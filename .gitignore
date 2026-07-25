@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# local JSON config store (dev fallback runtime state; production uses MongoDB).
+# The committed seed lives at data/portal-config.seed.json.
+/data/portal-config.json
 
 # vercel
 .vercel

@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-25T00:00:00.000Z",
+  "site": {
+    "orgName": "เทศบาลตำบลน้ำแพร่พัฒนา",
+    "orgSubName": "อ.หางดง จ.เชียงใหม่",
+    "title": "NAMPHRAE SMART CITY",
+    "brandTitle": "NAMPHRAE SMART SERVICE",
+    "tagline": "ระบบการให้บริการออนไลน์ ด้วยเทคโนโลยีดิจิทัล ได้อย่างทั่วถึง ตลอด 24 ชม. ทุกวัน",
+    "logoUrl": "https://www.namphraesmartcity.ai/images/index/logo.jpg",
+    "hero": {
+      "mediaType": "none",
+      "videoUrl": "",
+      "posterUrl": "",
+      "overlayOpacity": 0.45
+    },
+    "contact": {
+      "phone": "052-080792",
+      "email": "saraban@namphraephattana.go.th",
+      "address": "เทศบาลตำบลน้ำแพร่พัฒนา อ.หางดง จ.เชียงใหม่"
+    },
+    "manuals": [
+      {
+        "label": "คู่มือสำหรับประชาชน",
+        "url": "https://www.namphraesmartcity.ai/upload/ประชาชน.pdf"
+      },
+      {
+        "label": "คู่มือสำหรับผู้ดูแลระบบ",
+        "url": "https://www.namphraesmartcity.ai/upload/ผู้ดูแลระบบ.pdf"
+      },
+      {
+        "label": "คู่มือสำหรับเจ้าหน้าที่-ผู้อนุมัติ",
+        "url": "https://www.namphraesmartcity.ai/upload/เจ้าหน้าที่-ผู้อนุมัติ.pdf"
+      }
+    ]
+  },
+  "categories": [
+    {
+      "id": "service",
+      "label": "บริการประชาชน",
+      "order": 1
+    },
+    {
+      "id": "map",
+      "label": "แผนที่และข้อมูลพื้นที่",
+      "order": 2
+    },
+    {
+      "id": "info",
+      "label": "ข้อมูลข่าวสารและติดต่อ",
+      "order": 3
+    }
+  ],
+  "links": [
+    {
+      "id": "petition",
+      "title": "ยื่นคำร้องออนไลน์",
+      "subtitle": "แจ้งเรื่องร้องเรียน ขอรับบริการ ติดตามสถานะ",
+      "url": "https://petition.namphraesmartcity.ai/index.php",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/hero.png",
+      "categoryId": "service",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": true,
+      "order": 1,
+      "clickCount": 0
+    },
+    {
+      "id": "smart-namphrae",
+      "title": "Smart Namphrae",
+      "subtitle": "ระบบข้อมูลเทศบาลอัจฉริยะ",
+      "url": "https://www.smart-namphrae.app/",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-01.png",
+      "categoryId": "service",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 2,
+      "clickCount": 0
+    },
+    {
+      "id": "air-quality",
+      "title": "คุณภาพอากาศ",
+      "subtitle": "ตรวจสอบค่าฝุ่นและคุณภาพอากาศในพื้นที่",
+      "url": "https://namphraesmartcity.ai/calendar/NPDRH/Air.html",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-02.png",
+      "categoryId": "map",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 3,
+      "clickCount": 0
+    },
+    {
+      "id": "google-maps",
+      "title": "แผนที่สำนักงาน",
+      "subtitle": "นำทางมายังเทศบาลด้วย Google Maps",
+      "url": "https://goo.gl/maps/CU8gtbVYGjemprZd6?g_st=al",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-03.png",
+      "categoryId": "map",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 4,
+      "clickCount": 0
+    },
+    {
+      "id": "looker-dashboard",
+      "title": "แดชบอร์ดข้อมูลเทศบาล",
+      "subtitle": "รายงานสถิติและข้อมูลเชิงพื้นที่",
+      "url": "https://lookerstudio.google.com/u/0/reporting/9b076bf0-bf1c-415e-9cd6-832c2b02b298/page/p_1st5wrrded",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section5-01.png",
+      "categoryId": "info",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 5,
+      "clickCount": 0
+    },
+    {
+      "id": "agnos-health",
+      "title": "ปรึกษาสุขภาพออนไลน์",
+      "subtitle": "ประเมินอาการเบื้องต้นด้วย Agnos Health",
+      "url": "https://www.agnoshealth.com/",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-05.png",
+      "categoryId": "service",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 6,
+      "clickCount": 0
+    },
+    {
+      "id": "otop",
+      "title": "สินค้า OTOP",
+      "subtitle": "ผลิตภัณฑ์ชุมชนในตำบลน้ำแพร่",
+      "url": "https://www.namphraephattana.go.th/catalog/otops",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-06.png",
+      "categoryId": "info",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 7,
+      "clickCount": 0
+    },
+    {
+      "id": "google-earth",
+      "title": "ข้อมูลพื้นที่บน Google Earth",
+      "subtitle": "ชั้นข้อมูลเชิงพื้นที่แบบ 3 มิติ",
+      "url": "https://earth.google.com/web/data=Mj0KOwo5CiExU2ZqRTB2ZkNRekY5OXBhVHJ2QXFtS1pHa1Y0YmJBWDASEgoQNTVCRTQ0NDRDRTAwMDAwMSABQgIIAEoICK6IxvEGEAE",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-07.png",
+      "categoryId": "map",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 8,
+      "clickCount": 0
+    },
+    {
+      "id": "maplight",
+      "title": "แผนที่ไฟฟ้าส่องสว่าง",
+      "subtitle": "ตำแหน่งและสถานะไฟส่องสว่างสาธารณะ",
+      "url": "https://namphraesmartcity.ai/maplight/",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-08.png",
+      "categoryId": "map",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 9,
+      "clickCount": 0
+    },
+    {
+      "id": "cctv",
+      "title": "กล้องวงจรปิด CCTV",
+      "subtitle": "ดูภาพกล้องวงจรปิดในพื้นที่",
+      "url": "https://namphraesmartcity.ai/cctv/",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-09.png",
+      "categoryId": "map",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 10,
+      "clickCount": 0
+    },
+    {
+      "id": "announcements",
+      "title": "ประกาศและคำสั่ง",
+      "subtitle": "เอกสารราชการและประกาศจากเทศบาล",
+      "url": "https://www.namphraephattana.go.th/document/announce_and_order",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-10.png",
+      "categoryId": "info",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 11,
+      "clickCount": 0
+    },
+    {
+      "id": "paytax",
+      "title": "ชำระภาษีออนไลน์",
+      "subtitle": "บริการ e-Service ชำระภาษีท้องถิ่น",
+      "url": "https://www.namphraephattana.go.th/paytax/eservice",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-11.png",
+      "categoryId": "service",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 12,
+      "clickCount": 0
+    },
+    {
+      "id": "baimai",
+      "title": "ระบบจัดการใบไม้/เศษวัสดุ",
+      "subtitle": "ตรวจสอบข้อมูลการเผาและการจัดการเศษใบไม้",
+      "url": "https://namphraesmartcity.ai/calendar/NPDRH/baimai.html",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-12.png",
+      "categoryId": "service",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 13,
+      "clickCount": 0
+    },
+    {
+      "id": "map-main",
+      "title": "แผนที่เทศบาล",
+      "subtitle": "แผนที่ข้อมูลพื้นฐานในเขตเทศบาล",
+      "url": "https://namphraesmartcity.ai/map/",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-13.png",
+      "categoryId": "map",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 14,
+      "clickCount": 0
+    },
+    {
+      "id": "line-oa",
+      "title": "LINE Official Account",
+      "subtitle": "เพิ่มเพื่อนเพื่อรับข่าวสารและติดต่อเทศบาล",
+      "url": "https://lin.ee/LT37GS9",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-14.png",
+      "categoryId": "info",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 15,
+      "clickCount": 0
+    },
+    {
+      "id": "placeholder-15",
+      "title": "(ยังไม่ระบุบริการ)",
+      "subtitle": "ลิงก์เดิมชี้ไปที่ # — รอยืนยันปลายทาง",
+      "url": "",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-15.png",
+      "categoryId": "info",
+      "openInNewTab": true,
+      "isActive": false,
+      "isFeatured": false,
+      "order": 16,
+      "clickCount": 0
+    },
+    {
+      "id": "npdrh-calendar",
+      "title": "ปฏิทินกิจกรรม NPDRH",
+      "subtitle": "ปฏิทินกิจกรรมและข้อมูลโครงการ",
+      "url": "https://namphraesmartcity.ai/calendar/NPDRH/NPDRH.html",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-16.png",
+      "categoryId": "info",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 17,
+      "clickCount": 0
+    },
+    {
+      "id": "forest-map",
+      "title": "แผนที่ป่าชุมชน",
+      "subtitle": "ข้อมูลพื้นที่ป่าและการใช้ประโยชน์ที่ดิน",
+      "url": "https://forest-map.namphraesmartcity.ai/",
+      "imageUrl": "https://www.namphraesmartcity.ai/images/index/section1-17.png",
+      "categoryId": "map",
+      "openInNewTab": true,
+      "isActive": true,
+      "isFeatured": false,
+      "order": 18,
+      "clickCount": 0
+    }
+  ],
+  "_id": "portalConfig",
+  "visitorCount": 51051
+}
