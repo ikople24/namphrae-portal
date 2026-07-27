@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { SiteSettings } from '@/types/portal';
 
 // Slim, quiet header. The hero carries the brand; this just anchors identity and
@@ -36,6 +37,12 @@ export default function SiteHeader({ site }: { site: SiteSettings }) {
             โทร {site.contact.phone}
           </a>
         ) : null}
+        <Link
+          href="/admin"
+          className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 text-sm font-medium text-ink-soft transition hover:bg-black/[0.04] hover:text-ink"
+        >
+          เข้าสู่ระบบ
+        </Link>
       </div>
     </header>
   );
