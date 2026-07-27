@@ -31,7 +31,12 @@ async function checkAdmin(
   if (!userId) return { ok: false, status: 401 };
 
   // File-store dev mode has no registry to consult; Clerk sign-in suffices.
-  if (!isMongoConfigured()) return { ok: true, identity: { userId } };
+  // Loud on purpose: in production this would mean MONGODB_URI was forgotten
+  // and the registry gate is silently off.
+  if (!isMongoConfigured()) {
+    console.warn('checkAdmin: Clerk configured but Mongo is not — registry gate skipped');
+    return { ok: true, identity: { userId } };
+  }
 
   try {
     const db = await getUsersDb();

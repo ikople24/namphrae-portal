@@ -62,8 +62,10 @@ Port namphrae-map's `getMemberSsrProps` pattern:
 - Each admin page (`admin/index.tsx`, `admin/data.tsx`, `admin/settings.tsx`,
   `admin/links/new.tsx`, `admin/links/[id].tsx`) exports
   `getServerSideProps = getMemberSsrProps` and renders a shared
-  `<AccessDenied />` screen when `member` is false (signed out or not in the
-  registry), instead of the admin UI.
+  `<AccessDenied />` screen when `member` is false, instead of the admin UI.
+  Note (as built): `src/proxy.ts` (Clerk) already redirects signed-out visitors
+  to `/sign-in`, so in practice AccessDenied renders for signed-in users who are
+  not in the registry; it offers sign-out to switch accounts.
 
 ### 4. Env cleanup
 

@@ -1,6 +1,8 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import type { ComponentType } from 'react';
+import { SignOutButton, useAuth } from '@clerk/nextjs';
+import { isClerkPublicConfigured } from '@/lib/clerk-config';
 
 // Shown on /admin pages when the visitor is signed out or signed in but not in
 // the shared user registry (db_namphrae.users). Pairs with getMemberSsrProps
@@ -21,12 +23,7 @@ export function AccessDenied() {
           หากต้องการสิทธิ์ใช้งาน กรุณาติดต่อผู้ดูแลระบบ
         </p>
         <div className="flex gap-3">
-          <Link
-            href="/sign-in"
-            className="rounded-full bg-emerald-deep px-4 py-2 text-sm font-medium text-white"
-          >
-            เข้าสู่ระบบ
-          </Link>
+          {isClerkPublicConfigured() ? <AuthAction /> : null}
           <Link
             href="/"
             className="rounded-full px-4 py-2 text-sm font-medium text-ink-soft hover:bg-black/[0.04]"
@@ -36,6 +33,29 @@ export function AccessDenied() {
         </div>
       </div>
     </>
+  );
+}
+
+const pillClass =
+  'rounded-full bg-emerald-deep px-4 py-2 text-sm font-medium text-white';
+
+// A signed-in-but-unregistered visitor (this screen's usual audience — the
+// proxy redirects signed-out visitors to /sign-in before they get here) is
+// stuck on their account, so offer sign-out to switch accounts. Kept in its
+// own component so Clerk hooks only run when ClerkProvider exists.
+function AuthAction() {
+  const { isSignedIn } = useAuth();
+  if (isSignedIn) {
+    return (
+      <SignOutButton redirectUrl="/sign-in">
+        <button className={pillClass}>ออกจากระบบ / เปลี่ยนบัญชี</button>
+      </SignOutButton>
+    );
+  }
+  return (
+    <Link href="/sign-in" className={pillClass}>
+      เข้าสู่ระบบ
+    </Link>
   );
 }
 
