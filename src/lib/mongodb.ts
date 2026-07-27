@@ -38,3 +38,13 @@ export async function getDb(): Promise<Db> {
   const client = await getClientPromise();
   return client.db(dbName);
 }
+
+// Shared user registry lives in a different db on the same cluster
+// (namphrae-map's db). Membership in its `users` collection grants admin
+// access — see src/lib/auth-server.ts.
+const usersDbName = process.env.MONGODB_USERS_DB || 'db_namphrae';
+
+export async function getUsersDb(): Promise<Db> {
+  const client = await getClientPromise();
+  return client.db(usersDbName);
+}
