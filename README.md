@@ -61,8 +61,12 @@ npm run seed -- --force # เขียนทับของเดิม
 ```bash
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 CLERK_SECRET_KEY=sk_...
-ADMIN_EMAILS=someone@example.com   # (optional) จำกัดเฉพาะอีเมลนี้
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 ```
+
+> สิทธิ์เข้าหลังบ้าน: ล็อกอิน Clerk อย่างเดียวไม่พอ — ต้องมี record ใน MongoDB
+> db `db_namphrae` collection `users` (จับคู่ด้วย `clerkId`) ซึ่งเป็นทะเบียนผู้ใช้
+> ชุดเดียวกับ namphrae-map (เพิ่มผู้ใช้ที่เดียว ใช้ได้ทั้งสองแอป)
 
 ### 3. Cloudinary (อัปโหลดรูป/วิดีโอ)
 ถ้าไม่ตั้งค่า ปุ่มอัปโหลดจะแจ้งเตือน แต่ยัง **วาง URL รูปเองได้**
