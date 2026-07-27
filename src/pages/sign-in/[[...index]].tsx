@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import { SignIn } from '@clerk/nextjs';
 import Link from 'next/link';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
 
@@ -36,8 +37,9 @@ export default function SignInPage() {
   );
 }
 
+// Must be a static ESM import: a CJS require() here loads a second instance of
+// @clerk/nextjs whose React context differs from the ClerkProvider in _app,
+// which breaks prerender with "useSession can only be used within ClerkProvider".
 function ClerkSignIn() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { SignIn } = require('@clerk/nextjs');
   return <SignIn routing="path" path="/sign-in" signUpUrl="/sign-in" />;
 }

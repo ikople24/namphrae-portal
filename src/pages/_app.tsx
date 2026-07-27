@@ -14,7 +14,11 @@ export default function App({ Component, pageProps }: AppProps) {
   );
 
   if (isClerkPublicConfigured()) {
-    return <ClerkProvider {...pageProps}>{shell}</ClerkProvider>;
+    return (
+      <ClerkProvider afterSignOutUrl="/" {...pageProps}>
+        {shell}
+      </ClerkProvider>
+    );
   }
   return shell;
 }

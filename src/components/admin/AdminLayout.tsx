@@ -2,6 +2,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { ReactNode } from 'react';
+import { UserButton } from '@clerk/nextjs';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
 
 const NAV = [
@@ -91,10 +92,12 @@ export default function AdminLayout({
   );
 }
 
-// Rendered only when Clerk is configured; imported lazily so the client bundle
-// stays free of Clerk in dev-open mode.
+// Rendered only when Clerk is configured. Must use a static ESM import: a CJS
+// require() loads a second instance of @clerk/nextjs whose React context
+// differs from the ClerkProvider in _app, so the button would crash with
+// "useSession can only be used within ClerkProvider".
 function ClerkUserButton() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { UserButton } = require('@clerk/nextjs');
-  return <UserButton afterSignOutUrl="/" />;
+  // Sign-out redirect is configured on ClerkProvider in _app.tsx
+  // (afterSignOutUrl moved off UserButton in @clerk/nextjs v7).
+  return <UserButton />;
 }
