@@ -2,11 +2,13 @@ import { useRouter } from 'next/router';
 import useSWR from 'swr';
 import Link from 'next/link';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { getMemberSsrProps } from '@/lib/auth-server';
 import LinkForm from '@/components/admin/LinkForm';
 import { adminFetcher, toLinkInput } from '@/lib/admin-api';
 import type { PortalConfig } from '@/types/portal';
 
-export default function EditLinkPage() {
+function EditLinkPage() {
   const router = useRouter();
   const id = typeof router.query.id === 'string' ? router.query.id : '';
   const { data, isLoading } = useSWR<PortalConfig>(
@@ -37,3 +39,7 @@ export default function EditLinkPage() {
     </AdminLayout>
   );
 }
+
+export const getServerSideProps = getMemberSsrProps;
+
+export default withMemberGuard(EditLinkPage);

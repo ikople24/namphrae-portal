@@ -1,11 +1,13 @@
 import useSWR from 'swr';
 import Link from 'next/link';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { getMemberSsrProps } from '@/lib/auth-server';
 import LinkForm from '@/components/admin/LinkForm';
 import { adminFetcher } from '@/lib/admin-api';
 import type { PortalConfig } from '@/types/portal';
 
-export default function NewLinkPage() {
+function NewLinkPage() {
   const { data, isLoading } = useSWR<PortalConfig>(
     '/api/admin/config',
     adminFetcher
@@ -24,3 +26,7 @@ export default function NewLinkPage() {
     </AdminLayout>
   );
 }
+
+export const getServerSideProps = getMemberSsrProps;
+
+export default withMemberGuard(NewLinkPage);

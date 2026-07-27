@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import useSWR, { type KeyedMutator } from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { getMemberSsrProps } from '@/lib/auth-server';
 import ImageUploadField from '@/components/admin/ImageUploadField';
 import { adminFetcher, updateSite, uploadMedia } from '@/lib/admin-api';
 import { siteSettingsSchema } from '@/lib/schema';
 import type { PortalConfig, SiteSettings } from '@/types/portal';
 
-export default function SettingsPage() {
+function SettingsPage() {
   const { data, isLoading, mutate } = useSWR<PortalConfig>(
     '/api/admin/config',
     adminFetcher
@@ -257,3 +259,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   );
 }
+
+export const getServerSideProps = getMemberSsrProps;
+
+export default withMemberGuard(SettingsPage);

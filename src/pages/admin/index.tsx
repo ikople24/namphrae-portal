@@ -19,6 +19,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { getMemberSsrProps } from '@/lib/auth-server';
 import {
   adminFetcher,
   deleteLink,
@@ -31,7 +33,7 @@ import type { PortalConfig, ServiceLink } from '@/types/portal';
 
 type SortMode = 'order' | 'clicks';
 
-export default function AdminDashboard() {
+function AdminDashboard() {
   const { data, error, isLoading, mutate } = useSWR<PortalConfig>(
     '/api/admin/config',
     adminFetcher
@@ -294,3 +296,7 @@ function LinkRow({
     </li>
   );
 }
+
+export const getServerSideProps = getMemberSsrProps;
+
+export default withMemberGuard(AdminDashboard);

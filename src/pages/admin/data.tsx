@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { getMemberSsrProps } from '@/lib/auth-server';
 import { adminFetcher, importConfig } from '@/lib/admin-api';
 import { importConfigSchema } from '@/lib/schema';
 import type { PortalConfig } from '@/types/portal';
@@ -12,7 +14,7 @@ type Preview = {
   activeLinks: number;
 };
 
-export default function DataPage() {
+function DataPage() {
   const { data, mutate } = useSWR<PortalConfig>('/api/admin/config', adminFetcher);
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -152,3 +154,7 @@ export default function DataPage() {
     </AdminLayout>
   );
 }
+
+export const getServerSideProps = getMemberSsrProps;
+
+export default withMemberGuard(DataPage);
