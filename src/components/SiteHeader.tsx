@@ -4,10 +4,10 @@ import type { SiteSettings } from '@/types/portal';
 // 1c topbar: round logo tile, org name, nav (desktop), phone pill, login.
 export default function SiteHeader({ site }: { site: SiteSettings }) {
   const nav = [
-    { href: '#services', label: 'บริการ' },
-    { href: '#services', label: 'แผนที่' },
-    { href: '#services', label: 'ข่าวสาร' },
-    { href: '#contact', label: 'ติดต่อ' },
+    { href: '/#services', label: 'บริการ' },
+    { href: '/#services', label: 'แผนที่' },
+    { href: '/#services', label: 'ข่าวสาร' },
+    { href: '/#contact', label: 'ติดต่อ' },
   ];
   return (
     <header className="border-b border-line bg-white">
