@@ -1,6 +1,6 @@
 import type { SiteSettings } from '@/types/portal';
-import VisitorCounter from '@/components/VisitorCounter';
 
+// 1c footer: solid green, org identity + manuals + visitor count.
 export default function Footer({
   site,
   visitorCount,
@@ -8,59 +8,57 @@ export default function Footer({
   site: SiteSettings;
   visitorCount: number;
 }) {
-  const { contact } = site;
+  const year = new Date().getFullYear() + 543;
   return (
-    <footer className="mt-4 bg-emerald-deep text-white">
-      <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8">
-        <div className="grid gap-8 sm:grid-cols-[1.2fr_1fr]">
-          <div>
-            <p className="font-display text-lg font-semibold">{site.orgName}</p>
-            {site.orgSubName ? (
-              <p className="mt-1 text-sm text-white/70">{site.orgSubName}</p>
-            ) : null}
-            {contact?.address ? (
-              <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/80">
-                {contact.address}
-              </p>
-            ) : null}
-          </div>
-          <dl className="space-y-3 text-sm">
-            {contact?.phone ? (
-              <div className="flex gap-3">
-                <dt className="w-16 shrink-0 text-white/60">โทร</dt>
-                <dd>
-                  <a
-                    href={`tel:${contact.phone.replace(/[^0-9+]/g, '')}`}
-                    className="hover:underline"
-                  >
-                    {contact.phone}
-                  </a>
-                </dd>
-              </div>
-            ) : null}
-            {contact?.email ? (
-              <div className="flex gap-3">
-                <dt className="w-16 shrink-0 text-white/60">อีเมล</dt>
-                <dd className="break-all">
-                  <a href={`mailto:${contact.email}`} className="hover:underline">
-                    {contact.email}
-                  </a>
-                </dd>
-              </div>
-            ) : null}
-          </dl>
-        </div>
-
-        <div className="mt-8 flex flex-col gap-2 border-t border-white/15 pt-5 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            © {new Date().getFullYear()} {site.orgName}
+    <footer id="contact" className="bg-green-deep px-5 py-12 text-white sm:px-11">
+      <div className="grid gap-10 sm:grid-cols-[1.4fr_1fr_1fr]">
+        <div>
+          <p className="font-display text-[26px] font-bold leading-tight tracking-[-.02em]">
+            {site.orgName}
           </p>
-          <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1">
-            <span aria-hidden="true">👁</span>
-            ผู้เข้าชม{' '}
-            <span className="rounded bg-white px-1.5 py-0.5">
-              <VisitorCounter initial={visitorCount} />
-            </span>
+          <p className="mt-3.5 text-[13.5px] leading-[1.75] text-white/70">
+            {site.contact?.address ? (
+              <>
+                {site.contact.address}
+                <br />
+              </>
+            ) : null}
+            {site.contact?.phone ? (
+              <>
+                โทร {site.contact.phone}
+                <br />
+              </>
+            ) : null}
+            {site.contact?.email}
+          </p>
+        </div>
+        <div>
+          <p className="mb-3 font-display text-xs font-semibold tracking-[.16em] text-green-100">
+            คู่มือ
+          </p>
+          <div className="flex flex-col gap-[9px] text-[13.5px]">
+            {(site.manuals ?? []).map((m) => (
+              <a
+                key={m.url}
+                href={m.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/80 hover:text-white"
+              >
+                {m.label}
+              </a>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-3 font-display text-xs font-semibold tracking-[.16em] text-green-100">
+            ผู้เข้าชม
+          </p>
+          <p className="font-display text-[34px] font-bold [font-variant-numeric:tabular-nums]">
+            {visitorCount.toLocaleString('th-TH')}
+          </p>
+          <p className="mt-5 text-xs text-white/55">
+            © {year} {site.orgName}
           </p>
         </div>
       </div>
