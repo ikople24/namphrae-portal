@@ -1,20 +1,38 @@
 @import 'tailwindcss';
 
-/* ── Civic Lanna design tokens ──────────────────────────────────────────────
-   Deep teak-forest ink, a jade/emerald primary (น้ำแพร่ = spreading water),
-   a restrained Lanna gold accent, on cool paper. Category accents key the
-   three service groups.                                                       */
+/* ── "น้ำแพร่ Bold" design tokens — white–green palette ─────────────────────
+   Per public/design_handoff_namphrae_ui/README.md update note (29 ก.ค. 2569):
+   white base + fresh civic greens (อ้างอิงเทศบาลนครลำปาง). The emerald-* /
+   gold / aqua names are LEGACY ALIASES so pre-redesign components keep
+   rendering — new components use the green-* scale; remove aliases after
+   Phases 2–4.                                                                */
 @theme {
-  --color-paper: #f2f5ef;
-  --color-paper-deep: #e7ede4;
+  --color-paper: #ffffff;
+  --color-paper-deep: #f7fbf8;
   --color-surface: #ffffff;
-  --color-ink: #12251f;
-  --color-ink-soft: #4b5c54;
+  --color-surface-sunken: #fafbf9;
 
-  --color-emerald: #0e7a67;
-  --color-emerald-deep: #0a4e43;
-  --color-emerald-050: #e4f0ec;
+  --color-ink: #141414;
+  --color-ink-soft: #4b5563;
+  --color-ink-faint: #6b7280;
+  --color-ink-mute: #9ca3af;
 
+  --color-green: #17a34a;
+  --color-green-deep: #0f7a37;
+  --color-green-forest: #32523d;
+  --color-green-mid: #34b863;
+  --color-green-100: #cde9d6;
+  --color-green-050: #eaf7ef;
+  --color-green-025: #f7fbf8;
+  --color-green-hover: #a8ddbe;
+
+  --color-danger: #c2503a;
+  --color-line: rgba(17, 24, 39, 0.12);
+
+  /* Legacy aliases (pre-redesign components only). */
+  --color-emerald: #17a34a;
+  --color-emerald-deep: #0f7a37;
+  --color-emerald-050: #eaf7ef;
   --color-gold: #a9791f;
   --color-aqua: #24809e;
 
@@ -22,13 +40,61 @@
   --font-body: var(--font-body), ui-sans-serif, system-ui, sans-serif;
 
   --radius-card: 18px;
+
+  /* ── Smart-city animation layer (handoff §Animations) ──
+     Durations here are the defaults; per-use overrides go through
+     [animation-duration:2.4s]-style arbitrary utilities. */
+  --animate-np-rise: np-rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-np-ripple: np-ripple 3.2s ease-out infinite;
+  --animate-np-drift: np-drift 26s ease-in-out infinite alternate;
+  --animate-np-marquee: np-marquee 34s linear infinite;
+  --animate-np-scan: np-scan 7s linear infinite;
+  --animate-np-blink: np-blink 1.4s ease-in-out infinite;
+  --animate-np-grow: np-grow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-np-trace: np-trace 9s ease-out infinite alternate;
+
+  @keyframes np-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes np-ripple {
+    from { transform: scale(0.6); opacity: 0.5; }
+    to { transform: scale(1.9); opacity: 0; }
+  }
+  @keyframes np-drift {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to { transform: translate3d(-3%, -2%, 0) scale(1.08); }
+  }
+  @keyframes np-marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes np-scan {
+    0% { transform: translateY(-40px); opacity: 0; }
+    12% { opacity: 0.9; }
+    88% { opacity: 0.9; }
+    100% { transform: translateY(520px); opacity: 0; }
+  }
+  @keyframes np-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+  @keyframes np-grow {
+    from { transform: scaleY(0.08); }
+    to { transform: scaleY(1); }
+  }
+  @keyframes np-trace {
+    from { stroke-dashoffset: 1400; }
+    to { stroke-dashoffset: 0; }
+  }
 }
 
 :root {
-  /* Per-category accent, referenced from JSX via inline vars. */
-  --cat-service: #0e7a67;
-  --cat-map: #24809e;
-  --cat-info: #a9791f;
+  /* Per-category accent, referenced from JSX via inline vars.
+     (Same values as src/lib/category-accent.ts.) */
+  --cat-service: #17a34a;
+  --cat-map: #0f7a37;
+  --cat-info: #d4512c;
 }
 
 * {
@@ -52,23 +118,31 @@ body {
   font-family: var(--font-display);
 }
 
-/* ── Hero contour lines: signature topographic motif ───────────────────────
-   Drifts slowly to feel like spreading water / a living map. Static when the
-   viewer prefers reduced motion.                                             */
+/* Material Symbols base (font-face + subset loaded in _document.tsx). */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  display: inline-block;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-variation-settings: 'opsz' 24, 'wght' 300, 'FILL' 0, 'GRAD' 0;
+}
+
+/* ── Legacy pre-redesign styles (used by current Hero/cards; Phase 2 removes) */
 .contour-drift {
   animation: contour-drift 26s ease-in-out infinite alternate;
   transform-origin: center;
 }
 @keyframes contour-drift {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(-2%, -1.5%, 0) scale(1.06);
-  }
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-2%, -1.5%, 0) scale(1.06); }
 }
 
-/* Card lift on hover — quiet, everything defers to the hero. */
 .service-card {
   transition:
     transform 0.18s ease,
@@ -85,24 +159,28 @@ body {
   outline-offset: 2px;
 }
 
-/* Reveal-on-load for sections, disabled under reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
   .rise {
     animation: rise 0.6s both;
   }
   @keyframes rise {
-    from {
-      opacity: 0;
-      transform: translateY(14px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
   }
 }
+
+/* ── Reduced motion: kill every decorative animation. Entrance animations
+   (np-rise/np-grow) fall back to their natural (final) layout state. ──── */
 @media (prefers-reduced-motion: reduce) {
-  .contour-drift {
+  .contour-drift,
+  .animate-np-rise,
+  .animate-np-ripple,
+  .animate-np-drift,
+  .animate-np-marquee,
+  .animate-np-scan,
+  .animate-np-blink,
+  .animate-np-grow,
+  .animate-np-trace {
     animation: none;
   }
 }
@@ -110,7 +188,7 @@ body {
 /* Focus visibility floor for keyboard users. */
 a:focus-visible,
 button:focus-visible {
-  outline: 3px solid var(--color-emerald);
+  outline: 3px solid var(--color-green);
   outline-offset: 2px;
   border-radius: 6px;
 }
