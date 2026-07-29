@@ -1,78 +1,176 @@
+import { useEffect, useState } from 'react';
 import type { PublicLink, SiteSettings } from '@/types/portal';
-import HeroMedia from '@/components/HeroMedia';
-import ServiceThumb from '@/components/ServiceThumb';
+import Icon from '@/components/Icon';
+import ContourBackground from '@/components/ContourBackground';
+import { HERO_SHORTCUT_IDS, PM_SERIES, pmColor } from '@/lib/live-sample';
+import { iconForService } from '@/lib/icons';
 
-// Hero: the thesis of the page. States the service, then hands the visitor the
-// single most-used action (the featured link) as a large card.
-export default function Hero({
-  site,
-  featured,
-}: {
-  site: SiteSettings;
-  featured: PublicLink[];
-}) {
+// 1c hero: big type, CTAs, count-up stats, air card with sparkline, shortcut
+// rows. PM2.5 is MOCK (drifts to feel live) — see src/lib/live-sample.ts.
+
+// 0→1 progress over `ms` with cubic ease-out; jumps to 1 for reduced motion.
+function useCountUp(ms = 1600): number {
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = reduce ? 1 : Math.min(1, (now - t0) / ms);
+      setP(1 - Math.pow(1 - t, 3));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [ms]);
+  return p;
+}
+
+function track(id: string) {
+  if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+    navigator.sendBeacon(`/api/track/${encodeURIComponent(id)}`);
+  }
+}
+
+function AirCard({ pm }: { pm: number }) {
+  const ease = useCountUp();
   return (
-    <section className="relative isolate overflow-hidden text-white">
-      <HeroMedia hero={site.hero} />
-
-      <div className="relative mx-auto max-w-6xl px-5 pb-12 pt-14 sm:px-8 sm:pt-20 md:pb-16">
-        <p className="font-display text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
-          {site.title}
+    <div className="rounded-[24px] border border-line bg-green-025 p-[26px] text-ink max-sm:rounded-[20px] max-sm:px-5 max-sm:py-[18px]">
+      <div className="flex items-center justify-between">
+        <p className="font-display text-xs font-semibold tracking-[.16em] text-green-deep max-sm:text-[11px]">
+          อากาศวันนี้ · PM2.5
         </p>
-        <h1 className="mt-4 max-w-3xl font-display text-3xl font-bold leading-[1.12] sm:text-4xl md:text-[2.9rem]">
-          {site.brandTitle || site.orgName}
-        </h1>
-        {site.tagline ? (
-          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-white/85 sm:text-base">
-            {site.tagline}
-          </p>
-        ) : null}
-
-        {featured.length > 0 ? (
-          <div className="mt-8 grid gap-3 sm:max-w-2xl sm:grid-cols-1">
-            {featured.map((link) => (
-              <FeaturedCard key={link.id} link={link} />
-            ))}
-          </div>
-        ) : null}
+        <span className="relative grid h-3 w-3 place-items-center">
+          <span className="absolute inset-0 rounded-full bg-green animate-np-ripple [animation-duration:2.6s]" />
+          <span className="h-[7px] w-[7px] rounded-full bg-green" />
+        </span>
       </div>
-    </section>
+      <div className="mt-3.5 flex items-end justify-between gap-4">
+        <p className="font-display text-[84px] font-bold leading-[.85] tracking-[-.04em] text-green-deep [font-variant-numeric:tabular-nums] max-sm:text-[56px]">
+          {Math.round(pm * ease)}
+        </p>
+        <div className="flex h-[66px] items-end gap-[5px] max-sm:h-12 max-sm:gap-1">
+          {PM_SERIES.map((v, i) => (
+            <span
+              key={i}
+              className="w-[9px] origin-bottom rounded-[3px] animate-np-grow max-sm:w-[7px]"
+              style={{
+                height: `${Math.round((v / 50) * 100)}%`,
+                backgroundColor: pmColor(v),
+                animationDelay: `${i * 60}ms`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      <p className="mt-3 font-display text-sm font-semibold text-green-deep max-sm:text-[13px]">
+        µg/m³ · PM2.5 ปานกลาง
+      </p>
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-faint max-sm:hidden">
+        เซ็นเซอร์ 4 จุดในตำบล · อัปเดตสดทุกไม่กี่วินาที (ข้อมูลตัวอย่าง)
+      </p>
+    </div>
   );
 }
 
-function FeaturedCard({ link }: { link: PublicLink }) {
-  function track() {
-    if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
-      navigator.sendBeacon(`/api/track/${encodeURIComponent(link.id)}`);
-    }
-  }
+export default function Hero({
+  site,
+  links,
+  visitorCount,
+  pm,
+}: {
+  site: SiteSettings;
+  links: PublicLink[];
+  visitorCount: number;
+  pm: number;
+}) {
+  const ease = useCountUp();
+  const featured = links.find((l) => l.isFeatured && l.url);
+  const shortcuts = HERO_SHORTCUT_IDS.map((id) => links.find((l) => l.id === id))
+    .filter((l): l is PublicLink => Boolean(l && l.url))
+    .slice(0, 3);
+  const fallback = links.filter((l) => l.url && !l.isFeatured).slice(0, 3);
+  const rows = shortcuts.length === 3 ? shortcuts : fallback;
+  const activeCount = links.length;
 
   return (
-    <a
-      href={link.url || '#'}
-      target={link.openInNewTab ? '_blank' : undefined}
-      rel={link.openInNewTab ? 'noopener noreferrer' : undefined}
-      onClick={track}
-      onAuxClick={track}
-      className="group flex items-center gap-4 rounded-2xl border border-white/25 bg-white/10 p-3 backdrop-blur transition hover:bg-white/20 sm:p-4"
-    >
-      <div className="w-16 shrink-0 sm:w-20">
-        <ServiceThumb src={link.imageUrl} title={link.title} accent="#a9791f" />
+    <section className="relative overflow-hidden px-5 pb-[52px] pt-10 sm:px-11 sm:pt-[60px]">
+      <ContourBackground />
+      <div className="relative grid items-start gap-8 lg:grid-cols-[1.5fr_1fr] lg:gap-14">
+        <div>
+          <p className="font-display text-xs font-semibold tracking-[.32em] text-green">
+            NAMPHRAE SMART SERVICE
+          </p>
+          <h1 className="mt-[30px] font-display text-[44px] font-bold leading-[.98] tracking-[-.03em] text-green-deep sm:text-[92px] sm:leading-[.94] sm:tracking-[-.035em]">
+            น้ำแพร่
+            <br />
+            <span className="text-green-forest">ทั้งตำบล</span>
+          </h1>
+          <p className="mt-[26px] max-w-[440px] text-base leading-[1.75] text-ink-soft">
+            {site.tagline ||
+              `${activeCount} บริการออนไลน์ ตั้งแต่ยื่นคำร้องถึงดูค่าฝุ่นรายชั่วโมง เปิดตลอด 24 ชั่วโมง ไม่ต้องเดินทาง`}
+          </p>
+          <div className="mt-[34px] flex flex-wrap gap-3">
+            {featured ? (
+              <a
+                href={featured.url}
+                target={featured.openInNewTab ? '_blank' : undefined}
+                rel={featured.openInNewTab ? 'noopener noreferrer' : undefined}
+                onClick={() => track(featured.id)}
+                onAuxClick={() => track(featured.id)}
+                className="inline-flex items-center gap-[9px] rounded-full bg-green px-[30px] py-4 font-display text-[15.5px] font-bold text-white transition hover:bg-green-deep"
+              >
+                {featured.title}
+                <Icon name="arrow_forward" size={21} />
+              </a>
+            ) : null}
+            <a
+              href="#services"
+              className="inline-flex items-center gap-[9px] rounded-full border border-black/25 px-[30px] py-4 font-display text-[15.5px] font-semibold text-green-deep transition hover:bg-green-025"
+            >
+              ดูบริการทั้งหมด
+            </a>
+          </div>
+          <div className="mt-[46px] flex gap-8 sm:gap-11">
+            <div>
+              <p className="font-display text-[40px] font-bold leading-none text-green-deep [font-variant-numeric:tabular-nums]">
+                {Math.round(visitorCount * ease).toLocaleString('th-TH')}
+              </p>
+              <p className="mt-1.5 text-xs text-ink-faint">ครั้งที่ประชาชนเข้าใช้</p>
+            </div>
+            <div>
+              <p className="font-display text-[40px] font-bold leading-none text-green-deep">
+                24 ชม.
+              </p>
+              <p className="mt-1.5 text-xs text-ink-faint">เปิดบริการทุกวัน</p>
+            </div>
+            <div>
+              <p className="font-display text-[40px] font-bold leading-none text-green-deep [font-variant-numeric:tabular-nums]">
+                {Math.round(activeCount * ease)}
+              </p>
+              <p className="mt-1.5 text-xs text-ink-faint">ระบบดิจิทัลที่ใช้งานได้</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3.5">
+          <AirCard pm={pm} />
+          {rows.map((s) => (
+            <a
+              key={s.id}
+              href={s.url}
+              target={s.openInNewTab ? '_blank' : undefined}
+              rel={s.openInNewTab ? 'noopener noreferrer' : undefined}
+              onClick={() => track(s.id)}
+              onAuxClick={() => track(s.id)}
+              className="flex items-center gap-4 rounded-[20px] border border-black/[0.14] px-5 py-[18px] text-ink transition hover:border-green hover:bg-green-025"
+            >
+              <Icon name={iconForService(s.id, s.icon)} size={28} className="text-green" />
+              <span className="flex-1 font-display text-base font-semibold">{s.title}</span>
+              <Icon name="arrow_outward" size={22} className="text-ink-mute" />
+            </a>
+          ))}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="font-display text-lg font-semibold leading-tight sm:text-xl">
-          {link.title}
-        </p>
-        {link.subtitle ? (
-          <p className="mt-1 text-sm text-white/80">{link.subtitle}</p>
-        ) : null}
-      </div>
-      <span
-        className="ml-1 shrink-0 text-2xl transition group-hover:translate-x-1"
-        aria-hidden="true"
-      >
-        →
-      </span>
-    </a>
+    </section>
   );
 }
