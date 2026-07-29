@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import AdminLayout from '@/components/admin/AdminLayout';
+import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getMemberSsrProps } from '@/lib/auth-server';
 import {
@@ -29,9 +30,13 @@ import {
   updateLink,
 } from '@/lib/admin-api';
 import { accentFor } from '@/lib/category-accent';
+import { iconForService } from '@/lib/icons';
 import type { PortalConfig, ServiceLink } from '@/types/portal';
 
 type SortMode = 'order' | 'clicks';
+
+const GRID_COLS =
+  'grid grid-cols-[34px_minmax(240px,1fr)_128px_82px_64px_88px] items-center gap-3';
 
 function AdminDashboard() {
   const { data, error, isLoading, mutate } = useSWR<PortalConfig>(
@@ -39,6 +44,7 @@ function AdminDashboard() {
     adminFetcher
   );
   const [sortMode, setSortMode] = useState<SortMode>('order');
+  const [q, setQ] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -48,13 +54,22 @@ function AdminDashboard() {
     return m;
   }, [data]);
 
+  const needle = q.trim().toLowerCase();
   const links = useMemo(() => {
-    const list = [...(data?.links ?? [])];
+    let list = [...(data?.links ?? [])];
+    if (needle) {
+      list = list.filter((l) =>
+        `${l.title} ${l.subtitle ?? ''} ${l.url}`.toLowerCase().includes(needle)
+      );
+    }
     if (sortMode === 'clicks') {
       return list.sort((a, b) => b.clickCount - a.clickCount);
     }
     return list.sort((a, b) => a.order - b.order);
-  }, [data, sortMode]);
+  }, [data, sortMode, needle]);
+
+  // Dragging only makes sense over the full, manually-ordered list.
+  const canDrag = sortMode === 'order' && !needle;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -116,12 +131,24 @@ function AdminDashboard() {
     <AdminLayout
       title="ลิงก์บริการ"
       actions={
-        <Link
-          href="/admin/links/new"
-          className="rounded-full bg-emerald px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-deep"
-        >
-          + เพิ่มลิงก์
-        </Link>
+        <>
+          <label className="flex w-[230px] items-center gap-2 rounded-[10px] border border-black/[0.09] bg-white px-[13px] py-[9px]">
+            <Icon name="search" size={19} className="text-ink-mute" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="ค้นหาลิงก์"
+              className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-mute"
+            />
+          </label>
+          <Link
+            href="/admin/links/new"
+            className="inline-flex items-center gap-[7px] rounded-[10px] bg-green px-[17px] py-2.5 font-display text-[13.5px] font-semibold text-white transition hover:bg-green-deep"
+          >
+            <Icon name="add" size={19} />
+            เพิ่มลิงก์
+          </Link>
+        </>
       }
     >
       {error ? (
@@ -130,62 +157,83 @@ function AdminDashboard() {
         </p>
       ) : null}
       {msg ? (
-        <p className="mb-4 rounded-lg bg-emerald-050 px-4 py-2 text-sm text-emerald-deep">
+        <p className="mb-4 rounded-lg bg-green-050 px-4 py-2 text-sm text-green-deep">
           {msg}
         </p>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-ink-soft">
-        <span>{links.length} ลิงก์</span>
-        <div className="flex items-center gap-1">
-          <span>เรียงตาม:</span>
-          <button
-            onClick={() => setSortMode('order')}
-            className={`rounded-full px-3 py-1 ${sortMode === 'order' ? 'bg-emerald-050 text-emerald-deep' : 'hover:bg-black/[0.04]'}`}
-          >
-            ลำดับที่ตั้งไว้
-          </button>
-          <button
-            onClick={() => setSortMode('clicks')}
-            className={`rounded-full px-3 py-1 ${sortMode === 'clicks' ? 'bg-emerald-050 text-emerald-deep' : 'hover:bg-black/[0.04]'}`}
-          >
-            ความนิยม (คลิก)
-          </button>
-        </div>
-        {sortMode === 'clicks' ? (
-          <span className="text-xs text-amber-700">
-            โหมดดูอย่างเดียว — ลากจัดลำดับได้เฉพาะโหมด “ลำดับที่ตั้งไว้”
-          </span>
-        ) : null}
+      <div className="mb-3.5 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setSortMode('order')}
+          className={`rounded-full px-[13px] py-[7px] font-display text-[12.5px] font-medium ${
+            sortMode === 'order'
+              ? 'bg-green-050 text-green-deep'
+              : 'text-ink-faint hover:bg-black/[0.04]'
+          }`}
+        >
+          ลำดับที่ตั้งไว้
+        </button>
+        <button
+          onClick={() => setSortMode('clicks')}
+          className={`rounded-full px-[13px] py-[7px] font-display text-[12.5px] font-medium ${
+            sortMode === 'clicks'
+              ? 'bg-green-050 text-green-deep'
+              : 'text-ink-faint hover:bg-black/[0.04]'
+          }`}
+        >
+          ความนิยม (คลิก)
+        </button>
+        <span className="ml-auto text-[11.5px] text-ink-mute">
+          {canDrag
+            ? 'ลากที่จับ ⠿ เพื่อจัดลำดับ'
+            : 'ลากจัดลำดับได้เฉพาะโหมด “ลำดับที่ตั้งไว้” และไม่ได้กรองค้นหา'}
+        </span>
       </div>
 
       {isLoading ? (
         <p className="text-ink-soft">กำลังโหลด…</p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext
-            items={links.map((l) => l.id)}
-            strategy={verticalListSortingStrategy}
+        <div className="overflow-x-auto rounded-[14px] border border-black/[0.08] bg-white">
+          <div
+            className={`${GRID_COLS} border-b border-black/[0.07] bg-surface-sunken px-4 py-[11px] font-display text-[11px] font-semibold tracking-[.06em] text-ink-mute`}
           >
-            <ul className="space-y-2">
-              {links.map((link) => (
-                <LinkRow
-                  key={link.id}
-                  link={link}
-                  categoryLabel={categoryLabel.get(link.categoryId) ?? link.categoryId}
-                  draggable={sortMode === 'order'}
-                  busy={busy === link.id}
-                  onToggle={() => onToggleActive(link)}
-                  onDelete={() => onDelete(link)}
-                />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
+            <span />
+            <span>บริการ</span>
+            <span>หมวด</span>
+            <span className="text-right">คลิก</span>
+            <span className="text-center">แสดง</span>
+            <span />
+          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
+          >
+            <SortableContext
+              items={links.map((l) => l.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul>
+                {links.map((link) => (
+                  <LinkRow
+                    key={link.id}
+                    link={link}
+                    categoryLabel={categoryLabel.get(link.categoryId) ?? link.categoryId}
+                    draggable={canDrag}
+                    busy={busy === link.id}
+                    onToggle={() => onToggleActive(link)}
+                    onDelete={() => onDelete(link)}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
+          {!links.length ? (
+            <p className="px-4 py-6 text-sm text-ink-faint">
+              ไม่พบลิงก์ที่ตรงกับ “{q}”
+            </p>
+          ) : null}
+        </div>
       )}
     </AdminLayout>
   );
@@ -216,83 +264,99 @@ function LinkRow({
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.6 : 1,
+        opacity: isDragging ? 0.6 : link.isActive ? 1 : 0.55,
       }}
-      className={`flex items-center gap-3 rounded-xl border border-black/[0.07] bg-surface p-3 ${
-        link.isActive ? '' : 'opacity-60'
-      }`}
+      className={`${GRID_COLS} border-b border-black/[0.05] px-4 py-3 last:border-b-0 hover:bg-surface-sunken`}
     >
       <button
         {...attributes}
         {...listeners}
         aria-label="ลากเพื่อจัดลำดับ"
         disabled={!draggable}
-        className={`shrink-0 rounded-md px-1.5 py-2 text-ink-soft ${
-          draggable ? 'cursor-grab hover:bg-black/[0.05]' : 'cursor-not-allowed opacity-30'
+        className={`grid h-8 w-8 place-items-center rounded-md ${
+          draggable
+            ? 'cursor-grab text-black/20 hover:bg-black/[0.05]'
+            : 'cursor-not-allowed text-black/10'
         }`}
       >
-        ⠿
+        <Icon name="drag_indicator" size={20} />
       </button>
 
-      <span
-        className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-semibold sm:grid"
-        style={{ background: `color-mix(in srgb, ${accent} 14%, #fff)`, color: accent }}
-      >
-        {Array.from(link.title.trim())[0] ?? '•'}
+      <span className="flex min-w-0 items-center gap-[11px]">
+        <span
+          className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px]"
+          style={{
+            background: `color-mix(in srgb, ${accent} 12%, #fff)`,
+            color: accent,
+          }}
+        >
+          <Icon name={iconForService(link.id, link.icon)} size={19} />
+        </span>
+        <span className="min-w-0">
+          <span className="flex items-center gap-[7px]">
+            <span className="truncate font-display text-[13.5px] font-semibold text-ink">
+              {link.title}
+            </span>
+            {link.isFeatured ? (
+              <span className="rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 font-display text-[10px] font-semibold text-amber-800">
+                เด่น
+              </span>
+            ) : null}
+          </span>
+          <span className="block max-w-[330px] truncate text-[11px] text-ink-mute">
+            {link.url || '— ไม่มี URL —'}
+          </span>
+        </span>
       </span>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate font-medium text-ink">{link.title}</p>
-          {link.isFeatured ? (
-            <span className="rounded bg-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-gold">
-              เด่น
-            </span>
-          ) : null}
-        </div>
-        <p className="truncate text-xs text-ink-soft">
-          {categoryLabel} · {link.url || '— ไม่มี URL —'}
-        </p>
-      </div>
-
-      <div className="hidden shrink-0 text-right sm:block">
-        <p className="text-sm font-semibold tabular-nums text-ink">
-          {link.clickCount.toLocaleString('th-TH')}
-        </p>
-        <p className="text-[10px] text-ink-soft">คลิก</p>
-      </div>
-
-      <button
-        onClick={onToggle}
-        disabled={busy}
-        role="switch"
-        aria-checked={link.isActive}
-        aria-label={link.isActive ? 'กำลังแสดง — กดเพื่อซ่อน' : 'ซ่อนอยู่ — กดเพื่อแสดง'}
-        className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-          link.isActive ? 'bg-emerald' : 'bg-black/20'
-        } ${busy ? 'opacity-50' : ''}`}
+      <span
+        className="inline-flex items-center gap-1.5 font-display text-xs font-medium"
+        style={{ color: accent }}
       >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
-            link.isActive ? 'left-[22px]' : 'left-0.5'
-          }`}
-        />
-      </button>
+        <span className="h-[7px] w-[7px] rounded-full" style={{ background: accent }} />
+        {categoryLabel}
+      </span>
 
-      <Link
-        href={`/admin/links/${encodeURIComponent(link.id)}`}
-        className="shrink-0 rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium text-ink-soft transition hover:bg-black/[0.04]"
-      >
-        แก้ไข
-      </Link>
-      <button
-        onClick={onDelete}
-        disabled={busy}
-        aria-label={`ลบ ${link.title}`}
-        className="shrink-0 rounded-lg px-2 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-      >
-        ลบ
-      </button>
+      <span className="text-right font-display text-[13px] font-semibold text-ink [font-variant-numeric:tabular-nums]">
+        {link.clickCount.toLocaleString('th-TH')}
+      </span>
+
+      <span className="flex justify-center">
+        <button
+          onClick={onToggle}
+          disabled={busy}
+          role="switch"
+          aria-checked={link.isActive}
+          aria-label={link.isActive ? 'กำลังแสดง — กดเพื่อซ่อน' : 'ซ่อนอยู่ — กดเพื่อแสดง'}
+          className={`relative h-[22px] w-10 rounded-full transition ${
+            link.isActive ? 'bg-green' : 'bg-black/[0.18]'
+          } ${busy ? 'opacity-50' : ''}`}
+        >
+          <span
+            className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-white transition-all ${
+              link.isActive ? 'left-5' : 'left-0.5'
+            }`}
+          />
+        </button>
+      </span>
+
+      <span className="flex justify-end gap-1">
+        <Link
+          href={`/admin/links/${encodeURIComponent(link.id)}`}
+          aria-label={`แก้ไข ${link.title}`}
+          className="grid h-8 w-8 place-items-center rounded-[9px] text-ink-faint transition hover:bg-black/[0.06]"
+        >
+          <Icon name="edit" size={19} />
+        </Link>
+        <button
+          onClick={onDelete}
+          disabled={busy}
+          aria-label={`ลบ ${link.title}`}
+          className="grid h-8 w-8 place-items-center rounded-[9px] text-danger transition hover:bg-danger/10 disabled:opacity-50"
+        >
+          <Icon name="delete" size={19} />
+        </button>
+      </span>
     </li>
   );
 }
