@@ -1,11 +1,12 @@
-// Maps a category id to its accent colour. Known civic groups get fixed hues;
-// any custom category falls back to emerald so new categories still look right.
+// Maps a category id to its accent colour (handoff update note: greens ไล่ระดับ
+// + ชาดเป็นสีตัดจุดเดียว). Any custom category falls back to the primary green.
+// Keep in sync with the --cat-* vars in src/styles/globals.css.
 const ACCENTS: Record<string, string> = {
-  service: '#0e7a67', // บริการประชาชน — jade
-  map: '#24809e', // แผนที่และข้อมูลพื้นที่ — water blue
-  info: '#a9791f', // ข้อมูลข่าวสารและติดต่อ — Lanna gold
+  service: '#17a34a', // บริการประชาชน — เขียวสด
+  map: '#0f7a37', // แผนที่และข้อมูลพื้นที่ — เขียวเข้ม
+  info: '#d4512c', // ข้อมูลข่าวสารและติดต่อ — ชาด
 };
 
 export function accentFor(categoryId: string): string {
-  return ACCENTS[categoryId] ?? '#0e7a67';
+  return ACCENTS[categoryId] ?? '#17a34a';
 }
