@@ -1,4 +1,5 @@
 import type { SiteSettings } from '@/types/portal';
+import VisitorCounter from '@/components/VisitorCounter';
 
 // 1c footer: solid green, org identity + manuals + visitor count.
 export default function Footer({
@@ -54,8 +55,8 @@ export default function Footer({
           <p className="mb-3 font-display text-xs font-semibold tracking-[.16em] text-green-100">
             ผู้เข้าชม
           </p>
-          <p className="font-display text-[34px] font-bold [font-variant-numeric:tabular-nums]">
-            {visitorCount.toLocaleString('th-TH')}
+          <p className="font-display text-[34px] font-bold">
+            <VisitorCounter initial={visitorCount} />
           </p>
           <p className="mt-5 text-xs text-white/55">
             © {year} {site.orgName}
