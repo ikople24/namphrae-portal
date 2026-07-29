@@ -137,6 +137,7 @@ function AdminDashboard() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              aria-label="ค้นหาลิงก์"
               placeholder="ค้นหาลิงก์"
               className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-mute"
             />
