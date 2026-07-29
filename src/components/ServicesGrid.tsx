@@ -91,7 +91,7 @@ export default function ServicesGrid({
                 type="button"
                 onClick={() => setCat(p.id)}
                 aria-pressed={on}
-                className={`rounded-full px-[17px] py-[9px] font-display text-[13px] font-semibold transition ${
+                className={`rounded-full px-[17px] py-[9px] font-display text-[13px] font-semibold transition max-sm:min-h-[44px] ${
                   on
                     ? 'bg-green text-white'
                     : 'border border-black/[0.18] text-green-deep hover:bg-green-025'

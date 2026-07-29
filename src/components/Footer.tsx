@@ -26,11 +26,21 @@ export default function Footer({
             ) : null}
             {site.contact?.phone ? (
               <>
-                โทร {site.contact.phone}
+                โทร{' '}
+                <a
+                  href={`tel:${site.contact.phone.replace(/[^0-9+]/g, '')}`}
+                  className="hover:text-white"
+                >
+                  {site.contact.phone}
+                </a>
                 <br />
               </>
             ) : null}
-            {site.contact?.email}
+            {site.contact?.email ? (
+              <a href={`mailto:${site.contact.email}`} className="hover:text-white">
+                {site.contact.email}
+              </a>
+            ) : null}
           </p>
         </div>
         <div>

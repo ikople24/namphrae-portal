@@ -57,8 +57,14 @@ sections conflict, **the update note wins** (เช่น hover เซลล์�
   redesigned keep working with re-mapped tokens).
 
 ### Phase 2 — Public landing 1c
+- **As built (documented deviations):** no search box — the chosen 1c screens
+  have category pills only (search existed only in the unchosen 1a); mobile
+  shows the full service list as stacked hairline cells (the 1c Mobile
+  "บริการยอดนิยม" divider list is covered by the hero shortcut rows); the
+  admin-editable `brandTitle`/`orgSubName` fields are dormant in 1c (as is
+  hero media).
 - Rebuild `SiteHeader` (topbar), `Hero` + air card, LIVE SENSORS ticker,
-  category filter pills + search (client state `q`/`cat` over SSG data),
+  category filter pills (client state `cat` over SSG data),
   hairline service grid (**use `border-right/bottom`, not gap-1px + filler**,
   per handoff note), footer + visitor counter, `ContourBackground` with
   `np-trace`/scan/sensor nodes. Mobile layout per `1c Mobile`.

@@ -133,46 +133,9 @@ body {
   font-variation-settings: 'opsz' 24, 'wght' 300, 'FILL' 0, 'GRAD' 0;
 }
 
-/* ── Legacy pre-redesign styles (used by current Hero/cards; Phase 2 removes) */
-.contour-drift {
-  animation: contour-drift 26s ease-in-out infinite alternate;
-  transform-origin: center;
-}
-@keyframes contour-drift {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(-2%, -1.5%, 0) scale(1.06); }
-}
-
-.service-card {
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
-}
-.service-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 30px -18px color-mix(in srgb, var(--card-accent) 60%, #000);
-  border-color: color-mix(in srgb, var(--card-accent) 45%, transparent);
-}
-.service-card:focus-visible {
-  outline: 3px solid var(--card-accent);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .rise {
-    animation: rise 0.6s both;
-  }
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(14px); }
-    to { opacity: 1; transform: none; }
-  }
-}
-
 /* ── Reduced motion: kill every decorative animation. Entrance animations
    (np-rise/np-grow) fall back to their natural (final) layout state. ──── */
 @media (prefers-reduced-motion: reduce) {
-  .contour-drift,
   .animate-np-rise,
   .animate-np-ripple,
   .animate-np-drift,

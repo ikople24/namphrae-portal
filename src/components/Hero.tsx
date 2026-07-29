@@ -66,7 +66,7 @@ function AirCard({ pm }: { pm: number }) {
       <p className="mt-3 font-display text-sm font-semibold text-green-deep max-sm:text-[13px]">
         µg/m³ · PM2.5 ปานกลาง
       </p>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-faint max-sm:hidden">
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-faint">
         เซ็นเซอร์ 4 จุดในตำบล · อัปเดตสดทุกไม่กี่วินาที (ข้อมูลตัวอย่าง)
       </p>
     </div>
@@ -91,7 +91,8 @@ export default function Hero({
     .slice(0, 3);
   const fallback = links.filter((l) => l.url && !l.isFeatured).slice(0, 3);
   const rows = shortcuts.length === 3 ? shortcuts : fallback;
-  const activeCount = links.length;
+  // Only services with a working URL count as "ready to use".
+  const activeCount = links.filter((l) => l.url).length;
 
   return (
     <section className="relative overflow-hidden px-5 pb-[52px] pt-10 sm:px-11 sm:pt-[60px]">
