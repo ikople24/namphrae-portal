@@ -39,6 +39,7 @@ export function toLinkInput(l: ServiceLink): LinkInput {
     subtitle: l.subtitle ?? '',
     url: l.url,
     imageUrl: l.imageUrl ?? '',
+    icon: l.icon ?? '',
     categoryId: l.categoryId,
     openInNewTab: l.openInNewTab,
     isActive: l.isActive,

@@ -11,6 +11,7 @@ const EMPTY: LinkInput = {
   subtitle: '',
   url: '',
   imageUrl: '',
+  icon: '',
   categoryId: '',
   openInNewTab: true,
   isActive: true,

@@ -46,6 +46,7 @@ export type ServiceLink = {
   subtitle?: string;
   url: string;
   imageUrl?: string; // Cloudinary URL (or legacy hotlink)
+  icon?: string; // Material Symbols name (see src/lib/icons.ts)
   categoryId: string;
   openInNewTab: boolean;
   isActive: boolean; // false = hidden from public page

@@ -47,6 +47,12 @@ export const linkInputSchema = z.object({
   subtitle: z.string().optional().default(''),
   url: z.string().url('ต้องเป็น URL ที่ถูกต้อง').or(z.literal('')),
   imageUrl: z.string().url().or(z.literal('')).optional().default(''),
+  // Material Symbols name (see src/lib/icons.ts). Empty = fall back by id.
+  icon: z
+    .string()
+    .regex(/^[a-z0-9_]*$/, 'ชื่อไอคอนใช้ a-z, 0-9, _ เท่านั้น')
+    .optional()
+    .default(''),
   categoryId: z.string().min(1),
   openInNewTab: z.boolean().default(true),
   isActive: z.boolean().default(true),

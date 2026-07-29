@@ -63,7 +63,8 @@
       "isActive": true,
       "isFeatured": true,
       "order": 1,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "description"
     },
     {
       "id": "smart-namphrae",
@@ -76,7 +77,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 2,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "dashboard"
     },
     {
       "id": "air-quality",
@@ -89,7 +91,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 3,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "air"
     },
     {
       "id": "google-maps",
@@ -102,7 +105,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 4,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "location_on"
     },
     {
       "id": "looker-dashboard",
@@ -115,7 +119,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 5,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "monitoring"
     },
     {
       "id": "agnos-health",
@@ -128,7 +133,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 6,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "health_and_safety"
     },
     {
       "id": "otop",
@@ -141,7 +147,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 7,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "storefront"
     },
     {
       "id": "google-earth",
@@ -154,7 +161,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 8,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "public"
     },
     {
       "id": "maplight",
@@ -167,7 +175,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 9,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "lightbulb"
     },
     {
       "id": "cctv",
@@ -180,7 +189,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 10,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "videocam"
     },
     {
       "id": "announcements",
@@ -193,7 +203,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 11,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "campaign"
     },
     {
       "id": "paytax",
@@ -206,7 +217,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 12,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "payments"
     },
     {
       "id": "baimai",
@@ -219,7 +231,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 13,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "compost"
     },
     {
       "id": "map-main",
@@ -232,7 +245,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 14,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "map"
     },
     {
       "id": "line-oa",
@@ -245,7 +259,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 15,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "chat"
     },
     {
       "id": "placeholder-15",
@@ -258,7 +273,8 @@
       "isActive": false,
       "isFeatured": false,
       "order": 16,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "help"
     },
     {
       "id": "npdrh-calendar",
@@ -271,7 +287,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 17,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "calendar_month"
     },
     {
       "id": "forest-map",
@@ -284,7 +301,8 @@
       "isActive": true,
       "isFeatured": false,
       "order": 18,
-      "clickCount": 0
+      "clickCount": 0,
+      "icon": "forest"
     }
   ],
   "_id": "portalConfig",
