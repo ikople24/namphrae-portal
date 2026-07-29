@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import type { Category, PublicLink } from '@/types/portal';
 import Icon from '@/components/Icon';
 import { iconForService } from '@/lib/icons';
@@ -9,16 +10,13 @@ import { accentFor } from '@/lib/category-accent';
 // right/bottom border — no filler cells needed (handoff recommendation).
 // Hover = green-hover fill, text colors unchanged (update note: no inversion).
 
-function track(id: string) {
-  if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
-    navigator.sendBeacon(`/api/track/${encodeURIComponent(id)}`);
-  }
-}
-
 function Cell({ link, index }: { link: PublicLink; index: number }) {
-  const hasUrl = Boolean(link.url);
-  const inner = (
-    <>
+  return (
+    <Link
+      href={`/service/${encodeURIComponent(link.id)}`}
+      className="flex min-h-[150px] flex-col gap-4 border-b border-r border-line bg-white p-6 transition-colors duration-[.18s] animate-np-rise hover:bg-green-hover focus-visible:outline-3"
+      style={{ animationDelay: `${index * 55}ms`, outlineColor: accentFor(link.categoryId) }}
+    >
       <span className="flex items-center justify-between">
         <Icon name={iconForService(link.id, link.icon)} size={34} className="text-green-deep" />
         <span className="font-display text-[11px] font-semibold tracking-[.14em] text-ink-mute">
@@ -35,32 +33,7 @@ function Cell({ link, index }: { link: PublicLink; index: number }) {
           </span>
         ) : null}
       </span>
-    </>
-  );
-
-  const base =
-    'flex min-h-[150px] flex-col gap-4 border-b border-r border-line bg-white p-6 transition-colors duration-[.18s] animate-np-rise';
-  const style = { animationDelay: `${index * 55}ms` };
-
-  if (!hasUrl) {
-    return (
-      <div aria-disabled="true" className={`${base} cursor-default opacity-70`} style={style}>
-        {inner}
-      </div>
-    );
-  }
-  return (
-    <a
-      href={link.url}
-      target={link.openInNewTab ? '_blank' : undefined}
-      rel={link.openInNewTab ? 'noopener noreferrer' : undefined}
-      onClick={() => track(link.id)}
-      onAuxClick={() => track(link.id)}
-      className={`${base} hover:bg-green-hover focus-visible:outline-3`}
-      style={{ ...style, outlineColor: accentFor(link.categoryId) }}
-    >
-      {inner}
-    </a>
+    </Link>
   );
 }
 
