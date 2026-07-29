@@ -5,6 +5,7 @@ export default function Document() {
   return (
     <Html lang="th">
       <Head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="stylesheet" href={ICON_FONT_HREF} />
       </Head>
