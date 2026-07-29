@@ -1,43 +1,59 @@
-// Signature motif: layered topographic contour lines that drift slowly, evoking
-// spreading water (น้ำแพร่) and the area's maps. Purely decorative.
+import { SENSOR_NODES } from '@/lib/live-sample';
+
+// 1c hero decoration: 4 traced contour lines (np-trace, staggered), a scan
+// beam sweeping down, and 5 rippling sensor dots. Purely decorative.
 export default function ContourBackground() {
-  // Nested rolling curves across a wide viewBox; each is offset vertically.
-  const lines = Array.from({ length: 9 }, (_, i) => {
-    const y = 90 + i * 52;
-    const amp = 26 + (i % 3) * 10;
-    const d = `M -50 ${y}
-      C 180 ${y - amp}, 320 ${y + amp}, 520 ${y - amp * 0.5}
-      S 900 ${y + amp}, 1080 ${y - amp * 0.8}
-      S 1360 ${y + amp * 0.6}, 1450 ${y}`;
-    return { d, o: 0.05 + (i % 4) * 0.045 };
-  });
+  const paths = [
+    { d: 'M-40 380 C 240 300 460 470 720 370 S 1100 460 1330 340', o: 0.3, delay: '0s' },
+    { d: 'M-40 430 C 240 350 460 520 720 420 S 1100 510 1330 390', o: 0.22, delay: '.7s' },
+    { d: 'M-40 480 C 240 400 460 570 720 470 S 1100 560 1330 440', o: 0.16, delay: '1.4s' },
+    { d: 'M-40 530 C 240 450 460 620 720 520 S 1100 610 1330 490', o: 0.1, delay: '2.1s' },
+  ];
 
   return (
-    <svg
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      viewBox="0 0 1400 600"
-      preserveAspectRatio="xMidYMid slice"
-      fill="none"
-    >
-      <g className="contour-drift" stroke="#ffffff" strokeWidth="1.5">
-        {lines.map((l, i) => (
-          <path key={i} d={l.d} strokeOpacity={l.o} />
-        ))}
-      </g>
-      {/* Faint "source" ripple, off to one side. */}
-      <g className="contour-drift" stroke="#ffffff" fill="none">
-        {[70, 130, 200, 280].map((r, i) => (
-          <circle
-            key={r}
-            cx="1180"
-            cy="150"
-            r={r}
-            strokeOpacity={0.12 - i * 0.02}
-            strokeWidth="1.5"
+    <>
+      <svg
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full opacity-40 animate-np-drift"
+        viewBox="0 0 1280 560"
+        preserveAspectRatio="none"
+        fill="none"
+        stroke="#34b863"
+        strokeWidth="1.4"
+      >
+        {paths.map((p) => (
+          <path
+            key={p.d}
+            d={p.d}
+            strokeOpacity={p.o}
+            strokeDasharray={1400}
+            className="animate-np-trace"
+            style={{ animationDelay: p.delay }}
           />
         ))}
-      </g>
-    </svg>
+      </svg>
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-[120px] animate-np-scan"
+        style={{
+          background:
+            'linear-gradient(180deg, rgba(102,187,106,0) 0%, rgba(102,187,106,.12) 70%, rgba(102,187,106,.55) 100%)',
+        }}
+      />
+      {SENSOR_NODES.map((n) => (
+        <span
+          key={n.x + n.y}
+          aria-hidden="true"
+          className="absolute grid h-3 w-3 place-items-center"
+          style={{ left: n.x, top: n.y }}
+        >
+          <span
+            className="absolute inset-0 rounded-full bg-green-mid animate-np-ripple"
+            style={{ animationDelay: n.delay }}
+          />
+          <span className="h-[5px] w-[5px] rounded-full bg-green-mid shadow-[0_0_10px_rgba(102,187,106,.7)]" />
+        </span>
+      ))}
+    </>
   );
 }
