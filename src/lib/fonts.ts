@@ -1,15 +1,15 @@
-import { Bai_Jamjuree, IBM_Plex_Sans_Thai } from 'next/font/google';
+import { Anuphan, Noto_Sans_Thai_Looped } from 'next/font/google';
 
-// Display face — geometric, lightly squared; carries the "smart city" tone.
-export const display = Bai_Jamjuree({
+// Display / UI face — per the 1c handoff: headings, buttons, nav, numbers.
+export const display = Anuphan({
   subsets: ['thai', 'latin'],
-  weight: ['500', '600', '700'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-display',
   display: 'swap',
 });
 
-// Body face — highly readable for civic content in Thai and Latin.
-export const body = IBM_Plex_Sans_Thai({
+// Body face — long-form Thai civic content.
+export const body = Noto_Sans_Thai_Looped({
   subsets: ['thai', 'latin'],
   weight: ['400', '500', '600'],
   variable: '--font-body',
