@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import type { Category } from '@/types/portal';
 import { linkInputSchema, type LinkInput } from '@/lib/schema';
-import { createLink, updateLink, uploadMedia } from '@/lib/admin-api';
-import ImageUploadField from '@/components/admin/ImageUploadField';
+import { createLink, updateLink } from '@/lib/admin-api';
+import Icon from '@/components/Icon';
+import { SERVICE_ICONS, iconForService } from '@/lib/icons';
 
 const EMPTY: LinkInput = {
   id: '',
@@ -108,12 +109,27 @@ export default function LinkForm({
         </p>
       </Field>
 
-      <Field label="รูปภาพ">
-        <ImageUploadField
-          value={form.imageUrl ?? ''}
-          onChange={(url) => set('imageUrl', url)}
-          upload={(file) => uploadMedia(file, 'image').then((r) => r.url)}
-        />
+      <Field label="ไอคอน">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 flex-none place-items-center rounded-[10px] bg-green-050 text-green-deep">
+            <Icon name={iconForService(form.id, form.icon)} size={22} />
+          </span>
+          <select
+            className={inputCls}
+            value={form.icon ?? ''}
+            onChange={(e) => set('icon', e.target.value)}
+          >
+            <option value="">— อัตโนมัติตามรหัส (id) —</option>
+            {ICON_OPTIONS.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-1 text-xs text-ink-soft">
+          ไอคอนเส้นแทนรูปภาพเดิม — แบบอัตโนมัติจะเลือกตามรหัสบริการที่รู้จัก
+        </p>
       </Field>
 
       <div className="grid gap-5 sm:grid-cols-2">
@@ -182,6 +198,9 @@ export default function LinkForm({
 
 const inputCls =
   'w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/20';
+
+// Unique icon names from the service map, alphabetical, for the dropdown.
+const ICON_OPTIONS = Array.from(new Set(Object.values(SERVICE_ICONS))).sort();
 
 function Field({
   label,
