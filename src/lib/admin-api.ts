@@ -1,4 +1,5 @@
 import type {
+  Category,
   PortalConfig,
   ServiceLink,
   SiteSettings,
@@ -85,6 +86,18 @@ export async function reorderLinks(order: string[]): Promise<void> {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ order }),
+    })
+  );
+}
+
+export async function updateCategories(
+  categories: Category[]
+): Promise<Category[]> {
+  return jsonOrThrow(
+    await fetch('/api/admin/categories', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ categories }),
     })
   );
 }

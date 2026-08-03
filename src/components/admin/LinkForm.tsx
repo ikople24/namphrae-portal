@@ -5,6 +5,7 @@ import { linkInputSchema, type LinkInput } from '@/lib/schema';
 import { createLink, updateLink } from '@/lib/admin-api';
 import Icon from '@/components/Icon';
 import { SERVICE_ICONS, iconForService } from '@/lib/icons';
+import { slugify } from '@/lib/slugify';
 
 const EMPTY: LinkInput = {
   id: '',
@@ -253,12 +254,3 @@ function Toggle({
   );
 }
 
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 40);
-}
