@@ -36,7 +36,7 @@ function track(id: string) {
 function AirCard({ pm }: { pm: number }) {
   const ease = useCountUp();
   return (
-    <div className="rounded-[24px] border border-line bg-green-025 p-[26px] text-ink max-sm:rounded-[20px] max-sm:px-5 max-sm:py-[18px]">
+    <div className="rounded-[20px] border border-line bg-green-025 p-5 text-ink max-sm:px-4 max-sm:py-3.5">
       <div className="flex items-center justify-between">
         <p className="font-display text-xs font-semibold tracking-[.16em] text-green-deep max-sm:text-[11px]">
           อากาศวันนี้ · PM2.5
@@ -46,15 +46,15 @@ function AirCard({ pm }: { pm: number }) {
           <span className="h-[7px] w-[7px] rounded-full bg-green" />
         </span>
       </div>
-      <div className="mt-3.5 flex items-end justify-between gap-4">
-        <p className="font-display text-[84px] font-bold leading-[.85] tracking-[-.04em] text-green-deep [font-variant-numeric:tabular-nums] max-sm:text-[56px]">
+      <div className="mt-2 flex items-end justify-between gap-4">
+        <p className="font-display text-[56px] font-bold leading-[.85] tracking-[-.04em] text-green-deep [font-variant-numeric:tabular-nums] max-sm:text-[44px]">
           {Math.round(pm * ease)}
         </p>
-        <div className="flex h-[66px] items-end gap-[5px] max-sm:h-12 max-sm:gap-1">
+        <div className="flex h-[48px] items-end gap-1 max-sm:h-10">
           {PM_SERIES.map((v, i) => (
             <span
               key={i}
-              className="w-[9px] origin-bottom rounded-[3px] animate-np-grow max-sm:w-[7px]"
+              className="w-2 origin-bottom rounded-[3px] animate-np-grow max-sm:w-[7px]"
               style={{
                 height: `${Math.round((v / 50) * 100)}%`,
                 backgroundColor: pmColor(v),
@@ -64,11 +64,8 @@ function AirCard({ pm }: { pm: number }) {
           ))}
         </div>
       </div>
-      <p className="mt-3 font-display text-sm font-semibold text-green-deep max-sm:text-[13px]">
+      <p className="mt-1.5 font-display text-[13px] font-semibold text-green-deep">
         µg/m³ · PM2.5 ปานกลาง
-      </p>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-faint">
-        เซ็นเซอร์ 4 จุดในตำบล · อัปเดตสดทุกไม่กี่วินาที (ข้อมูลตัวอย่าง)
       </p>
     </div>
   );
