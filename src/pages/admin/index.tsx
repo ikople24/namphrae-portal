@@ -29,7 +29,7 @@ import {
   toLinkInput,
   updateLink,
 } from '@/lib/admin-api';
-import { accentFor } from '@/lib/category-accent';
+import { accentOf } from '@/lib/category-accent';
 import { iconForService } from '@/lib/icons';
 import type { PortalConfig, ServiceLink } from '@/types/portal';
 
@@ -51,6 +51,12 @@ function AdminDashboard() {
   const categoryLabel = useMemo(() => {
     const m = new Map<string, string>();
     data?.categories.forEach((c) => m.set(c.id, c.label));
+    return m;
+  }, [data]);
+
+  const categoryById = useMemo(() => {
+    const m = new Map<string, PortalConfig['categories'][number]>();
+    data?.categories.forEach((c) => m.set(c.id, c));
     return m;
   }, [data]);
 
@@ -224,6 +230,7 @@ function AdminDashboard() {
                     busy={busy === link.id}
                     onToggle={() => onToggleActive(link)}
                     onDelete={() => onDelete(link)}
+                    accent={accentOf(categoryById.get(link.categoryId), link.categoryId)}
                   />
                 ))}
               </ul>
@@ -247,6 +254,7 @@ function LinkRow({
   busy,
   onToggle,
   onDelete,
+  accent,
 }: {
   link: ServiceLink;
   categoryLabel: string;
@@ -254,10 +262,10 @@ function LinkRow({
   busy: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  accent: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: link.id, disabled: !draggable });
-  const accent = accentFor(link.categoryId);
 
   return (
     <li

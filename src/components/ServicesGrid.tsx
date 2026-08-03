@@ -3,19 +3,19 @@ import Link from 'next/link';
 import type { Category, PublicLink } from '@/types/portal';
 import Icon from '@/components/Icon';
 import { iconForService } from '@/lib/icons';
-import { accentFor } from '@/lib/category-accent';
+import { accentOf } from '@/lib/category-accent';
 
 // 1c "บริการทั้งหมด": H2 + category pills + 3-column hairline grid.
 // Hairline technique: container gets top/left border, every cell gets
 // right/bottom border — no filler cells needed (handoff recommendation).
 // Hover = green-hover fill, text colors unchanged (update note: no inversion).
 
-function Cell({ link, index }: { link: PublicLink; index: number }) {
+function Cell({ link, index, accent }: { link: PublicLink; index: number; accent: string }) {
   return (
     <Link
       href={`/service/${encodeURIComponent(link.id)}`}
       className="flex min-h-[150px] flex-col gap-4 border-b border-r border-line bg-white p-6 transition-colors duration-[.18s] animate-np-rise hover:bg-green-hover focus-visible:outline-3"
-      style={{ animationDelay: `${index * 55}ms`, outlineColor: accentFor(link.categoryId) }}
+      style={{ animationDelay: `${index * 55}ms`, outlineColor: accent }}
     >
       <span className="flex items-center justify-between">
         <Icon name={iconForService(link.id, link.icon)} size={34} className="text-green-deep" />
@@ -47,6 +47,7 @@ export default function ServicesGrid({
   const [cat, setCat] = useState<string>('all');
   const shown = cat === 'all' ? links : links.filter((l) => l.categoryId === cat);
   const pills = [{ id: 'all', label: 'ทั้งหมด' }, ...categories.map((c) => ({ id: c.id, label: c.label }))];
+  const catById = new Map(categories.map((c) => [c.id, c]));
 
   return (
     <section id="services" className="bg-white px-5 pb-[60px] pt-[52px] sm:px-11">
@@ -79,7 +80,12 @@ export default function ServicesGrid({
       {shown.length ? (
         <div className="grid border-l border-t border-line sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((link, i) => (
-            <Cell key={link.id} link={link} index={i} />
+            <Cell
+              key={link.id}
+              link={link}
+              index={i}
+              accent={accentOf(catById.get(link.categoryId), link.categoryId)}
+            />
           ))}
         </div>
       ) : (
