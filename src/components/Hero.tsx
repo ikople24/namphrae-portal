@@ -191,7 +191,7 @@ export default function Hero({
             </div>
           </div>
         </div>
-        <div className="flex flex-col gap-3.5">
+        <div className="flex w-full flex-col gap-3.5 lg:max-w-[440px] lg:justify-self-end">
           <AirCard pm={pm} />
           {rows.map((s) => (
             <a
