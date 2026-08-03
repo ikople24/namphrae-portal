@@ -11,7 +11,7 @@ export default function SiteHeader({ site }: { site: SiteSettings }) {
   ];
   return (
     <header className="border-b border-line bg-white">
-      <div className="mx-auto flex max-w-7xl items-center gap-3 px-5 py-4 sm:gap-4 sm:px-11 sm:py-5">
+      <div className="flex items-center gap-3 px-5 py-4 sm:gap-4 sm:px-11 sm:py-5">
         {site.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
