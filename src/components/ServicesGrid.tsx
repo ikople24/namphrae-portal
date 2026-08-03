@@ -51,6 +51,7 @@ export default function ServicesGrid({
 
   return (
     <section id="services" className="bg-white px-5 pb-[60px] pt-[52px] sm:px-11">
+      <div className="mx-auto max-w-7xl">
       <div className="mb-[30px] flex flex-wrap items-end gap-4">
         <h2 className="font-display text-[32px] font-bold leading-none tracking-[-.03em] text-green-deep sm:text-[44px]">
           บริการทั้งหมด
@@ -93,6 +94,7 @@ export default function ServicesGrid({
           <p className="font-display text-base font-semibold text-ink">ไม่พบบริการในหมวดนี้</p>
         </div>
       )}
+      </div>
     </section>
   );
 }

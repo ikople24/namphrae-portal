@@ -44,6 +44,7 @@ export default function ServiceDetail({ config, link }: Props) {
           className="px-5 pb-[30px] pt-[22px] text-white sm:px-9"
           style={{ background: 'linear-gradient(160deg, #17a34a, #0f7a37)' }}
         >
+          <div className="mx-auto max-w-7xl">
           <Link
             href="/#services"
             className="inline-flex items-center gap-[7px] rounded-full border border-white/30 bg-white/[0.12] px-3.5 py-[7px] font-display text-[13px] font-medium text-white transition hover:bg-white/[0.22]"
@@ -66,9 +67,10 @@ export default function ServiceDetail({ config, link }: Props) {
               </h1>
             </div>
           </div>
+          </div>
         </div>
 
-        <div className="grid gap-7 px-5 pb-10 pt-[30px] sm:px-9 lg:grid-cols-[1.4fr_.8fr]">
+        <div className="mx-auto grid max-w-7xl gap-7 px-5 pb-10 pt-[30px] sm:px-9 lg:grid-cols-[1.4fr_.8fr]">
           <div>
             <p className="max-w-[620px] text-[15px] leading-[1.75] text-ink">
               {link.subtitle ? `${link.subtitle} — ` : ''}

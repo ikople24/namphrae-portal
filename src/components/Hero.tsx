@@ -105,7 +105,7 @@ export default function Hero({
   return (
     <section className="relative overflow-hidden px-5 pb-[52px] pt-10 sm:px-11 sm:pt-[60px]">
       {hasMedia ? <HeroMedia hero={hero} /> : <ContourBackground />}
-      <div className="relative grid items-start gap-8 lg:grid-cols-[1.5fr_1fr] lg:gap-14">
+      <div className="relative mx-auto grid max-w-7xl items-start gap-8 lg:grid-cols-[1.5fr_1fr] lg:gap-14">
         <div>
           <p
             className={`font-display text-xs font-semibold tracking-[.32em] ${

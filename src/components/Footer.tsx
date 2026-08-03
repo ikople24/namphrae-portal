@@ -12,7 +12,7 @@ export default function Footer({
   const year = new Date().getFullYear() + 543;
   return (
     <footer id="contact" className="bg-green-deep px-5 py-12 text-white sm:px-11">
-      <div className="grid gap-10 sm:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-7xl gap-10 sm:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <p className="font-display text-[26px] font-bold leading-tight tracking-[-.02em]">
             {site.orgName}
