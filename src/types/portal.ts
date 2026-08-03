@@ -38,6 +38,7 @@ export type Category = {
   id: string; // slug e.g. "service"
   label: string;
   order: number;
+  color?: string; // curated palette hex (see src/lib/category-accent.ts)
 };
 
 export type ServiceLink = {

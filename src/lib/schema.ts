@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CONFIG_ID } from '@/types/portal';
+import { CATEGORY_COLOR_VALUES } from '@/lib/category-accent';
 
 // A single Zod source of truth, reused by API routes and admin forms.
 
@@ -33,8 +34,10 @@ export const categorySchema = z.object({
     .string()
     .min(1)
     .regex(/^[a-z0-9-]+$/, 'slug ใช้ a-z, 0-9, - เท่านั้น'),
-  label: z.string().min(1),
+  label: z.string().min(1, 'ต้องระบุชื่อหมวด'),
   order: z.number().int(),
+  // Curated palette only (see CATEGORY_COLORS); absent = legacy per-id hue.
+  color: z.enum(CATEGORY_COLOR_VALUES).optional(),
 });
 
 // The editable shape of a link as submitted from the admin form.
