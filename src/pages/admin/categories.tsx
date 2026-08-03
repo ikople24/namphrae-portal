@@ -5,6 +5,7 @@ import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getMemberSsrProps } from '@/lib/auth-server';
 import { adminFetcher, updateCategories } from '@/lib/admin-api';
+import { categorySchema } from '@/lib/schema';
 import { CATEGORY_COLORS, accentOf } from '@/lib/category-accent';
 import { slugify } from '@/lib/slugify';
 import type { Category, PortalConfig } from '@/types/portal';
@@ -88,6 +89,15 @@ function CategoriesPage() {
     if (!list.length) {
       setMsg('ต้องมีอย่างน้อย 1 หมวด');
       return;
+    }
+    // Validate client-side first so the admin sees zod's Thai message instead
+    // of a bare 400 code (mirrors LinkForm's pattern).
+    for (const c of list) {
+      const parsed = categorySchema.safeParse({ ...c, order: 1 });
+      if (!parsed.success) {
+        setMsg(parsed.error.issues[0]?.message ?? 'ข้อมูลหมวดไม่ถูกต้อง');
+        return;
+      }
     }
     setSaving(true);
     setMsg(null);
