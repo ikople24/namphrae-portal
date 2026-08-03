@@ -103,7 +103,7 @@ export default function Hero({
         : false;
 
   return (
-    <section className="relative overflow-hidden px-5 pb-[52px] pt-10 sm:px-11 sm:pt-[60px]">
+    <section className="relative overflow-hidden px-5 pb-[52px] pt-10 sm:px-11 sm:pt-[60px] xl:px-24">
       {hasMedia ? <HeroMedia hero={hero} /> : <ContourBackground />}
       <div className="relative grid items-start gap-8 lg:grid-cols-[1.5fr_1fr] lg:gap-14">
         <div>
