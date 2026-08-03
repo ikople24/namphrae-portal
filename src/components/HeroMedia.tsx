@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { HeroMedia as HeroMediaType } from '@/types/portal';
-import ContourBackground from '@/components/ContourBackground';
 
-// Renders the hero backdrop per hero.mediaType. Video autoplays muted/looped,
-// but falls back to the poster image when the viewer prefers reduced motion.
+// Full-bleed hero backdrop (video or image) + darkening overlay. Rendered by
+// Hero only when media is configured; video autoplays muted/looped and falls
+// back to the poster image when the viewer prefers reduced motion.
 export default function HeroMedia({ hero }: { hero: HeroMediaType }) {
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -20,8 +20,8 @@ export default function HeroMedia({ hero }: { hero: HeroMediaType }) {
       className="absolute inset-0"
       style={{
         background: `linear-gradient(180deg,
-          color-mix(in srgb, var(--color-emerald-deep) 82%, transparent),
-          color-mix(in srgb, var(--color-emerald-deep) ${Math.round(
+          color-mix(in srgb, var(--color-green-deep) 82%, transparent),
+          color-mix(in srgb, var(--color-green-deep) ${Math.round(
             hero.overlayOpacity * 100
           )}%, transparent))`,
       }}
@@ -64,18 +64,10 @@ export default function HeroMedia({ hero }: { hero: HeroMediaType }) {
     );
   }
 
-  // mediaType === 'none' (or missing media): gradient + contour signature.
-  return (
-    <>
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(120% 130% at 78% 8%, var(--color-emerald) 0%, var(--color-emerald-deep) 58%, #073a32 100%)',
-        }}
-        aria-hidden="true"
-      />
-      <ContourBackground />
-    </>
-  );
+  // Video configured but no poster and motion is reduced: plain deep green.
+  if (hero.mediaType === 'video' && hero.videoUrl) {
+    return <div className="absolute inset-0 bg-green-deep" aria-hidden="true" />;
+  }
+
+  return null;
 }

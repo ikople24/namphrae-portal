@@ -1,5 +1,9 @@
 import { useRef, useState } from 'react';
 
+function isVideoUrl(url: string): boolean {
+  return /\/video\/upload\/|\.(mp4|webm|mov)(\?|$)/i.test(url);
+}
+
 // Image field: paste a URL or upload a file (via the provided upload fn, which
 // signs + sends to Cloudinary). Degrades gracefully when uploads aren't set up —
 // the URL box still works.
@@ -38,8 +42,19 @@ export default function ImageUploadField({
       <div className="flex items-start gap-3">
         <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg border border-black/10 bg-paper">
           {value ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="" className="h-full w-full object-cover" />
+            isVideoUrl(value) ? (
+              // Video URLs render as a muted inline preview, not a broken <img>.
+              <video
+                src={value}
+                muted
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={value} alt="" className="h-full w-full object-cover" />
+            )
           ) : (
             <span className="text-[10px] text-ink-soft">ไม่มีรูป</span>
           )}

@@ -61,8 +61,11 @@ sections conflict, **the update note wins** (เช่น hover เซลล์�
   have category pills only (search existed only in the unchosen 1a); mobile
   shows the full service list as stacked hairline cells (the 1c Mobile
   "บริการยอดนิยม" divider list is covered by the hero shortcut rows); the
-  admin-editable `brandTitle`/`orgSubName` fields are dormant in 1c (as is
-  hero media).
+  admin-editable `brandTitle`/`orgSubName` fields are dormant in 1c. Hero
+  media was re-enabled by user decision (3 ส.ค. 2569): when configured, the
+  hero renders `HeroMedia` (video/poster + overlay) as a full background
+  instead of the contour layer and the hero text flips to a light-on-dark
+  variant; with `mediaType: none` the white 1c hero is unchanged.
 - Rebuild `SiteHeader` (topbar), `Hero` + air card, LIVE SENSORS ticker,
   category filter pills (client state `cat` over SSG data),
   hairline service grid (**use `border-right/bottom`, not gap-1px + filler**,
