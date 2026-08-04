@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { bySchedule, matches } from '@/lib/jobs-store';
+import {
+  bySchedule,
+  buildJobPatch,
+  buildNewJob,
+  JOB_EDITABLE_FIELDS,
+  matches,
+} from '@/lib/jobs-store';
+import type { JobInput } from '@/lib/schema';
 import type { CalendarJob } from '@/types/portal';
 
 // เทสต์นี้ครอบเฉพาะ matches() และ bySchedule() — ฟังก์ชันบริสุทธิ์ล้วน ๆ
@@ -120,6 +127,84 @@ describe('bySchedule', () => {
     ];
     const sorted = [...jobs].sort(bySchedule);
     expect(sorted.map((j) => j.id)).toEqual(['1', '2', '3', '4', '5', '6']);
+  });
+});
+
+// ---- รูปร่างเอกสาร: createJob (ผ่าน buildNewJob) กับ updateJob (ผ่าน --------
+// buildJobPatch) ต้องเห็นตรงกันว่าฟิลด์ที่ไม่บังคับว่าง ('') ไม่ใช่ค่าที่ควร
+// ตัดคีย์ทิ้ง — เดิม createJob ตัดคีย์ทิ้งด้วย conditional spread ขณะที่
+// updateJob เขียนทุกคีย์เสมอ ทำให้งานที่ไม่เคยแก้กับงานที่แก้แล้วมีรูปร่าง
+// เอกสารต่างกันทั้งที่ความหมายเดียวกัน (ดูคอมเมนต์บน buildNewJob ใน
+// jobs-store.ts) ตอนนี้ทั้งสองทางเขียนคีย์ครบเสมอแล้ว เทสต์ชุดนี้ตรึงไว้
+describe('รูปร่างเอกสาร: buildNewJob กับ buildJobPatch ต้องเขียนคีย์ชุดเดียวกัน', () => {
+  const BLANK_INPUT: JobInput = {
+    kind: 'ems',
+    date: '2026-08-05',
+    time: '06:00',
+    title: 'ก',
+    village: '',
+    origin: '',
+    destination: '',
+    phone: '',
+    note: '',
+  };
+
+  const FULL_INPUT: JobInput = {
+    kind: 'rescue',
+    date: '2026-08-06',
+    time: '13:30',
+    title: 'ข',
+    village: 'ม.3 ต.น้ำแพร่',
+    origin: 'บ้านที่อาศัย',
+    destination: 'รพ.สวนดอก',
+    phone: '0812345678',
+    note: 'ใช้รถเข็น',
+  };
+
+  it('งานใหม่ที่เว้นฟิลด์ไม่บังคับว่าง ยังมีคีย์ครบ ไม่ตัดทิ้ง', () => {
+    const job = buildNewJob(BLANK_INPUT, 'staff@example.com');
+    const optionalKeys = [
+      'village',
+      'origin',
+      'destination',
+      'phone',
+      'note',
+    ] as const;
+    for (const key of optionalKeys) {
+      expect(key in job, key).toBe(true);
+      expect(job[key]).toBe('');
+    }
+  });
+
+  it('JOB_EDITABLE_FIELDS ตรงกับคีย์ที่ buildJobPatch เขียนจริงทุกตัว ไม่ขาดไม่เกิน', () => {
+    const patchKeys = Object.keys(buildJobPatch(FULL_INPUT)).sort();
+    expect(patchKeys).toEqual([...JOB_EDITABLE_FIELDS].sort());
+  });
+
+  it('คีย์ที่ buildJobPatch เขียน ต้องเป็นชุดย่อยของคีย์ที่ buildNewJob สร้าง', () => {
+    // ถ้าสองทางนี้ไม่ตรงกัน งานที่ผ่านการแก้จะมีรูปร่างต่างจากงานที่เพิ่งสร้าง
+    const built = new Set(
+      Object.keys(buildNewJob(FULL_INPUT, 'staff@example.com'))
+    );
+    for (const key of JOB_EDITABLE_FIELDS) {
+      expect(built.has(key), key).toBe(true);
+    }
+  });
+
+  it('buildJobPatch ไม่แตะสถานะหรือ audit trail', () => {
+    const patch = buildJobPatch(FULL_INPUT) as Record<string, unknown>;
+    const forbidden = [
+      'status',
+      'createdAt',
+      'createdBy',
+      'decidedAt',
+      'decidedBy',
+      'doneAt',
+      'doneBy',
+    ];
+    for (const key of forbidden) {
+      expect(key in patch, key).toBe(false);
+    }
   });
 });
 

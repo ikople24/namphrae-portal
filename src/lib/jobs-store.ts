@@ -107,25 +107,39 @@ export async function getJob(id: string): Promise<CalendarJob | null> {
   return (await fileRead()).find((j) => j.id === id) ?? null;
 }
 
-export async function createJob(
-  input: JobInput,
-  createdBy: string
-): Promise<CalendarJob> {
-  const job: CalendarJob = {
+/**
+ * ประกอบงานใหม่จากอินพุตที่ผ่าน Zod แล้ว — แยกออกมาจาก createJob เพื่อให้เทสต์
+ * ตรวจ "รูปร่างเอกสาร" ได้โดยไม่ต้องแตะ Mongo หรือไฟล์
+ *
+ * เขียนฟิลด์ที่ไม่บังคับทุกตัวเสมอ แม้เป็นสตริงว่าง — ห้ามตัดคีย์ทิ้ง เพราะ
+ * updateJob เขียนครบทุกคีย์ผ่าน $set อยู่แล้ว ถ้าตรงนี้ตัดทิ้ง งานที่ไม่เคยมี
+ * หมู่บ้านกับงานที่เคยมีแล้วลบออกจะมีรูปร่างต่างกันทั้งที่ความหมายเดียวกัน แล้ว
+ * โค้ดที่ใช้ `??` หรือ `'village' in job` จะแสดงผลสองแบบ ('' คือค่า "ไม่มีข้อมูล"
+ * — เดิมตามรอย lineGroupId ใน config-store.ts)
+ */
+export function buildNewJob(input: JobInput, createdBy: string): CalendarJob {
+  return {
     id: crypto.randomUUID(),
     kind: input.kind,
     status: 'pending', // งานใหม่รออนุมัติเสมอ ไม่ว่าใครกรอก
     date: input.date,
     time: input.time,
     title: input.title,
-    ...(input.village ? { village: input.village } : {}),
-    ...(input.origin ? { origin: input.origin } : {}),
-    ...(input.destination ? { destination: input.destination } : {}),
-    ...(input.phone ? { phone: input.phone } : {}),
-    ...(input.note ? { note: input.note } : {}),
+    village: input.village,
+    origin: input.origin,
+    destination: input.destination,
+    phone: input.phone,
+    note: input.note,
     createdAt: new Date().toISOString(),
     createdBy,
   };
+}
+
+export async function createJob(
+  input: JobInput,
+  createdBy: string
+): Promise<CalendarJob> {
+  const job = buildNewJob(input, createdBy);
 
   if (usingMongo()) {
     await ensureIndexes();
@@ -163,12 +177,34 @@ async function patchJob(
   return jobs[index];
 }
 
-/** แก้เนื้อหางาน — ไม่แตะสถานะและไม่แตะ audit trail */
-export async function updateJob(
-  id: string,
-  input: JobInput
-): Promise<CalendarJob | null> {
-  return patchJob(id, {
+// ฟิลด์ที่ buildJobPatch เขียนทับ — ต้องเป็นชุดย่อยของคีย์ที่ buildNewJob สร้าง
+// (มีเทสต์ผูกไว้ใน jobs-store.test.ts) เพื่อไม่ให้งานที่แก้แล้วมีรูปร่าง
+// ต่างจากงานที่เพิ่งสร้าง
+export const JOB_EDITABLE_FIELDS = [
+  'kind',
+  'date',
+  'time',
+  'title',
+  'village',
+  'origin',
+  'destination',
+  'phone',
+  'note',
+] as const satisfies readonly (keyof JobInput & keyof CalendarJob)[];
+
+/**
+ * ประกอบ patch ของ updateJob จากอินพุตที่ผ่าน Zod แล้ว — แยกออกมาเป็นฟังก์ชัน
+ * บริสุทธิ์ด้วยเหตุผลเดียวกับ buildNewJob: ให้เทสต์เรียกตรง ๆ ได้โดยไม่ผ่าน
+ * patchJob (ซึ่งมี I/O) จึงเทียบคีย์ที่เขียนจริงกับ JOB_EDITABLE_FIELDS และกับ
+ * buildNewJob ได้โดยไม่ต้องแตะ Mongo หรือไฟล์
+ *
+ * เขียน object literal ตรง ๆ แทนที่จะวนลูปจาก JOB_EDITABLE_FIELDS: TypeScript
+ * ตรวจ `patch[field] = input[field]` ในลูปไม่ผ่าน เพราะ field เป็น union ของ
+ * คีย์หลายชนิด (เช่น 'kind': JobKind ปนกับ 'title': string) แล้ว TS เช็ค
+ * ชนิดค่าแบบ union รวมทั้งก้อนแทนที่จะจับคู่ทีละคีย์
+ */
+export function buildJobPatch(input: JobInput): Partial<CalendarJob> {
+  return {
     kind: input.kind,
     date: input.date,
     time: input.time,
@@ -178,7 +214,15 @@ export async function updateJob(
     destination: input.destination,
     phone: input.phone,
     note: input.note,
-  });
+  };
+}
+
+/** แก้เนื้อหางาน — ไม่แตะสถานะและไม่แตะ audit trail */
+export async function updateJob(
+  id: string,
+  input: JobInput
+): Promise<CalendarJob | null> {
+  return patchJob(id, buildJobPatch(input));
 }
 
 /**
