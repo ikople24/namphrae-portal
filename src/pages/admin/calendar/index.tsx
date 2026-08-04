@@ -35,11 +35,17 @@ const STATUS_STYLE: Record<JobStatus, string> = {
 // สำรองไว้ ไม่งั้น STATUS_STYLE[job.status] จะคืน undefined แล้ว className หาย
 const FALLBACK_STATUS_STYLE = 'bg-black/[0.06] text-ink-faint';
 
-const ACTION_LABEL: Record<JobStatus, string> = {
-  pending: 'ถอนอนุมัติ',
-  approved: 'อนุมัติ',
-  done: 'ปิดงาน',
-  cancelled: 'ยกเลิก',
+// ป้ายปุ่มต้องขึ้นกับคู่ (from, to) ไม่ใช่ to อย่างเดียว — สามใน 7 ทรานซิชันที่
+// อนุญาต (ดู ALLOWED ใน job-status.ts) เป็นการ "ย้อนกลับ" ซึ่งความหมายขึ้นกับ
+// สถานะต้นทาง คีย์ตาม to อย่างเดียวเคยทำให้ done → approved ขึ้นว่า "อนุมัติ"
+// (จริง ๆ คือเปิดงานที่ปิดแล้วกลับมา) และ cancelled → pending ขึ้นว่า
+// "ถอนอนุมัติ" (จริง ๆ คือกู้งานที่ยกเลิกกลับมารออนุมัติใหม่ — ถอนอนุมัติจริง ๆ
+// คือ approved → pending ต่างหาก) ดู I-1 ในรีวิวรอบสุดท้ายก่อน merge
+const ACTION_LABEL: Record<JobStatus, Partial<Record<JobStatus, string>>> = {
+  pending: { approved: 'อนุมัติ', cancelled: 'ยกเลิก' },
+  approved: { done: 'ปิดงาน', cancelled: 'ยกเลิก', pending: 'ถอนอนุมัติ' },
+  done: { approved: 'เปิดงานใหม่' },
+  cancelled: { pending: 'กู้คืนงาน' },
 };
 
 function AdminCalendarPage() {
@@ -61,6 +67,13 @@ function AdminCalendarPage() {
 
   const jobs = monthQuery.data?.jobs ?? [];
   const pending = pendingQuery.data?.jobs ?? [];
+  // ทั้งสองคำขอคืน `data: undefined` เมื่อ fetch พัง (isLoading ก็เป็น false
+  // ด้วย) ถ้าไม่เช็ค error แยก หน้าจะ fallback jobs/pending เป็น [] เงียบ ๆ
+  // แล้วขึ้น "ไม่มีงานรออนุมัติ"/"ยังไม่มีงานในเดือนนี้" — แยกไม่ออกจากคิวที่
+  // ว่างจริง งานที่เพิ่งขอไว้ตอนตีห้าจะไม่มีใครเห็นจนกว่าจะมีใครสงสัยว่าทำไม
+  // ไม่มีอะไรเลย (ดู C-1 ในรีวิวรอบสุดท้ายก่อน merge — mongodb.ts แคช rejected
+  // connect promise ไว้ทั้งอายุ container ด้วย บั๊กชั่วคราวหนึ่งครั้งจึงค้างยาว)
+  const loadError = monthQuery.error ?? pendingQuery.error;
 
   async function refresh() {
     await Promise.all([monthQuery.mutate(), pendingQuery.mutate()]);
@@ -111,6 +124,16 @@ function AdminCalendarPage() {
       {msg ? (
         <p className="mb-4 rounded-xl border border-black/[0.08] bg-white px-3.5 py-2.5 text-[13px] text-ink-soft">
           {msg}
+        </p>
+      ) : null}
+
+      {/* ต้องขึ้นเหนือทั้งสองหมวด ไม่ใช่แทนที่ — รายการที่โหลดมาได้บางส่วนก็ยัง
+          มีประโยชน์ (เช่น pending พังแต่ month โหลดผ่าน) จุดสำคัญคือ "ว่าง"
+          ต้องไม่มีทางแปลว่า "พัง" โดยไม่มีอะไรบอก */}
+      {loadError ? (
+        <p className="mb-4 rounded-xl border border-red-300/60 bg-red-50 px-3.5 py-2.5 text-[13px] text-red-800">
+          โหลดรายการงานไม่สำเร็จ — ข้อมูลที่แสดงด้านล่างอาจไม่ครบ (
+          {loadError instanceof Error ? loadError.message : 'เกิดข้อผิดพลาด'})
         </p>
       ) : null}
 
@@ -237,7 +260,11 @@ function JobTable({
                       onClick={() => onStatus(job, next)}
                       className="rounded-lg border border-black/[0.12] px-2.5 py-1 text-[12px] text-ink-soft transition hover:bg-black/[0.04] disabled:opacity-40"
                     >
-                      {ACTION_LABEL[next]}
+                      {/* คู่ (from, to) ทุกคู่ที่ nextStatuses คืนมาต้องมีป้าย
+                          อยู่ใน ACTION_LABEL เสมอ (ผูกกับ ALLOWED เดียวกัน) —
+                          fallback เป็นชื่อสถานะปลายทางไว้กันจอขาวเฉย ๆ ถ้าข้อมูล
+                          หลุด ไม่ควรถูกเรียกจริง */}
+                      {ACTION_LABEL[job.status]?.[next] ?? JOB_STATUS_LABEL[next]}
                     </button>
                   ))}
                   <Link
