@@ -821,6 +821,14 @@ in the date/time strings."
 **Files:**
 - Create: `src/lib/line-message.ts`, `src/lib/line-signature.ts`
 - Test: `src/lib/line-message.test.ts`, `src/lib/line-signature.test.ts`
+- Modify: `src/lib/schema.ts` (เพิ่ม `.trim()` — ดูหมายเหตุ)
+
+> **หมายเหตุจาก review ของ Task 1:** Task 1 ใส่ `.trim()` ให้ `title` แต่ไม่ได้ใส่ให้ฟิลด์อื่น
+> `origin: '   '` จึงยัง truthy และจะทำให้ `formatNewJobMessage` ขึ้นบรรทัด `➤     → -` เป็นขยะ
+> **แก้ที่ต้นทาง:** เพิ่ม `.trim()` ต่อจาก `z.string()` ให้ `village`, `origin`, `destination`,
+> `phone`, `note` ใน `jobInputSchema` เป็นส่วนหนึ่งของ task นี้ (แก้ที่ formatter จะได้แค่ปิดอาการ
+> ส่วนค่าขยะยังถูกเก็บลงฐานข้อมูลและไปโผล่ในตารางหลังบ้านอยู่ดี) — ตัวอย่าง:
+> `village: z.string().trim().max(200).optional().default('')`
 
 - [ ] **Step 1: เขียนเทสต์ข้อความ — `src/lib/line-message.test.ts`**
 
