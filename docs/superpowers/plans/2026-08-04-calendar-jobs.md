@@ -2829,7 +2829,14 @@ export default function CalendarPage({ config }: { config: PublicConfig }) {
               month={month}
               jobs={data?.jobs ?? []}
               onMonthChange={setMonth}
-              renderLabel={(job) => JOB_KIND_LABEL[job.kind]}
+              // spec ข้อ 2 บอกว่าสาธารณะเห็น เวลา + ประเภทงาน + หมู่บ้าน — village
+              // เป็นฟิลด์เดียวที่ไม่ใช่ PII ที่ toPublicJob ส่งมาให้ ถ้าไม่ใช้ตรงนี้
+              // ก็เท่ากับส่งมาเปล่า ๆ และหน้าเว็บก็ไม่ตรงกับที่ spec สัญญาไว้
+              renderLabel={(job) =>
+                job.village
+                  ? `${JOB_KIND_LABEL[job.kind]} · ${job.village}`
+                  : JOB_KIND_LABEL[job.kind]
+              }
             />
             {isLoading && !data ? (
               <p className="mt-3 text-[13px] text-ink-soft">กำลังโหลด…</p>
@@ -3021,10 +3028,16 @@ git commit -m "feat(calendar): LINE group field in settings, docs"
 
 ```bash
 npm test                 # เทสต์ 5 ไฟล์ผ่านทั้งหมด
-npx tsc --noEmit         # ไม่มี type error
+npx tsc --noEmit         # ไม่มี type error  ← ห้ามข้าม ดูเหตุผลด้านล่าง
 npm run lint             # ไม่มี lint error
 npm run build            # build สำเร็จ เห็น /calendar และ /admin/calendar ใน route list
 ```
+
+> **`npx tsc --noEmit` ไม่ใช่ตัวเลือกเสริม** — ด่านกัน PII รั่วชั้นแรกเป็น type (`PublicJob` มี
+> `Partial<Record<JobPrivateField, never>>`) และเทสต์ที่ตรึงด่านนั้นไว้ใช้ `@ts-expect-error`
+> ซึ่ง **vitest ไม่ตรวจให้เลย** พิสูจน์แล้วตอนทำ Task 3: ลองถอด `never` ออกจาก `PublicJob`
+> แล้ว `npm test` ยังเขียว 11/11 ส่วน `tsc` แดงด้วย `TS2578: Unused '@ts-expect-error' directive`
+> ถ้ารัน `npm test` อย่างเดียวแล้วเชื่อว่าปลอดภัย เท่ากับด่านชั้นแรกหายไปโดยไม่มีสัญญาณอะไรเลย
 
 ทดสอบด้วยมือแบบ zero-config (ไม่ต้องมี Mongo/Clerk/LINE — `npm run dev`):
 
