@@ -188,7 +188,11 @@ export function adminCalendarKey(params: {
   return `/api/admin/calendar${query ? `?${query}` : ''}`;
 }
 
-export async function createJob(
+// ตั้งชื่อยาวโดยตั้งใจ ไม่ใช้ createJob/updateJob/setJobStatus/deleteJob เฉย ๆ
+// เพราะ src/lib/jobs-store.ts (server-only ลาก fs/mongodb) มีชื่อชนกันเป๊ะ —
+// ทุกจุดที่เรียกใช้ฟังก์ชันพวกนี้คือ component ฝั่ง client ที่ "อยู่ฝั่งไหน"
+// เป็นคำถามที่ชื่อฟังก์ชันควรตอบเอง ไม่ใช่ปล่อยให้ auto-import ของ editor เดา
+export async function createCalendarJob(
   input: JobInput
 ): Promise<{ job: CalendarJob; lineNotified: boolean }> {
   return jsonOrThrow(
@@ -200,20 +204,20 @@ export async function createJob(
   );
 }
 
-export async function updateJob(
+export async function updateCalendarJob(
   id: string,
-  patch: JobInput
+  job: JobInput
 ): Promise<CalendarJob> {
   return jsonOrThrow(
     await fetch(`/api/admin/calendar/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ patch }),
+      body: JSON.stringify({ job }),
     })
   );
 }
 
-export async function setJobStatus(
+export async function setCalendarJobStatus(
   id: string,
   status: JobStatus
 ): Promise<CalendarJob> {
@@ -226,7 +230,7 @@ export async function setJobStatus(
   );
 }
 
-export async function deleteJob(id: string): Promise<void> {
+export async function deleteCalendarJob(id: string): Promise<void> {
   return jsonOrThrow(
     await fetch(`/api/admin/calendar/${encodeURIComponent(id)}`, {
       method: 'DELETE',

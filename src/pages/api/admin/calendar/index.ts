@@ -50,7 +50,17 @@ export default async function handler(
         .json({ error: 'invalid_job', issues: parsed.error.issues });
     }
 
-    const job = await createJob(parsed.data, admin.email ?? admin.userId);
+    let job;
+    try {
+      job = await createJob(parsed.data, admin.email ?? admin.userId);
+    } catch (err) {
+      // pushNewJobNotice ไม่โยน error ออกมาเลย (best-effort คืน boolean เสมอ —
+      // ดู src/lib/line.ts) catch นี้จึงเห็นได้แค่ error จาก createJob เท่านั้น
+      // นั่นแปลว่า 500 จากตรงนี้เท่ากับ "งานยังไม่ถูกบันทึก" เสมอ ต่างจาก 500
+      // ของ GET/PATCH/DELETE ที่แค่อ่าน/แก้ของเดิมที่มีอยู่แล้วไม่สำเร็จ
+      console.error('POST /api/admin/calendar failed', err);
+      return res.status(500).json({ error: 'server_error' });
+    }
     // บันทึกก่อน แจ้งทีหลัง และไม่ให้ผลของ LINE ย้อนกลับมาทำให้งานหาย
     const lineNotified = await pushNewJobNotice(job);
     return res.status(201).json({ job, lineNotified });
