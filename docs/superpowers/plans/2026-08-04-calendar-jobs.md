@@ -2663,6 +2663,9 @@ function AdminCalendarPage() {
           jobs={jobs.filter((j) => j.status !== 'cancelled')}
           onMonthChange={setMonth}
           renderLabel={(job) => job.title}
+          // คลิกงานบนปฏิทินแล้วไปหน้าแก้ไขเลย — ไม่งั้นปฏิทินเป็นแค่ภาพนิ่ง
+          // ต้องไล่หาแถวเดียวกันในตารางด้านล่างอีกที
+          onSelect={(job) => router.push(`/admin/calendar/${job.id}`)}
         />
       </section>
 
