@@ -2458,6 +2458,13 @@ Says which single field reaches the public calendar, right next to it."
 - Create: `src/pages/admin/calendar/index.tsx`
 - Modify: `src/components/admin/AdminLayout.tsx:9-14`
 
+> **หมายเหตุจาก review ของ Task 2 — แถวที่สถานะเพี้ยนต้องอธิบายตัวเองได้:**
+> `job-status.ts` ป้องกันไม่ให้สถานะแปลกปลอมทำหน้าจอพัง (คืนลิสต์ว่าง = ไม่มีปุ่ม) แล้ว
+> แต่ `JOB_STATUS_LABEL[job.status]` จะได้ `undefined` → ป้ายสถานะว่างเปล่า เจ้าหน้าที่เห็นงาน
+> ที่กดอะไรไม่ได้และไม่มีอะไรบอกว่าทำไม
+> **ใส่ fallback:** `JOB_STATUS_LABEL[job.status] ?? \`สถานะไม่รู้จัก (${job.status})\`` และให้
+> `STATUS_STYLE[job.status]` มี fallback เป็นสีเทาด้วย
+
 - [ ] **Step 1: เพิ่มเมนูใน `src/components/admin/AdminLayout.tsx`**
 
 ```ts
