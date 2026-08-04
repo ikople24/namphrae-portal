@@ -206,7 +206,7 @@ thaiMonthLabel(year, month): string   // 'สิงหาคม 2569' — พ.�
 
 | ไฟล์ | หน้าที่ | import |
 |---|---|---|
-| `line-message.ts` | `formatNewJobMessage(job): string` | type เท่านั้น |
+| `line-message.ts` | `formatNewJobMessage(job, adminUrl?): string` | `types/portal`, `calendar-grid` — ไม่มีตัวไหนทำ I/O |
 | `line-signature.ts` | `verifyLineSignature(rawBody, header, secret): boolean` | `node:crypto` |
 | `line.ts` | `pushNewJobNotice(job)` — อ่าน env + groupId แล้วยิง API | config-store, สองไฟล์บน |
 

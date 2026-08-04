@@ -1371,7 +1371,16 @@ export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
       },
       body: JSON.stringify({
         to,
-        messages: [{ type: 'text', text: formatNewJobMessage(job) }],
+        // ส่ง base URL เข้าไปให้ formatter เติมลิงก์ท้ายข้อความ — ไม่ตั้ง env ก็แค่
+        // ไม่มีบรรทัดลิงก์ ข้อความอื่นเหมือนเดิม (แบบเดียวกับที่ Cloudinary ทำ)
+        // จุดสำคัญ: ตัวแจ้งเตือนมีไว้ให้คนกดเข้าไปอนุมัติ ถ้าไม่มีอะไรให้กด
+        // เจ้าหน้าที่ต้องจำ URL แล้วพิมพ์เองบนมือถือตอนหกโมงเช้า
+        messages: [
+          {
+            type: 'text',
+            text: formatNewJobMessage(job, process.env.NEXT_PUBLIC_SITE_URL),
+          },
+        ],
       }),
     });
     if (!res.ok) {
@@ -2964,6 +2973,11 @@ patient name because the API never sends one."
 # → เชิญบอท OA เข้ากลุ่มเจ้าหน้าที่ (ระบบจะจำ groupId ให้เองตอนบอทเข้ากลุ่ม)
 LINE_CHANNEL_ACCESS_TOKEN=
 LINE_CHANNEL_SECRET=
+
+# base URL ของเว็บ ใช้เติมลิงก์ท้ายข้อความแจ้งเตือน LINE ให้เจ้าหน้าที่กดเข้ามา
+# อนุมัติได้เลย ไม่ต้องจำ URL แล้วพิมพ์เองบนมือถือ — ไม่ตั้งก็แค่ไม่มีบรรทัดลิงก์
+# ห้ามใส่ / ปิดท้าย เช่น https://namphrae-portal-production.up.railway.app
+NEXT_PUBLIC_SITE_URL=
 ```
 
 - [ ] **Step 3: เพิ่มหัวข้อใน `README.md`**
@@ -2990,8 +3004,15 @@ LINE_CHANNEL_SECRET=
 `data/calendar-jobs.json` สำหรับ dev เหมือน config) — เอกสาร config ถูกเขียนทับทั้งก้อน
 ทุก mutation ส่วนงานปฏิทินโตไม่จำกัด จึงต้องแยก
 
-**ตั้งค่า LINE:** ดู `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_CHANNEL_SECRET` ใน
-`.env.example` — ถ้าไม่ตั้ง ระบบยังใช้งานได้ครบ เพียงแต่ไม่ส่งแจ้งเตือน
+**ตั้งค่า LINE:** ดู `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_CHANNEL_SECRET` /
+`NEXT_PUBLIC_SITE_URL` ใน `.env.example` — ถ้าไม่ตั้ง ระบบยังใช้งานได้ครบ เพียงแต่
+ไม่ส่งแจ้งเตือน (และถ้าตั้งสองตัวแรกแต่ไม่ตั้งตัวที่สาม ข้อความจะไม่มีลิงก์ให้กด)
+
+> ⚠️ **ข้อความแจ้งเตือน LINE มีข้อมูลส่วนบุคคลครบชุด** — ชื่อผู้ป่วย เบอร์โทร ต้นทาง
+> ปลายทาง สิ่งเดียวที่คุมว่าใครเห็นคือ "บอทอยู่กลุ่มไหน" ซึ่งระบบจำจาก event `join`
+> อัตโนมัติ ถ้าบอทถูกเชิญเข้ากลุ่มผิด ข้อมูลจะไหลไปที่นั่นทันทีโดยไม่มีอะไรเตือน
+> **ช่อง LINE group id ใน `/admin/settings` จึงต้องแสดงค่าปัจจุบันให้เห็นเสมอ**
+> ไม่ใช่แค่ช่องว่างให้กรอก — มันเป็นทางเดียวที่เจ้าหน้าที่จะสังเกตได้ว่ากลุ่มเปลี่ยนไป
 ```
 
 แก้บรรทัด Scripts ให้มี `npm test` ด้วย:
