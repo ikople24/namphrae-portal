@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CONFIG_ID } from '@/types/portal';
+import { CONFIG_ID, JOB_KINDS, JOB_STATUSES } from '@/types/portal';
 import { CATEGORY_COLOR_VALUES } from '@/lib/category-accent';
 
 // A single Zod source of truth, reused by API routes and admin forms.
@@ -94,29 +94,32 @@ export type ImportConfig = z.infer<typeof importConfigSchema>;
 
 // ── ปฏิทินปฏิบัติงาน ────────────────────────────────────────────────────────
 
-export const jobKindSchema = z.enum(['ems', 'rescue']);
-export const jobStatusSchema = z.enum([
-  'pending',
-  'approved',
-  'done',
-  'cancelled',
-]);
+export const jobKindSchema = z.enum(JOB_KINDS);
+export const jobStatusSchema = z.enum(JOB_STATUSES);
 
 // ฟอร์มเดียวชุดฟิลด์เดียวใช้ทั้งงานกู้ชีพและกู้ภัย — งานกู้ภัยเว้นฟิลด์ที่ไม่ใช้ว่างไว้
 export const jobInputSchema = z.object({
   kind: jobKindSchema,
   date: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'วันที่ต้องเป็นรูปแบบ YYYY-MM-DD'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'วันที่ต้องเป็นรูปแบบ YYYY-MM-DD')
+    .refine((s) => {
+      // เทียบ round-trip เพื่อจับวันที่ที่ไม่มีจริง เช่น 2026-02-30 ที่ Date
+      // จะเลื่อนไปเป็น 2 มี.ค. เงียบ ๆ
+      const d = new Date(`${s}T00:00:00Z`);
+      return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+    }, 'วันที่ไม่มีอยู่จริง'),
   time: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'เวลาต้องเป็นรูปแบบ HH:mm'),
-  title: z.string().min(1, 'ต้องระบุชื่อผู้ป่วย/ชื่องาน'),
-  village: z.string().optional().default(''),
-  origin: z.string().optional().default(''),
-  destination: z.string().optional().default(''),
-  phone: z.string().optional().default(''),
-  note: z.string().optional().default(''),
+  title: z.string().trim().min(1, 'ต้องระบุชื่อผู้ป่วย/ชื่องาน').max(200),
+  village: z.string().max(200).optional().default(''),
+  origin: z.string().max(200).optional().default(''),
+  destination: z.string().max(200).optional().default(''),
+  phone: z.string().max(30).optional().default(''),
+  // เก็บ note ให้พอส่งต่อเป็นข้อความ LINE push ได้ (LINE จำกัดข้อความที่ 5000
+  // ตัวอักษร ค่านี้เว้นระยะกว้าง ๆ ไว้ไม่ให้การ push ล้มเพราะ note ยาวเกิน)
+  note: z.string().max(1000).optional().default(''),
 });
 
 export type JobInput = z.infer<typeof jobInputSchema>;

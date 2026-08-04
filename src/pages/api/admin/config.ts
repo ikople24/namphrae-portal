@@ -34,6 +34,11 @@ export default async function handler(
       site: parsed.data.site,
       categories: parsed.data.categories,
       links: parsed.data.links,
+      // ใช้ || ไม่ใช่ ?? โดยตั้งใจ: import เปลี่ยนค่านี้ได้ แต่ backup เก่าที่
+      // เก็บ '' (ยุคก่อนมี LINE) ต้องไม่ไปเคลียร์ค่าที่ตั้งอยู่แล้วทิ้งเงียบ ๆ
+      // — group id เป็นค่าโครงสร้างพื้นฐานที่ webhook จับตอนบอทเข้ากลุ่ม
+      // ครั้งเดียว ไม่มีทางเรียก webhook ซ้ำเพื่อกู้คืน หายแล้วแจ้งเตือนเงียบ
+      lineGroupId: parsed.data.lineGroupId || current.lineGroupId,
     };
     const saved = await saveConfig(next, admin.email ?? admin.userId);
     await revalidateHome(res);

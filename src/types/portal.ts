@@ -1,6 +1,8 @@
-// Domain types for the Namphrae Portal config document.
-// The whole portal is described by a single PortalConfig object which is stored
-// as one MongoDB document (or one local JSON file in the dev fallback store).
+// Domain types for the Namphrae Portal config document, plus the calendar
+// jobs domain (a separate, unbounded collection — see the ปฏิทินปฏิบัติงาน
+// section below). The portal config itself is a single PortalConfig object
+// stored as one MongoDB document (or one local JSON file in the dev fallback
+// store).
 
 export type HeroMediaType = 'none' | 'image' | 'video';
 
@@ -86,8 +88,13 @@ export type PublicLink = Omit<ServiceLink, 'isActive'>;
 // งานปฏิทินอยู่คนละ collection กับ PortalConfig (ดู src/lib/jobs-store.ts):
 // config เป็นเอกสารก้อนเดียวที่เขียนทับทั้งก้อนทุกครั้ง ส่วนงานโตไม่จำกัด
 
-export type JobKind = 'ems' | 'rescue'; // กู้ชีพ (รับ-ส่งผู้ป่วย) | กู้ภัย (งานป้องกัน)
-export type JobStatus = 'pending' | 'approved' | 'done' | 'cancelled';
+// แหล่งความจริงเดียวของ union — schema.ts ใช้ z.enum(JOB_KINDS) จากอาเรย์นี้
+// โดยตรง กันไม่ให้ type กับ schema เพี้ยนกันเมื่อมีการเพิ่มชนิดงานใหม่
+export const JOB_KINDS = ['ems', 'rescue'] as const; // กู้ชีพ (รับ-ส่งผู้ป่วย) | กู้ภัย (งานป้องกัน)
+export type JobKind = (typeof JOB_KINDS)[number];
+
+export const JOB_STATUSES = ['pending', 'approved', 'done', 'cancelled'] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
 
 export type CalendarJob = {
   id: string;
@@ -109,11 +116,16 @@ export type CalendarJob = {
   doneBy?: string;
 };
 
+// ฟิลด์ที่ห้ามหลุดสู่สาธารณะเด็ดขาด — ประกาศเป็น never เพื่อให้การเผลอ spread
+// CalendarJob ทั้งก้อนมาเป็น PublicJob กลายเป็น compile error ไม่ใช่แค่เทสต์จับ
+type JobPrivateField = 'title' | 'phone' | 'origin' | 'destination' | 'note';
+
 // สิ่งที่หลุดออกสู่สาธารณะได้เท่านั้น — ดู src/lib/job-public.ts
 export type PublicJob = Pick<
   CalendarJob,
-  'id' | 'kind' | 'date' | 'time' | 'status'
-> & { village?: string };
+  'id' | 'kind' | 'date' | 'time' | 'status' | 'village'
+> &
+  Partial<Record<JobPrivateField, never>>;
 
 export const JOB_KIND_LABEL: Record<JobKind, string> = {
   ems: 'รับ-ส่งผู้ป่วย',

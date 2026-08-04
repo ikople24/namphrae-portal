@@ -176,7 +176,11 @@ function normalise(config: PortalConfig): PortalConfig {
     visitorCount: config.visitorCount ?? 0,
     site: config.site,
     categories: config.categories ?? [],
-    lineGroupId: config.lineGroupId,
+    // '' คือค่า "ยังไม่ตั้งค่า" ที่ตั้งใจ ห้ามปล่อยเป็น undefined: mongodb
+    // driver serialize undefined เป็น BSON null (ignoreUndefined ปิดอยู่โดย
+    // ปริยาย) แล้ว null จะไหลไปโผล่ใน export → import ชนกับ
+    // z.string().optional() ที่ปฏิเสธ null ทำให้ restore backup พังทุกครั้ง
+    lineGroupId: config.lineGroupId ?? '',
     links: (config.links ?? []).map((l) => ({
       ...l,
       clickCount: l.clickCount ?? 0,
