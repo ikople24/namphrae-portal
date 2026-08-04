@@ -1,10 +1,12 @@
 import type {
+  CalendarJob,
   Category,
+  JobStatus,
   PortalConfig,
   ServiceLink,
   SiteSettings,
 } from '@/types/portal';
-import type { LinkInput } from '@/lib/schema';
+import type { JobInput, LinkInput } from '@/lib/schema';
 
 // Thin client wrappers around the /api/admin endpoints. Each throws on failure
 // with a message suitable for a toast/inline error.
@@ -170,4 +172,74 @@ export async function uploadMedia(
   }
   const data = (await res.json()) as { secure_url: string };
   return { url: data.secure_url };
+}
+
+export type JobListResponse = { month: string | null; jobs: CalendarJob[] };
+
+/** สร้าง query string ของหน้าปฏิทินหลังบ้าน — ไม่ใส่คีย์ที่ไม่มีค่า */
+export function adminCalendarKey(params: {
+  month?: string;
+  status?: JobStatus;
+}): string {
+  const qs = new URLSearchParams();
+  if (params.month) qs.set('month', params.month);
+  if (params.status) qs.set('status', params.status);
+  const query = qs.toString();
+  return `/api/admin/calendar${query ? `?${query}` : ''}`;
+}
+
+export async function createJob(
+  input: JobInput
+): Promise<{ job: CalendarJob; lineNotified: boolean }> {
+  return jsonOrThrow(
+    await fetch('/api/admin/calendar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  );
+}
+
+export async function updateJob(
+  id: string,
+  patch: JobInput
+): Promise<CalendarJob> {
+  return jsonOrThrow(
+    await fetch(`/api/admin/calendar/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ patch }),
+    })
+  );
+}
+
+export async function setJobStatus(
+  id: string,
+  status: JobStatus
+): Promise<CalendarJob> {
+  return jsonOrThrow(
+    await fetch(`/api/admin/calendar/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+  );
+}
+
+export async function deleteJob(id: string): Promise<void> {
+  return jsonOrThrow(
+    await fetch(`/api/admin/calendar/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  );
+}
+
+export async function updateLineGroupId(lineGroupId: string): Promise<void> {
+  return jsonOrThrow(
+    await fetch('/api/admin/line-group', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lineGroupId }),
+    })
+  );
 }
