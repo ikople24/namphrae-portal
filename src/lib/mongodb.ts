@@ -1,4 +1,5 @@
 import { MongoClient, type Db } from 'mongodb';
+import { cacheUntilRejected } from '@/lib/promise-cache';
 
 // Serverless-safe MongoDB client. On Vercel each function invocation can spin up
 // a fresh module scope, so we cache the client on globalThis to avoid exhausting
@@ -21,17 +22,29 @@ function getClientPromise(): Promise<MongoClient> {
   if (!uri) {
     throw new Error('MONGODB_URI is not set');
   }
+  const connect = () => new MongoClient(uri).connect();
+
+  // cacheUntilRejected, not a bare `if (!cached)`: a rejected promise is truthy,
+  // so caching it means one failed connect at start-up is never retried and the
+  // process stays broken until it is replaced. Long-lived hosts (Railway) do not
+  // replace it per request the way Vercel does — see src/lib/promise-cache.ts.
   if (process.env.NODE_ENV === 'development') {
     // Reuse across HMR reloads in dev.
-    if (!global._mongoClientPromise) {
-      global._mongoClientPromise = new MongoClient(uri).connect();
-    }
-    return global._mongoClientPromise;
+    return cacheUntilRejected(
+      () => global._mongoClientPromise,
+      (v) => {
+        global._mongoClientPromise = v;
+      },
+      connect
+    );
   }
-  if (!clientPromise) {
-    clientPromise = new MongoClient(uri).connect();
-  }
-  return clientPromise;
+  return cacheUntilRejected(
+    () => clientPromise,
+    (v) => {
+      clientPromise = v;
+    },
+    connect
+  );
 }
 
 export async function getDb(): Promise<Db> {
