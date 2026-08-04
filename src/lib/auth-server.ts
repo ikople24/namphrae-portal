@@ -1,6 +1,7 @@
 import type { GetServerSideProps, GetServerSidePropsContext, NextApiRequest, NextApiResponse } from 'next';
 import { isClerkConfigured } from '@/lib/clerk-config';
 import { getUsersDb, isMongoConfigured } from '@/lib/mongodb';
+import { allowAdminWithoutRegistry } from '@/lib/admin-registry-gate';
 
 // SERVER ONLY. Import this only from API routes / getServerSideProps — it pulls
 // in @clerk/nextjs/server. For client-safe env checks use '@/lib/clerk-config'.
@@ -30,11 +31,19 @@ async function checkAdmin(
   const { userId } = getAuth(req);
   if (!userId) return { ok: false, status: 401 };
 
-  // File-store dev mode has no registry to consult; Clerk sign-in suffices.
-  // Loud on purpose: in production this would mean MONGODB_URI was forgotten
-  // and the registry gate is silently off.
+  // ไม่มีทะเบียนให้ตรวจ = ตัดสินไม่ได้ว่าใครเป็นเจ้าหน้าที่ ซึ่งเป็นสถานการณ์
+  // เดียวกับ "ทะเบียนล่ม" ด้านล่างที่ปฏิเสธไปแล้ว — production จึงต้องปฏิเสธ
+  // เหมือนกัน ไม่งั้นการลืม MONGODB_URI ตัวเดียวจะเปลี่ยนหลังบ้านให้เปิดรับ
+  // ทุกคนที่ล็อกอิน Clerk ได้ โดยเว็บยังเสิร์ฟ seed ต่อไปเหมือนไม่มีอะไรเกิดขึ้น
   if (!isMongoConfigured()) {
-    console.warn('checkAdmin: Clerk configured but Mongo is not — registry gate skipped');
+    if (!allowAdminWithoutRegistry(process.env.NODE_ENV)) {
+      console.error(
+        'checkAdmin: ตั้ง Clerk ไว้แต่ไม่มี MONGODB_URI — ปฏิเสธการเข้าหลังบ้านทั้งหมด ' +
+          '(ตั้ง MONGODB_URI ให้ครบเพื่อให้ทะเบียนผู้ใช้กลับมาทำงาน)'
+      );
+      return { ok: false, status: 403 };
+    }
+    console.warn('checkAdmin: Clerk configured but Mongo is not — registry gate skipped (dev)');
     return { ok: true, identity: { userId } };
   }
 
