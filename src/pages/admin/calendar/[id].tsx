@@ -28,11 +28,17 @@ function toJobInput(job: CalendarJob): JobInput {
 function EditJobPage() {
   const router = useRouter();
   const id = typeof router.query.id === 'string' ? router.query.id : '';
-  const { data, error, isLoading } = useSWR<{ jobs: CalendarJob[] }>(
-    id ? '/api/admin/calendar' : null,
+  // ดึงงานเดียวตรง ๆ จาก /api/admin/calendar/[id] แทนที่จะโหลดทั้งลิสต์แล้วหา
+  // ด้วย .find() ฝั่ง client — ลิสต์เต็มลากข้อมูลผู้ป่วยทุกคนในระบบเข้ามาแค่เพื่อ
+  // แก้ไขงานเดียว
+  const {
+    data: job,
+    error,
+    isLoading,
+  } = useSWR<CalendarJob>(
+    id ? `/api/admin/calendar/${encodeURIComponent(id)}` : null,
     adminFetcher
   );
-  const job = data?.jobs.find((j) => j.id === id);
 
   return (
     <AdminLayout title="แก้ไขงานปฏิบัติงาน">
@@ -43,11 +49,11 @@ function EditJobPage() {
         ← กลับไปหน้าปฏิทิน
       </Link>
       {error ? (
-        <p className="text-red-700">โหลดข้อมูลไม่สำเร็จ</p>
-      ) : isLoading || !data ? (
+        <p className="text-red-700">
+          {error instanceof Error ? error.message : 'โหลดข้อมูลไม่สำเร็จ'}
+        </p>
+      ) : isLoading || !job ? (
         <p className="text-ink-soft">กำลังโหลด…</p>
-      ) : !job ? (
-        <p className="text-ink-soft">ไม่พบงานนี้</p>
       ) : (
         <JobForm mode="edit" jobId={job.id} initial={toJobInput(job)} />
       )}

@@ -5,6 +5,7 @@ import { deleteJob, getJob, setJobStatus, updateJob } from '@/lib/jobs-store';
 import { jobInputSchema, jobStatusSchema } from '@/lib/schema';
 import type { JobStatus } from '@/types/portal';
 
+// GET    /api/admin/calendar/[id]  — งานเดียว ไม่ดึงทั้งลิสต์มาหาที่ client
 // PATCH  /api/admin/calendar/[id]  body { job?: JobInput, status?: JobStatus }
 // `job` คือชุดฟิลด์ที่แก้ได้ "ทั้งชุด" ไม่ใช่เฉพาะที่เปลี่ยน — jobInputSchema เติม
 // ฟิลด์ที่ไม่ได้ส่งมาเป็น '' ให้เอง ถ้าส่งมาแค่บางฟิลด์ ฟิลด์ที่เหลือจะถูกล้างทิ้ง
@@ -19,6 +20,18 @@ export default async function handler(
 
   const id = typeof req.query.id === 'string' ? req.query.id : '';
   if (!id) return res.status(400).json({ error: 'missing_id' });
+
+  if (req.method === 'GET') {
+    try {
+      const job = await getJob(id);
+      return job
+        ? res.status(200).json(job)
+        : res.status(404).json({ error: 'not_found' });
+    } catch (err) {
+      console.error('GET /api/admin/calendar/[id] failed', err);
+      return res.status(500).json({ error: 'server_error' });
+    }
+  }
 
   if (req.method === 'DELETE') {
     try {
@@ -96,6 +109,6 @@ export default async function handler(
     }
   }
 
-  res.setHeader('Allow', 'PATCH, DELETE');
+  res.setHeader('Allow', 'GET, PATCH, DELETE');
   return res.status(405).json({ error: 'method_not_allowed' });
 }
