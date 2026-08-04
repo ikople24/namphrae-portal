@@ -56,6 +56,10 @@ export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
     return false;
   }
 
+  // ตัด / ท้าย URL ทิ้ง — ค่าที่ก๊อปมาจากช่อง address bar มักติดมาด้วย แล้วจะได้
+  // ลิงก์ //admin/calendar ที่บาง host ยอม บาง host ตอบ 404 พังไม่เหมือนกันทุกที่
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
+
   try {
     const res = await fetch(PUSH_URL, {
       method: 'POST',
@@ -63,6 +67,9 @@ export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
         'content-type': 'application/json',
         authorization: `Bearer ${token}`,
       },
+      // งานถูกบันทึกแล้วก่อนถึงบรรทัดนี้ ไม่มีใครควรรอผลของ noti — ตั้ง timeout
+      // สั้น ๆ กัน LINE ค้างแล้วลาก request บันทึกงานให้เจ้าหน้าที่นั่งรอตาม
+      signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         to,
         // ส่ง base URL เข้าไปให้ formatter เติมลิงก์ท้ายข้อความ — ไม่ตั้ง env ก็แค่
@@ -72,7 +79,7 @@ export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
         messages: [
           {
             type: 'text',
-            text: formatNewJobMessage(job, process.env.NEXT_PUBLIC_SITE_URL),
+            text: formatNewJobMessage(job, siteUrl),
           },
         ],
       }),
