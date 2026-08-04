@@ -104,14 +104,61 @@ describe('formatNewJobMessage', () => {
       phone: '1'.repeat(30),
       note: 'จ'.repeat(1000),
     };
-    expect(formatNewJobMessage(job).length).toBeLessThan(3000);
+    const msg = formatNewJobMessage(job); // ไม่ใส่ adminUrl — วัดโครงพื้นฐาน
+    // โครงข้อความตอนไม่มี adminUrl มี 6 บรรทัดตายตัวเสมอ: หัว + ชนิด/เวลา +
+    // ชื่อ + เส้นทาง + โทร + หมายเหตุ — เช็คจำนวนบรรทัดจับบั๊กที่ความยาวรวม
+    // เฉย ๆ จับไม่ได้ เช่น push บรรทัด note ซ้ำสองครั้ง (ยาวขึ้นแต่ยังไม่ชน
+    // เพดาน 3000 ที่ตั้งไว้กว้าง ๆ ด้านล่าง)
+    expect(msg.split('\n')).toHaveLength(6);
+    expect(msg.length).toBeLessThan(3000); // เพดานจริงของ LINE คือ 5000
   });
 
-  // job.date มาจาก CalendarJob ที่ควรผ่าน Zod มาแล้วเสมอในทางปกติ แต่ข้อมูลเสีย
-  // จาก storage (อ่านตรงจาก Mongo โดยไม่ validate ซ้ำ) ก็ยังต้องไม่ทำให้การส่ง
-  // แจ้งเตือนทั้งข้อความล้ม — ข้อความเพี้ยนได้แต่ต้องไม่ throw จนกลุ่มไม่ได้รับ
-  // แจ้งเตือนอะไรเลย (เทียบกับ thaiShortDate's own guard ใน calendar-grid.test.ts)
-  it('วันที่เพี้ยนจากข้อมูลที่ไม่ผ่าน Zod ไม่ทำให้ formatter throw', () => {
+  // เทสต์ข้างบนเข้ารหัสตัวเลข 200/200/200/200/30/1000 ไว้ตรง ๆ ซึ่งจะไม่รู้ตัว
+  // เลยถ้ามีคนขยับ .max() ใน jobInputSchema ในอนาคต (schema แก้ แต่เทสต์ข้อความ
+  // ยังใช้ตัวเลขเดิม ข้อความจริงจึงยาวกว่าที่เทสต์คำนวณไว้แบบเงียบ ๆ) ปักหมุด
+  // เพดานจาก schema ตรง ๆ ในเทสต์แยกนี้แทน — ถ้า .max() เปลี่ยน เทสต์นี้ต้อง
+  // แดงก่อน เตือนให้ไปปรับตัวเลขในเทสต์ข้อความด้านบนตามด้วย (ไม่อ่านค่ากลับ
+  // จาก .max() ผ่าน .optional().default() ตรง ๆ เพราะยุ่งยากใน zod 4)
+  it('เพดานความยาวฟิลด์ที่ใช้คำนวณเทสต์ข้อความด้านบนปักหมุดจาก schema โดยตรง', () => {
+    const ok = {
+      kind: 'ems' as const,
+      date: '2026-08-05',
+      time: '06:00',
+      title: 'ก'.repeat(200),
+      village: 'ข'.repeat(200),
+      origin: 'ค'.repeat(200),
+      destination: 'ง'.repeat(200),
+      phone: '1'.repeat(30),
+      note: 'จ'.repeat(1000),
+    };
+    expect(jobInputSchema.safeParse(ok).success).toBe(true);
+    expect(
+      jobInputSchema.safeParse({ ...ok, title: 'ก'.repeat(201) }).success
+    ).toBe(false);
+    expect(
+      jobInputSchema.safeParse({ ...ok, village: 'ข'.repeat(201) }).success
+    ).toBe(false);
+    expect(
+      jobInputSchema.safeParse({ ...ok, origin: 'ค'.repeat(201) }).success
+    ).toBe(false);
+    expect(
+      jobInputSchema.safeParse({ ...ok, destination: 'ง'.repeat(201) })
+        .success
+    ).toBe(false);
+    expect(
+      jobInputSchema.safeParse({ ...ok, phone: '1'.repeat(31) }).success
+    ).toBe(false);
+    expect(
+      jobInputSchema.safeParse({ ...ok, note: 'จ'.repeat(1001) }).success
+    ).toBe(false);
+  });
+
+  // ข้อมูลเสียจาก storage ที่ไม่ผ่าน Zod (kind นอกตาราง / date, time หายไป)
+  // ต้องไม่ทำให้ formatter throw จนกลุ่มไม่ได้รับแจ้งเตือนอะไรเลย ข้อความ
+  // เพี้ยนได้แต่ต้องไม่ throw — เทียบกับ thaiShortDate's own guard ใน
+  // calendar-grid.test.ts และ JOB_STATUS_LABEL[status] ?? ... ของ Task 13
+  // ที่กัน "undefined" โผล่ในข้อความ/ตารางแบบเดียวกัน
+  it('kind/วันที่/เวลาเพี้ยนจากข้อมูลที่ไม่ผ่าน Zod ไม่ทำให้ formatter throw หรือขึ้น undefined', () => {
     expect(() => formatNewJobMessage({ ...BASE, date: '' })).not.toThrow();
     expect(
       typeof formatNewJobMessage({
@@ -119,5 +166,25 @@ describe('formatNewJobMessage', () => {
         date: undefined as unknown as string,
       })
     ).toBe('string');
+    expect(() =>
+      formatNewJobMessage({ ...BASE, time: undefined as unknown as string })
+    ).not.toThrow();
+
+    const bogusKind = formatNewJobMessage({
+      ...BASE,
+      kind: 'triage' as CalendarJob['kind'],
+    });
+    expect(bogusKind).not.toContain('undefined');
+    expect(bogusKind).toContain('🔔 triage');
+  });
+
+  it('มี adminUrl ต่อท้ายด้วยลิงก์ไปหน้าปฏิทินแอดมิน', () => {
+    const msg = formatNewJobMessage(BASE, 'https://portal.example.com');
+    expect(msg).toContain('\n👉 https://portal.example.com/admin/calendar');
+    expect(msg.split('\n')).toHaveLength(6); // BASE เดิม 5 บรรทัด + ลิงก์ 1
+  });
+
+  it('ไม่มี adminUrl ก็ไม่ขึ้นบรรทัดลิงก์ — graceful degradation แบบเดียวกับ Cloudinary', () => {
+    expect(formatNewJobMessage(BASE)).not.toContain('👉');
   });
 });

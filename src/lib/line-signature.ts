@@ -14,6 +14,11 @@ export function verifyLineSignature(
   header: string | undefined,
   secret: string
 ): boolean {
+  // secret ว่าง (ยังไม่ได้ตั้ง env) กับลายเซ็นไม่ตรงกัน คืน false เหมือนกันโดย
+  // เจตนา — แต่สองกรณีนี้ต้องได้รับการจัดการต่างกันที่ผู้เรียก: route ต้องเช็ค
+  // !secret แล้วตอบ 503 *ก่อน* เรียกฟังก์ชันนี้ ถ้าข้าม route จะตอบ 401 ทุก
+  // ครั้งเหมือนลายเซ็นผิดตลอดไป LINE จะ retry แล้วสุดท้ายปิดใช้งาน webhook —
+  // ความล้มเหลวจะอ่านเหมือน "ลายเซ็นไม่ตรง" ทั้งที่จริงคือ "ยังไม่ตั้งค่า env"
   if (!header || !secret) return false;
 
   const expected = Buffer.from(
