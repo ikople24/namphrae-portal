@@ -144,6 +144,16 @@ vitest.config.ts                  ตั้ง alias `@` ให้ vitest (ต�
 `data/calendar-jobs.json` สำหรับ dev เหมือน config, gitignored) — เอกสาร config
 ถูกเขียนทับทั้งก้อนทุก mutation ส่วนงานปฏิทินโตไม่จำกัด จึงต้องแยก
 
+> ⚠️ **ต้องตั้ง `MONGODB_URI` ก่อนใช้งานจริง ไม่ว่าจะ deploy บน host ไหนก็ตาม**
+> ไม่ใช่แค่ Vercel — filesystem ของ Vercel read-only ตอน runtime จึงพังทันทีด้วย
+> `EROFS` ถ้าลืมตั้ง (เห็นชัดเจน) แต่ host แบบ Railway เขียนไฟล์ได้จริง เพียงแต่
+> ไม่คงอยู่ข้าม deploy — ถ้าลืมตั้ง `MONGODB_URI` บน Railway ทุกอย่างจะ "ใช้งาน
+> ได้" ปกติ (บันทึกงาน ปฏิทินขึ้น LINE ยิงแจ้งเตือน) จนกว่าจะ deploy รอบถัดไป
+> แล้วข้อมูลผู้ป่วยทั้งหมดหายไปเงียบ ๆ โดยไม่มีอะไรเตือน — jobs-store จึงปฏิเสธ
+> การใช้แบ็กเอนด์ไฟล์เองเมื่อ `NODE_ENV=production` ไม่มี `MONGODB_URI` (โยน
+> error ให้ทุกคำขอ API ของปฏิทินตอบ 500 ดัง ๆ แทน) ดูรายละเอียดใน
+> `assertFileBackendAllowed()` ที่ `src/lib/jobs-store.ts`
+
 ### ตั้งค่า LINE
 
 ถ้าไม่ตั้งเลย ระบบยังใช้งานได้ครบทุกอย่างตามปกติ เพียงแต่ไม่ส่งแจ้งเตือนเข้ากลุ่ม

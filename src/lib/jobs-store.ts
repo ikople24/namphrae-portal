@@ -11,7 +11,14 @@ import type { CalendarJob, JobStatus } from '@/types/portal';
 // ถ้ายัดรวมจะชนเพดาน 16MB ของ Mongo document และทำ version พุ่งโดยเปล่าประโยชน์
 //
 // แบ็กเอนด์เหมือน config-store: Mongo เมื่อมี MONGODB_URI ไม่งั้นใช้ไฟล์ในเครื่อง
-// (Vercel/Railway filesystem เป็น read-only ตอน runtime — production ต้องใช้ Mongo)
+// — filesystem บน Vercel read-only ตอน runtime จึงพังทันทีด้วย EROFS ถ้าลืมตั้ง
+// MONGODB_URI (พังแบบเห็นชัด) แต่ Railway filesystem เขียนได้จริง เพียงแต่ไม่คง
+// อยู่ข้าม deploy (ephemeral) — ไม่ใช่ read-only เหมือน Vercel ถ้าลืมตั้ง
+// MONGODB_URI บน Railway ทุกอย่างจะ "ใช้งานได้" ปกติ (บันทึกงาน ปฏิทินขึ้น LINE
+// ยิงแจ้งเตือน) จนกว่าจะ deploy รอบถัดไปแล้วข้อมูลผู้ป่วยทั้งหมดหายไปเงียบ ๆ —
+// อันตรายกว่า EROFS ของ Vercel มาก เพราะไม่มีอะไรเตือนจนกว่าจะสายเกินไป
+// assertFileBackendAllowed() ด้านล่างจึงปฏิเสธแบ็กเอนด์ไฟล์เองตอน production
+// ไม่ว่าจะ host ไหน แทนที่จะหวังพึ่งพฤติกรรม read-only ของ Vercel เพียงเจ้าเดียว
 //
 // แบ็กเอนด์ไฟล์ไม่มี lock: ทุกฟังก์ชันอ่าน-แก้-เขียนทั้งอาเรย์ สอง request ที่
 // เขียนพร้อมกัน (next dev เสิร์ฟพร้อมกันได้จริง) แข่งกันได้ งานหนึ่งหายเงียบ ๆ
@@ -36,7 +43,25 @@ function usingMongo(): boolean {
 
 // ---- file backend ----------------------------------------------------------
 
+// ปฏิเสธแบ็กเอนด์ไฟล์เองตอน production ไม่มี MONGODB_URI — ดูคอมเมนต์หัวไฟล์
+// นี้ว่าทำไม (Railway เขียนไฟล์ได้จริงแต่ไม่คงอยู่ข้าม deploy ต่างจาก Vercel ที่
+// พังทันทีด้วย EROFS) เรียกจาก fileRead()/fileWrite() สองจุดนี้พอ เพราะทุก
+// public API ของไฟล์นี้ (listJobs/getJob/createJob/patchJob/deleteJob) เมื่อไม่
+// ได้ใช้ Mongo จะไหลผ่านสองฟังก์ชันนี้เสมอ — 500 ดัง ๆ ทุกครั้งที่เรียก ดีกว่า
+// ข้อมูลที่หายไปเงียบ ๆ ตอน deploy รอบถัดไป
+function assertFileBackendAllowed(): void {
+  if (process.env.NODE_ENV === 'production' && !isMongoConfigured()) {
+    throw new Error(
+      'ไม่ได้ตั้งค่า MONGODB_URI — ปฏิเสธการบันทึกงานปฏิทินลงไฟล์ในเครื่องตอน ' +
+        'production เพราะ filesystem ของ hosting ส่วนใหญ่ (เช่น Railway) เขียนได้ ' +
+        'จริงแต่ไม่คงอยู่ข้าม deploy ข้อมูลจะหายเงียบ ๆ โดยไม่มีอะไรเตือน ตั้งค่า ' +
+        'MONGODB_URI ก่อนใช้งานจริง'
+    );
+  }
+}
+
 async function fileRead(): Promise<CalendarJob[]> {
+  assertFileBackendAllowed();
   try {
     return JSON.parse(await fs.readFile(RUNTIME_FILE, 'utf8')) as CalendarJob[];
   } catch (err) {
@@ -50,6 +75,7 @@ async function fileRead(): Promise<CalendarJob[]> {
 }
 
 async function fileWrite(jobs: CalendarJob[]): Promise<void> {
+  assertFileBackendAllowed();
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(RUNTIME_FILE, JSON.stringify(jobs, null, 2) + '\n', 'utf8');
 }
