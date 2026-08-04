@@ -1880,6 +1880,8 @@ PATCH route stays as a fallback."
 import {
   THAI_DOW,
   buildMonthGrid,
+  currentMonthInBangkok,
+  parseMonth,
   shiftMonth,
   thaiMonthLabel,
   todayInBangkok,
@@ -1916,7 +1918,13 @@ export default function MonthGrid<T extends CalendarEntry>({
   onMonthChange: (month: string) => void;
   onSelect?: (job: T) => void;
 }) {
-  const [year, monthNo] = month.split('-').map(Number);
+  // ใช้ parseMonth() ตัวเดียวกับที่ API ใช้ ไม่ใช่ split('-') เอง — ไม่งั้น component
+  // กับ API ตอบไม่ตรงกันว่าอะไรคือเดือนที่ถูกต้อง: '2026-13' ที่ API ตอบ 400 จะกลาย
+  // เป็นสัปดาห์ผีของเดือนธันวาคมพร้อมหัวข้อ 'undefined 2569' ส่วน '' ทำให้ทุกช่องมี
+  // key เป็น 'NaN-NaN-NaN' ซ้ำกันหมด · เดือนพังแล้วถอยไปเดือนปัจจุบันดีกว่าพังทั้งตาราง
+  // (currentMonthInBangkok() คืนรูปแบบถูกต้องเสมอ parseMonth จึงไม่มีทางคืน null)
+  const { year, month: monthNo } =
+    parseMonth(month) ?? parseMonth(currentMonthInBangkok())!;
   const weeks = buildMonthGrid(year, monthNo);
   const today = todayInBangkok();
 
