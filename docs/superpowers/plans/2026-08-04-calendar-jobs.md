@@ -44,10 +44,17 @@
 
 ## Task 1: Types + Zod schema + ปิดรูรั่ว `normalise()`
 
+> **แก้หลัง code review** — code review ของ task นี้เจอ 2 จุดที่แผนเดิมพลาด และแก้ในรอบนี้แล้ว:
+> `undefined` ถูกเขียนลง Mongo เป็น `null` (พังการ restore backup) จึงเก็บ `''` แทน · และ
+> `src/pages/api/admin/config.ts` ประกอบ config ทีละฟิลด์เหมือน `normalise()` จึงดรอป `lineGroupId`
+> ตอน import — เป็นไฟล์ที่แผนเดิมไม่ได้ลิสต์ไว้ · เพิ่ม compile-time guard กัน PII รั่ว และ
+> `.refine()` กันวันที่ที่ไม่มีจริง รายละเอียดอยู่ในแต่ละ step ด้านล่าง
+
 **Files:**
 - Modify: `src/types/portal.ts`
 - Modify: `src/lib/schema.ts`
 - Modify: `src/lib/config-store.ts:159-176` (ฟังก์ชัน `normalise`)
+- Modify: `src/pages/api/admin/config.ts:29-37` (import handler — เพิ่มหลัง review)
 
 - [ ] **Step 1: เพิ่ม types ท้ายไฟล์ `src/types/portal.ts` (ก่อนบรรทัด `export const CONFIG_ID`)**
 
@@ -56,8 +63,13 @@
 // งานปฏิทินอยู่คนละ collection กับ PortalConfig (ดู src/lib/jobs-store.ts):
 // config เป็นเอกสารก้อนเดียวที่เขียนทับทั้งก้อนทุกครั้ง ส่วนงานโตไม่จำกัด
 
-export type JobKind = 'ems' | 'rescue'; // กู้ชีพ (รับ-ส่งผู้ป่วย) | กู้ภัย (งานป้องกัน)
-export type JobStatus = 'pending' | 'approved' | 'done' | 'cancelled';
+// ประกาศเป็น const array แล้ว derive type ออกมา ตามแบบ CATEGORY_COLOR_VALUES เดิม
+// — schema.ts เอา array ตัวเดียวกันไปทำ z.enum() ทั้งสองฝั่งจึงดริฟต์จากกันไม่ได้
+export const JOB_KINDS = ['ems', 'rescue'] as const; // กู้ชีพ (รับ-ส่งผู้ป่วย) | กู้ภัย (งานป้องกัน)
+export const JOB_STATUSES = ['pending', 'approved', 'done', 'cancelled'] as const;
+
+export type JobKind = (typeof JOB_KINDS)[number];
+export type JobStatus = (typeof JOB_STATUSES)[number];
 
 export type CalendarJob = {
   id: string;
@@ -79,11 +91,17 @@ export type CalendarJob = {
   doneBy?: string;
 };
 
+// ฟิลด์ที่ห้ามหลุดสู่สาธารณะเด็ดขาด — ประกาศเป็น never เพื่อให้การเผลอ spread
+// CalendarJob ทั้งก้อนมาเป็น PublicJob กลายเป็น compile error ไม่ใช่แค่เทสต์จับ
+// (Pick อย่างเดียวกัน field ใหม่ที่เพิ่มทีหลังได้ แต่ไม่กัน `{ ...job }`)
+type JobPrivateField = 'title' | 'phone' | 'origin' | 'destination' | 'note';
+
 // สิ่งที่หลุดออกสู่สาธารณะได้เท่านั้น — ดู src/lib/job-public.ts
 export type PublicJob = Pick<
   CalendarJob,
-  'id' | 'kind' | 'date' | 'time' | 'status'
-> & { village?: string };
+  'id' | 'kind' | 'date' | 'time' | 'status' | 'village'
+> &
+  Partial<Record<JobPrivateField, never>>;
 
 export const JOB_KIND_LABEL: Record<JobKind, string> = {
   ems: 'รับ-ส่งผู้ป่วย',
@@ -128,6 +146,12 @@ export type PortalConfig = {
 
 `normalise()` ประกอบ object ใหม่ทีละฟิลด์ ฟิลด์ที่ไม่ได้ระบุจะ**หายทุกครั้งที่อ่าน config** — ข้ามขั้นนี้แล้ว groupId ที่ webhook เก็บมาจะโดนลบทิ้งทันที
 
+**เก็บ `''` ไม่ใช่ `undefined`** — `mongoWrite` ทำ `$set: rest` และ driver ตั้ง `ignoreUndefined: false`
+ไว้เป็นค่าเริ่มต้น `undefined` จึงถูกเขียนลงเป็น BSON `null` → export ออกมาเป็น `null` →
+import กลับเข้ามาโดน `z.string().optional()` ปฏิเสธ → **restore backup พังทุกเครื่องที่ติดตั้ง**
+แม้จะไม่เคยตั้ง LINE เลย · ใช้ `''` ยังทำให้ Task 10 ล้างค่าได้จริงด้วย เพราะ `''` เป็นค่าที่
+`$set` เขียนลงจริง (ถ้าใช้ conditional spread คีย์จะหายจาก `$set` แล้ว Mongo เก็บค่าเก่าไว้ตลอดไป)
+
 ```ts
 function normalise(config: PortalConfig): PortalConfig {
   return {
@@ -138,7 +162,9 @@ function normalise(config: PortalConfig): PortalConfig {
     visitorCount: config.visitorCount ?? 0,
     site: config.site,
     categories: config.categories ?? [],
-    lineGroupId: config.lineGroupId,
+    // '' คือค่า "ยังไม่ตั้ง" — undefined จะถูกเขียนลง Mongo เป็น null แล้วทำให้
+    // การ import backup กลับเข้ามาพัง (z.string().optional() ไม่รับ null)
+    lineGroupId: config.lineGroupId ?? '',
     links: (config.links ?? []).map((l) => ({
       ...l,
       clickCount: l.clickCount ?? 0,
@@ -155,33 +181,41 @@ function normalise(config: PortalConfig): PortalConfig {
 ```ts
 // ── ปฏิทินปฏิบัติงาน ────────────────────────────────────────────────────────
 
-export const jobKindSchema = z.enum(['ems', 'rescue']);
-export const jobStatusSchema = z.enum([
-  'pending',
-  'approved',
-  'done',
-  'cancelled',
-]);
+// ใช้ const array ตัวเดียวกับที่ portal.ts derive type ออกมา — union กับ schema
+// จึงดริฟต์จากกันไม่ได้ (แบบเดียวกับ categorySchema.color: z.enum(CATEGORY_COLOR_VALUES))
+export const jobKindSchema = z.enum(JOB_KINDS);
+export const jobStatusSchema = z.enum(JOB_STATUSES);
 
 // ฟอร์มเดียวชุดฟิลด์เดียวใช้ทั้งงานกู้ชีพและกู้ภัย — งานกู้ภัยเว้นฟิลด์ที่ไม่ใช้ว่างไว้
 export const jobInputSchema = z.object({
   kind: jobKindSchema,
   date: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'วันที่ต้องเป็นรูปแบบ YYYY-MM-DD'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'วันที่ต้องเป็นรูปแบบ YYYY-MM-DD')
+    .refine((s) => {
+      // เทียบ round-trip เพื่อจับวันที่ที่ไม่มีจริง เช่น 2026-02-30 ที่ Date
+      // จะเลื่อนไปเป็น 2 มี.ค. เงียบ ๆ — งานแบบนั้นบันทึกผ่าน ส่ง LINE แล้ว
+      // แต่ไม่ขึ้นบนปฏิทินเลยเพราะ buildMonthGrid สร้างช่องเฉพาะวันที่มีจริง
+      const d = new Date(`${s}T00:00:00Z`);
+      return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+    }, 'วันที่ไม่มีอยู่จริง'),
   time: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'เวลาต้องเป็นรูปแบบ HH:mm'),
-  title: z.string().min(1, 'ต้องระบุชื่อผู้ป่วย/ชื่องาน'),
-  village: z.string().optional().default(''),
-  origin: z.string().optional().default(''),
-  destination: z.string().optional().default(''),
-  phone: z.string().optional().default(''),
-  note: z.string().optional().default(''),
+  // trim ก่อน min(1) ไม่งั้น '   ' ผ่าน — title คือสิ่งที่การ์ด LINE และตารางใช้เป็นหลัก
+  title: z.string().trim().min(1, 'ต้องระบุชื่อผู้ป่วย/ชื่องาน').max(200),
+  village: z.string().max(200).optional().default(''),
+  origin: z.string().max(200).optional().default(''),
+  destination: z.string().max(200).optional().default(''),
+  phone: z.string().max(30).optional().default(''),
+  // note ไหลลงไปอยู่ใน body ของ LINE push ซึ่งจำกัดข้อความที่ 5000 ตัวอักษร
+  note: z.string().max(1000).optional().default(''),
 });
 
 export type JobInput = z.infer<typeof jobInputSchema>;
 ```
+
+เพิ่ม `JOB_KINDS, JOB_STATUSES` เข้า import จาก `@/types/portal` ด้านบนไฟล์ (บรรทัด 2)
 
 - [ ] **Step 5: เพิ่ม `lineGroupId` เข้า `portalConfigSchema` ใน `src/lib/schema.ts`**
 
@@ -199,15 +233,37 @@ export const portalConfigSchema = z.object({
 });
 ```
 
+- [ ] **Step 5b: ⚠️ ปิดรูรั่วที่สองใน `src/pages/api/admin/config.ts:29-37`**
+
+handler ของ `PUT` (import ทั้งไฟล์) ประกอบ `next` ทีละฟิลด์แบบเดียวกับ `normalise()` และ
+ไม่มี `lineGroupId` — restore backup ทีไรก็ตัดการเชื่อม LINE เงียบ ๆ ทั้งที่ UI บอกว่าสำเร็จ
+เพิ่มเข้า object literal:
+
+```ts
+    const next: PortalConfig = {
+      _id: CONFIG_ID,
+      version: current.version, // saveConfig bumps this
+      updatedAt: current.updatedAt,
+      visitorCount: parsed.data.visitorCount ?? current.visitorCount,
+      site: parsed.data.site,
+      categories: parsed.data.categories,
+      links: parsed.data.links,
+      // ใช้ || ไม่ใช่ ?? โดยตั้งใจ: import ตั้งค่า groupId ได้ แต่ไฟล์เก่าที่มีค่าว่าง
+      // ต้องไม่ล้างกลุ่มที่ใช้งานอยู่ทิ้ง — groupId เป็น state ที่ webhook เก็บมา
+      // ไม่ใช่เนื้อหาที่ผู้ใช้แก้ และ webhook จะไม่ยิงซ้ำเพราะบอทเข้ากลุ่มไปแล้ว
+      lineGroupId: parsed.data.lineGroupId || current.lineGroupId,
+    };
+```
+
 - [ ] **Step 6: ตรวจว่า type ผ่าน**
 
-Run: `npx tsc --noEmit`
-Expected: ไม่มี output (exit 0)
+Run: `npx tsc --noEmit && npm run lint`
+Expected: ไม่มี output ทั้งคู่ (exit 0)
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/types/portal.ts src/lib/schema.ts src/lib/config-store.ts
+git add src/types/portal.ts src/lib/schema.ts src/lib/config-store.ts src/pages/api/admin/config.ts
 git commit -m "feat(calendar): add CalendarJob types, job schema, lineGroupId
 
 normalise() rebuilds the config object field by field, so lineGroupId has
@@ -980,6 +1036,11 @@ route decides what the secret is."
 **Files:**
 - Create: `src/lib/jobs-store.ts`
 - Modify: `.gitignore`
+
+> **หมายเหตุจาก review ของ Task 1:** store นี้อ่านข้อมูลด้วย `as CalendarJob` ตรง ๆ ไม่ผ่าน Zod
+> ซึ่งลอกตาม `config-store.ts` เดิมโดยตั้งใจ — ยอมรับได้เพราะเอกสารทุกฉบับเขียนโดยโค้ดเราเอง
+> ที่ผ่าน `jobInputSchema` มาแล้ว และ `toPublicJob()` ประกอบ payload ทีละฟิลด์ เอกสารที่ผิดรูป
+> จึงทำให้ฟิลด์แปลกปลอมรั่วออกสาธารณะไม่ได้อยู่ดี **อย่าเพิ่ม `calendarJobSchema` ในรอบนี้**
 
 - [ ] **Step 1: เพิ่มไฟล์ข้อมูล dev เข้า `.gitignore`**
 
