@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed": "tsx scripts/seed.ts",
+    "import:gcal": "tsx scripts/import-google-calendar.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.1",
