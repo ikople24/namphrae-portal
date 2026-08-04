@@ -247,7 +247,45 @@ function SettingsForm({
   );
 }
 
-type LineGroupStatus = { lineGroupId: string | null; configured: boolean };
+type LineGroupStatus = {
+  lineGroupId: string | null;
+  configured: boolean;
+  push: boolean;
+  webhook: boolean;
+};
+
+// สองความพร้อมนี้ควบคุมกันคนละอย่าง — push (LINE_CHANNEL_ACCESS_TOKEN) คือส่ง
+// แจ้งเตือนงานใหม่ได้ไหม, webhook (LINE_CHANNEL_SECRET) คือรับ groupId ตอน
+// เชิญบอทเข้ากลุ่มได้ไหม ตั้งแค่ตัวเดียวก็ใช้งานได้จริงบางส่วน (ดู M-1 ในรีวิว
+// รอบสุดท้ายก่อน merge — isLineConfigured() เดิมต้องมีครบทั้งคู่ ทำให้ตั้งแค่
+// token ก็ยังขึ้น "ยังไม่ได้ตั้งค่า" ทั้งที่แจ้งเตือนออกจริงแล้ว)
+function lineStatusMessage(status: LineGroupStatus): {
+  icon: 'check_circle' | 'warning';
+  text: string;
+} {
+  if (status.push && status.webhook) {
+    return {
+      icon: 'check_circle',
+      text: 'ตั้งค่า LINE ครบแล้ว — งานใหม่จะถูกส่งแจ้งเตือนเข้ากลุ่มด้านล่างทันที',
+    };
+  }
+  if (status.push) {
+    return {
+      icon: 'warning',
+      text: 'ส่งแจ้งเตือนงานใหม่เข้ากลุ่มได้แล้ว แต่ยังเชิญบอทเข้ากลุ่มใหม่ไม่ได้ — ถ้าต้องตั้งกลุ่มใหม่หรือย้ายกลุ่ม ต้องแจ้งผู้ดูแลระบบก่อน (ผู้ดูแลระบบ: ตั้งค่า LINE_CHANNEL_SECRET ด้วย ไม่งั้น webhook รับ event จาก LINE ไม่ได้)',
+    };
+  }
+  if (status.webhook) {
+    return {
+      icon: 'warning',
+      text: 'รับข้อมูลกลุ่มจาก LINE ได้ แต่ยังส่งแจ้งเตือนงานใหม่ไม่ได้ — เจ้าหน้าที่จะไม่ได้รับแจ้งเตือนเมื่อมีงานใหม่ (ผู้ดูแลระบบ: ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ด้วย)',
+    };
+  }
+  return {
+    icon: 'warning',
+    text: 'ยังไม่ได้ตั้งค่าระบบแจ้งเตือน LINE — เจ้าหน้าที่จะไม่ได้รับแจ้งเตือนเมื่อมีงานใหม่ (ผู้ดูแลระบบ: ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN และ LINE_CHANNEL_SECRET ใน environment)',
+  };
+}
 
 // การบันทึกกลุ่ม LINE เป็นคนละ action จากปุ่ม "บันทึก" ด้านบน (ซึ่งเซฟ
 // site settings ทั้งก้อนผ่าน onSave) โดยตั้งใจ — groupId ปกติมาจาก webhook เอง
@@ -296,13 +334,8 @@ function LineGroupSection() {
       {query.data ? (
         <div className="rounded-lg border border-black/15 bg-paper-deep px-4 py-3 text-sm">
           <p className="flex items-center gap-2">
-            <Icon
-              name={query.data.configured ? 'check_circle' : 'warning'}
-              size={18}
-            />
-            {query.data.configured
-              ? 'ตั้งค่า LINE ครบแล้ว — งานใหม่จะถูกส่งแจ้งเตือนเข้ากลุ่มด้านล่างทันที'
-              : 'ยังไม่ได้ตั้งค่าระบบแจ้งเตือน LINE — เจ้าหน้าที่จะไม่ได้รับแจ้งเตือนเมื่อมีงานใหม่ (ผู้ดูแลระบบ: ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN และ LINE_CHANNEL_SECRET ใน environment)'}
+            <Icon name={lineStatusMessage(query.data).icon} size={18} />
+            {lineStatusMessage(query.data).text}
           </p>
           <p className="mt-1 text-ink-soft">
             กลุ่มปัจจุบัน:{' '}

@@ -9,10 +9,23 @@ import type { CalendarJob } from '@/types/portal';
 
 const PUSH_URL = 'https://api.line.me/v2/bot/message/push';
 
+// สองความพร้อมนี้เป็นคนละเรื่องกัน ใช้คนละ env var: ส่งแจ้งเตือน (push) ใช้แค่
+// LINE_CHANNEL_ACCESS_TOKEN (ดู pushNewJobNotice ด้านล่าง) ส่วนรับ event จาก
+// LINE (webhook เก็บ groupId ตอนบอทเข้ากลุ่ม) ใช้แค่ LINE_CHANNEL_SECRET ตรวจ
+// ลายเซ็น (ดู src/pages/api/line/webhook.ts) ตั้งแค่ token อย่างเดียวก็ยิง
+// แจ้งเตือนได้จริง แต่ webhook จะ 503 ตลอด — เดิม isLineConfigured() เดียว
+// ต้องมีครบทั้งคู่ ทำให้กรณีนี้ขึ้น "ยังไม่ได้ตั้งค่า" ทั้งที่แจ้งเตือนออกจริง
+// (ดู M-1 ในรีวิวรอบสุดท้ายก่อน merge) — แยกให้ /admin/settings บอกแต่ละครึ่ง
+export function isLinePushConfigured(): boolean {
+  return Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN);
+}
+
+export function isLineWebhookConfigured(): boolean {
+  return Boolean(process.env.LINE_CHANNEL_SECRET);
+}
+
 export function isLineConfigured(): boolean {
-  return Boolean(
-    process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_SECRET
-  );
+  return isLinePushConfigured() && isLineWebhookConfigured();
 }
 
 /** กลุ่มที่บอทถูกเชิญเข้าไป — webhook เป็นคนเก็บค่านี้ให้ตอน event `join` */

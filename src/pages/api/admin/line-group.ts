@@ -1,8 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAdmin } from '@/lib/auth-server';
-import { getLineGroupId, isLineConfigured, setLineGroupId } from '@/lib/line';
+import {
+  getLineGroupId,
+  isLineConfigured,
+  isLinePushConfigured,
+  isLineWebhookConfigured,
+  setLineGroupId,
+} from '@/lib/line';
 
-// GET   /api/admin/line-group  → { lineGroupId, configured }
+// GET   /api/admin/line-group  → { lineGroupId, configured, push, webhook }
+// `configured` คือ push && webhook เก็บไว้เพื่อไม่ให้ผู้ใช้เดิมของฟิลด์นี้พัง —
+// `push`/`webhook` คือสองความพร้อมที่แยกจากกันจริง (ดู isLinePushConfigured/
+// isLineWebhookConfigured ใน line.ts) ตั้งแค่ token อย่างเดียวก็ส่งแจ้งเตือน
+// ได้แล้ว แม้ webhook (รับ groupId ตอนเชิญบอทเข้ากลุ่ม) จะยังไม่พร้อมก็ตาม
 // PATCH /api/admin/line-group  body { lineGroupId: string }
 //
 // ปกติ webhook เก็บ groupId ให้เองตอนบอทถูกเชิญเข้ากลุ่ม PATCH ไว้กรอกเองเมื่อ
@@ -24,6 +34,8 @@ export default async function handler(
       return res.status(200).json({
         lineGroupId: (await getLineGroupId()) ?? null,
         configured: isLineConfigured(),
+        push: isLinePushConfigured(),
+        webhook: isLineWebhookConfigured(),
       });
     } catch (err) {
       console.error('GET /api/admin/line-group failed', err);
