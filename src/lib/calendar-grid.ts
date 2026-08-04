@@ -17,6 +17,10 @@ const THAI_MONTHS_SHORT = [
 ];
 
 // ชื่อวันแบบสัปดาห์เริ่มวันจันทร์ ให้ตรงกับลำดับช่องใน buildMonthGrid
+// ปฏิทินไทยตามธรรมเนียมทั่วไปเริ่มวันอาทิตย์ (อา จ อ พ พฤ ศ ส) — ที่นี่เริ่ม
+// จันทร์เพราะสืบทอดมาจาก wkst=1 ของ Google Calendar embed เดิม เป็นการจงใจ
+// เลือกให้ตรงกับ buildMonthGrid ไม่ใช่พลาด ถ้าจะแก้ให้เริ่มอาทิตย์ต้องแก้
+// buildMonthGrid คู่กันด้วยเสมอ (มีเทสต์ผูกไว้ด้านล่าง)
 export const THAI_DOW = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -71,9 +75,15 @@ export function thaiMonthLabel(year: number, month: number): string {
   return `${THAI_MONTHS[month - 1]} ${year + 543}`;
 }
 
-/** '2026-08-05' → '5 ส.ค. 69' (พ.ศ. สองหลักท้าย) */
+/**
+ * '2026-08-05' → '5 ส.ค. 69' (พ.ศ. สองหลักท้าย)
+ *
+ * กัน undefined/null ด้วย `?? ''` เพราะฟังก์ชันนี้ยังถูกเรียกกับข้อมูลดิบจาก
+ * Mongo ที่ไม่ผ่าน Zod (ตารางแอดมิน Task 13) — พังแค่แถวเดียวด้วยข้อความ
+ * เพี้ยนยังดีกว่า throw จน error boundary ดึงทั้งหน้าตารางหายไปด้วย
+ */
 export function thaiShortDate(date: string): string {
-  const [year, month, day] = date.split('-').map(Number);
+  const [year, month, day] = (date ?? '').split('-').map(Number);
   const be = (year + 543) % 100;
   return `${day} ${THAI_MONTHS_SHORT[month - 1]} ${pad(be)}`;
 }

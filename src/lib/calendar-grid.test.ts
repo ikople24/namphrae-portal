@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildMonthGrid,
   currentMonthInBangkok,
@@ -6,8 +6,13 @@ import {
   shiftMonth,
   thaiMonthLabel,
   thaiShortDate,
+  THAI_DOW,
   todayInBangkok,
 } from '@/lib/calendar-grid';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('buildMonthGrid', () => {
   // ส.ค. 2026 ขึ้นต้นวันเสาร์ สัปดาห์เริ่มวันจันทร์จึงมีวันของเดือนก่อน 5 วัน
@@ -69,6 +74,15 @@ describe('buildMonthGrid', () => {
     expect(weeks[0][0]).toEqual({ date: '2027-02-01', inMonth: true });
     expect(weeks[3][6]).toEqual({ date: '2027-02-28', inMonth: true });
   });
+
+  // THAI_DOW เริ่มจันทร์ตาม wkst=1 เดิม ไม่ใช่ธรรมเนียมปฏิทินไทยทั่วไปที่เริ่ม
+  // อาทิตย์ — ผูกเทสต์นี้กับ buildMonthGrid โดยตรง ถ้าใครแก้ THAI_DOW ให้เริ่ม
+  // อาทิตย์โดยไม่แก้ buildMonthGrid คู่กัน เทสต์นี้ต้องแดง
+  it('THAI_DOW เรียงตรงกับคอลัมน์ของ buildMonthGrid — 1 ส.ค. 2026 เป็นวันเสาร์', () => {
+    const week0 = buildMonthGrid(2026, 8)[0];
+    const col = week0.findIndex((c) => c.date === '2026-08-01');
+    expect(THAI_DOW[col]).toBe('ส');
+  });
 });
 
 describe('thaiMonthLabel', () => {
@@ -90,6 +104,15 @@ describe('thaiShortDate', () => {
   it('ข้ามศตวรรษ พ.ศ. (2599 → 2600) เลขสองหลักท้ายวนกลับเป็น 00', () => {
     expect(thaiShortDate('2056-12-31')).toBe('31 ธ.ค. 99');
     expect(thaiShortDate('2057-01-01')).toBe('1 ม.ค. 00');
+  });
+
+  // ตารางแอดมิน (Task 13) เรียกฟังก์ชันนี้กับข้อมูลดิบจาก Mongo ที่ไม่ผ่าน
+  // Zod — undefined/null ต้องไม่ throw จนพังทั้งตาราง ข้อความเพี้ยนได้แต่ต้อง
+  // ไม่ล้ม
+  it('ไม่ throw เมื่อค่าที่ได้เป็น undefined/null (ข้อมูลดิบที่ยังไม่ผ่าน Zod)', () => {
+    expect(() => thaiShortDate(undefined as unknown as string)).not.toThrow();
+    expect(typeof thaiShortDate(undefined as unknown as string)).toBe('string');
+    expect(() => thaiShortDate(null as unknown as string)).not.toThrow();
   });
 });
 
@@ -134,5 +157,19 @@ describe('todayInBangkok / currentMonthInBangkok', () => {
     const today = todayInBangkok();
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(currentMonthInBangkok()).toBe(today.slice(0, 7));
+  });
+
+  // ยึดเวลากรุงเทพจริง ไม่ใช่ UTC — 17:30 UTC คือ 00:30 ของวันถัดไปที่กรุงเทพ
+  // (UTC+7) เทสต์รูปแบบด้านบนผ่านได้แม้สลับเป็น UTC เงียบ ๆ เทสต์นี้จับกรณีนั้น
+  it('ยึดเวลาไทยจริง ไม่ใช่ UTC — 17:30 UTC คือเช้าวันถัดไปที่กรุงเทพ', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-04T17:30:00Z'));
+    expect(todayInBangkok()).toBe('2026-08-05');
+  });
+
+  it('ข้ามเดือนตามเวลาไทย ไม่ใช่ UTC', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-31T17:30:00Z'));
+    expect(currentMonthInBangkok()).toBe('2026-08');
   });
 });
