@@ -3053,6 +3053,42 @@ git commit -m "feat(calendar): LINE group field in settings, docs"
 
 ---
 
+## ⚠️ bug ที่มีอยู่เดิม — นอกขอบเขตแผนนี้ แต่ฟีเจอร์นี้จะทำให้เจอบ่อยขึ้น
+
+พบระหว่าง review ของ Task 6 · **ห้ามแก้ใน branch นี้** เพราะไม่เกี่ยวกับปฏิทินและกระทบทั้งเว็บ
+
+`src/lib/mongodb.ts` cache ตัว **promise** ของ `.connect()` ไว้โดยไม่เคลียร์เมื่อมัน reject:
+
+```ts
+if (!clientPromise) {
+  clientPromise = new MongoClient(uri).connect();
+}
+return clientPromise;
+```
+
+connect ล้มครั้งแรก (Mongo สะดุดชั่วคราว หรือ DNS ยังไม่พร้อมตอน container เพิ่งขึ้น) →
+`clientPromise` ถือ promise ที่ reject ไว้ตลอดอายุ process → `getDb()` ทุกครั้งต่อจากนั้น
+reject ด้วย error เดิม **โดยไม่เคยลองเชื่อมใหม่เลย**
+
+**บน Railway อันตรายกว่าบน Vercel** เพราะ container อยู่ยาว ไม่ได้เกิดใหม่ทุก request —
+Mongo สะดุดครั้งเดียวตอนบูตทำให้เว็บพังยาวจนกว่าจะ redeploy ด้วยมือ
+
+เป็นของเดิมก่อนฟีเจอร์นี้ กระทบ `config-store` อยู่แล้ว แต่ปฏิทินยิง Mongo ถี่กว่ามาก
+โอกาสเจอจึงสูงขึ้น · ทางแก้ (แยก branch):
+
+```ts
+if (!clientPromise) {
+  clientPromise = new MongoClient(uri).connect().catch((err) => {
+    clientPromise = undefined; // ให้คำขอถัดไปได้ลองเชื่อมใหม่ ไม่ค้างที่ error เดิม
+    throw err;
+  });
+}
+```
+
+(ตัวแปร `global._mongoClientPromise` ฝั่ง dev มีปัญหาเดียวกัน แก้แบบเดียวกัน)
+
+---
+
 ## Verification
 
 รันทั้งหมดนี้ก่อนถือว่าเสร็จ — และ**ต้องเห็นผลจริงก่อนพูดว่าผ่าน**:
