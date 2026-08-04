@@ -12,6 +12,8 @@ export const PUBLIC_JOB_STATUSES: readonly JobStatus[] = ['approved', 'done'];
  * ประกอบ object ใหม่ทีละฟิลด์โดยเจตนา — ถ้าใช้ rest-spread หรือ delete
  * ฟิลด์ PII ที่เพิ่มเข้า CalendarJob ทีหลังจะรั่วออกไปเองโดยอัตโนมัติ
  * แบบนี้การเพิ่มฟิลด์สาธารณะต้องเป็นการตัดสินใจที่ตั้งใจเสมอ
+ *
+ * ฟังก์ชันนี้ไม่กรองสถานะ — feed สาธารณะต้องเรียกผ่าน toPublicJobs() เสมอ
  */
 export function toPublicJob(job: CalendarJob): PublicJob {
   const out: PublicJob = {

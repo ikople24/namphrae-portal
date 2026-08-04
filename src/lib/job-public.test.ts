@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toPublicJob, toPublicJobs } from '@/lib/job-public';
-import type { CalendarJob } from '@/types/portal';
+import type { CalendarJob, PublicJob } from '@/types/portal';
 
 const FULL: CalendarJob = {
   id: 'job-1',
@@ -65,6 +65,12 @@ describe('toPublicJob', () => {
     expect(pub.title).toBeUndefined();
     expect(pub.phone).toBeUndefined();
     expect(pub.status).toBe('deferred');
+  });
+
+  it('PublicJob กันการ spread ทั้งก้อนตั้งแต่ตอน compile', () => {
+    // @ts-expect-error — CalendarJob ทั้งก้อนต้องไม่ assign เป็น PublicJob ได้
+    const leak: PublicJob = { ...FULL };
+    expect(leak.id).toBe('job-1');
   });
 });
 

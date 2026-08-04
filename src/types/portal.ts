@@ -116,15 +116,31 @@ export type CalendarJob = {
   doneBy?: string;
 };
 
-// ฟิลด์ที่ห้ามหลุดสู่สาธารณะเด็ดขาด — ประกาศเป็น never เพื่อให้การเผลอ spread
-// CalendarJob ทั้งก้อนมาเป็น PublicJob กลายเป็น compile error ไม่ใช่แค่เทสต์จับ
-type JobPrivateField = 'title' | 'phone' | 'origin' | 'destination' | 'note';
+// รายชื่อฟิลด์ที่อนุญาตให้สาธารณะเห็นคือแหล่งความจริงเดียว — ฟิลด์ไหนของ
+// CalendarJob ไม่ถูกเขียนไว้ในนี้ถือว่าเป็นข้อมูลส่วนตัวโดยปริยาย (private by
+// default) ไม่ใช่กลับด้าน ดังนั้นฟิลด์ใหม่ที่เพิ่มเข้า CalendarJob ทีหลัง
+// (เช่น createdBy, decidedBy, doneBy ซึ่งเป็นอีเมล/Clerk id ของเจ้าหน้าที่)
+// จะถูกกันไว้เป็นส่วนตัวเองโดยอัตโนมัติ ต้องเติมชื่อลงอาเรย์นี้อย่างตั้งใจ
+// เท่านั้นจึงจะเปิดเผยได้ — ต่างจากการไล่ประกาศฟิลด์ต้องห้ามทีละชื่อซึ่งลืม
+// เพิ่มฟิลด์ใหม่ได้ง่าย (JobPrivateField เดิมตกหล่นไปแล้วสามฟิลด์)
+export const PUBLIC_JOB_FIELDS = [
+  'id',
+  'kind',
+  'date',
+  'time',
+  'status',
+  'village',
+] as const satisfies readonly (keyof CalendarJob)[];
+
+type PublicJobField = (typeof PUBLIC_JOB_FIELDS)[number];
+
+// ฟิลด์ที่เหลือทั้งหมดของ CalendarJob (ไม่ว่าจะมีอยู่วันนี้หรือเพิ่มทีหลัง)
+// ถูก derive มาเป็น never โดยอัตโนมัติ เพื่อให้การเผลอ spread CalendarJob
+// ทั้งก้อนมาเป็น PublicJob กลายเป็น compile error ไม่ใช่แค่เทสต์จับ
+type JobPrivateField = Exclude<keyof CalendarJob, PublicJobField>;
 
 // สิ่งที่หลุดออกสู่สาธารณะได้เท่านั้น — ดู src/lib/job-public.ts
-export type PublicJob = Pick<
-  CalendarJob,
-  'id' | 'kind' | 'date' | 'time' | 'status' | 'village'
-> &
+export type PublicJob = Pick<CalendarJob, PublicJobField> &
   Partial<Record<JobPrivateField, never>>;
 
 export const JOB_KIND_LABEL: Record<JobKind, string> = {
