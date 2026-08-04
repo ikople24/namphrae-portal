@@ -2132,12 +2132,19 @@ patient name even when the admin page hands it full job records."
 - Create: `src/pages/admin/calendar/new.tsx`
 - Create: `src/pages/admin/calendar/[id].tsx`
 
+> **หมายเหตุจาก review ของ Task 8 — ฟอร์มต้องส่ง `JobInput` ครบทุกฟิลด์เสมอ:**
+> `PATCH` รับ body `{ job?: JobInput; status?: JobStatus }` โดย `job` คือชุดฟิลด์ที่แก้ได้
+> **ทั้งชุด** ไม่ใช่เฉพาะที่เปลี่ยน — `jobInputSchema` เติมฟิลด์ที่ไม่ได้ส่งมาเป็น `''` ให้เอง
+> และ `updateJob` ใน store เขียนทับทั้ง 9 ฟิลด์เสมอ **ถ้าส่งมาแค่บางฟิลด์ ที่เหลือจะถูกล้างทิ้ง
+> เงียบ ๆ โดยไม่มี error** · โค้ดที่ให้ไว้ด้านล่างถูกอยู่แล้ว (`{ ...EMPTY, ...initial }` แล้วส่ง
+> `parsed.data` ทั้งก้อน) — อย่า "ปรับให้ส่งเฉพาะฟิลด์ที่เปลี่ยน" เพื่อประหยัด payload
+
 - [ ] **Step 1: เขียน `src/components/admin/JobForm.tsx`**
 
 ```tsx
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { createJob, updateJob } from '@/lib/admin-api';
+import { createCalendarJob, updateCalendarJob } from '@/lib/admin-api';
 import { jobInputSchema, type JobInput } from '@/lib/schema';
 import { todayInBangkok } from '@/lib/calendar-grid';
 import { JOB_KIND_COLOR, JOB_KIND_LABEL, type JobKind } from '@/types/portal';
@@ -2191,7 +2198,7 @@ export default function JobForm({
     setSaving(true);
     try {
       if (mode === 'new') {
-        const { lineNotified } = await createJob(parsed.data);
+        const { lineNotified } = await createCalendarJob(parsed.data);
         if (!lineNotified) {
           // งานถูกบันทึกแล้ว บอกตรง ๆ ว่าอะไรสำเร็จอะไรไม่สำเร็จ
           setWarning('บันทึกงานแล้ว แต่ส่งแจ้งเตือน LINE ไม่สำเร็จ');
@@ -2199,7 +2206,7 @@ export default function JobForm({
           return;
         }
       } else if (jobId) {
-        await updateJob(jobId, parsed.data);
+        await updateCalendarJob(jobId, parsed.data);
       }
       router.push('/admin/calendar');
     } catch (err) {
@@ -2529,8 +2536,8 @@ import { getMemberSsrProps } from '@/lib/auth-server';
 import {
   adminCalendarKey,
   adminFetcher,
-  deleteJob,
-  setJobStatus,
+  deleteCalendarJob,
+  setCalendarJobStatus,
   type JobListResponse,
 } from '@/lib/admin-api';
 import { currentMonthInBangkok, thaiShortDate } from '@/lib/calendar-grid';
@@ -2584,7 +2591,7 @@ function AdminCalendarPage() {
     setBusy(job.id);
     setMsg(null);
     try {
-      await setJobStatus(job.id, next);
+      await setCalendarJobStatus(job.id, next);
       await refresh();
       setMsg(`${job.title}: ${JOB_STATUS_LABEL[next]}`);
     } catch (err) {
@@ -2599,7 +2606,7 @@ function AdminCalendarPage() {
     setBusy(job.id);
     setMsg(null);
     try {
-      await deleteJob(job.id);
+      await deleteCalendarJob(job.id);
       await refresh();
       setMsg('ลบงานแล้ว');
     } catch (err) {
