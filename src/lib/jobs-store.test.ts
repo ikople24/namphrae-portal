@@ -6,7 +6,7 @@ import {
   JOB_EDITABLE_FIELDS,
   matches,
 } from '@/lib/jobs-store';
-import type { JobInput } from '@/lib/schema';
+import { jobInputSchema, type JobInput } from '@/lib/schema';
 import type { CalendarJob } from '@/types/portal';
 
 // เทสต์นี้ครอบเฉพาะ matches() และ bySchedule() — ฟังก์ชันบริสุทธิ์ล้วน ๆ
@@ -95,7 +95,13 @@ describe('matches', () => {
   });
 });
 
-describe('bySchedule', () => {
+// bySchedule ต้องเป็น total order (date, time, createdAt, id) ไล่ครบทุกระดับ
+// — ไม่ใช่แค่ date+time — เพราะ Mongo ไม่รับประกันลำดับของเอกสารที่ sort key
+// เท่ากันเป๊ะ (และลำดับนั้นเปลี่ยนได้ระหว่างรัน query สองครั้ง) ในขณะที่
+// Array.prototype.sort ของแบ็กเอนด์ไฟล์เสถียรมาตั้งแต่ ES2019 เทสต์ชุดนี้จึง
+// ตั้งใจ "จับ" ค่า date/time/createdAt ให้ชนกันแล้วดูว่า id ตัดสินผลได้จริง
+// แทนที่จะพึ่งลำดับที่ใส่เข้ามาใน array (ซึ่งเป็นพฤติกรรมที่ Mongo ให้ไม่ได้)
+describe('bySchedule — total order ที่ทั้งแบ็กเอนด์ไฟล์และ Mongo ต้องให้ผลตรงกัน', () => {
   it('วันที่ต่างกัน — เรียงตามวันที่ก่อนเวลา', () => {
     const early = makeJob({ id: 'a', date: '2026-08-01', time: '23:00' });
     const late = makeJob({ id: 'b', date: '2026-08-02', time: '00:00' });
@@ -110,23 +116,80 @@ describe('bySchedule', () => {
     expect(bySchedule(evening, morning)).toBeGreaterThan(0);
   });
 
-  it('วัน+เวลาเท่ากันทุกด้าน — คืนค่า 0', () => {
-    const a = makeJob({ id: 'a', date: '2026-08-01', time: '08:00' });
-    const b = makeJob({ id: 'b', date: '2026-08-01', time: '08:00' });
-    expect(bySchedule(a, b)).toBe(0);
+  it('วัน+เวลาเท่ากัน — เรียงตาม createdAt ต่อ ไม่ใช่ลำดับที่ใส่เข้ามา', () => {
+    const older = makeJob({
+      id: 'a',
+      date: '2026-08-01',
+      time: '06:00',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    });
+    const newer = makeJob({
+      id: 'b',
+      date: '2026-08-01',
+      time: '06:00',
+      createdAt: '2026-07-02T00:00:00.000Z',
+    });
+    // เรียก newer ก่อน older โดยตั้งใจ — ถ้าฟังก์ชันแอบพึ่งลำดับอาร์กิวเมนต์
+    // หรือ Array.sort's stability แทนที่จะเทียบ createdAt เอง ผลจะกลับด้าน
+    expect(bySchedule(newer, older)).toBeGreaterThan(0);
+    expect(bySchedule(older, newer)).toBeLessThan(0);
   });
 
-  it('เรียง list ที่สลับลำดับแบบสมจริงได้ ascending ถูกต้องและเสถียรเมื่อวัน+เวลาเท่ากัน', () => {
+  it('วัน+เวลา+createdAt เท่ากันหมด — เรียงตาม id เป็นตัวตัดสินสุดท้าย', () => {
+    const shared = {
+      date: '2026-08-01',
+      time: '06:00',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    };
+    const a = makeJob({ id: 'a', ...shared });
+    const z = makeJob({ id: 'z', ...shared });
+    expect(bySchedule(a, z)).toBeLessThan(0);
+    expect(bySchedule(z, a)).toBeGreaterThan(0);
+  });
+
+  it('เรียง list ที่สลับลำดับแบบสมจริงได้ ascending ตาม total order แม้ date/time/createdAt ชนกันหมด', () => {
+    const sameCreatedAt = '2026-08-01T00:00:00.000Z';
     const jobs = [
-      makeJob({ id: '5', date: '2026-08-20', time: '10:00' }),
-      makeJob({ id: '1', date: '2026-08-05', time: '09:00' }),
-      makeJob({ id: '4', date: '2026-08-05', time: '23:30' }),
-      makeJob({ id: '2', date: '2026-08-05', time: '09:00' }), // เวลาเดียวกับ '1' — มาทีหลังใน input
-      makeJob({ id: '3', date: '2026-08-05', time: '14:00' }),
-      makeJob({ id: '6', date: '2026-09-01', time: '00:00' }),
+      makeJob({
+        id: '5',
+        date: '2026-08-20',
+        time: '10:00',
+        createdAt: sameCreatedAt,
+      }),
+      makeJob({
+        id: 'z',
+        date: '2026-08-05',
+        time: '09:00',
+        createdAt: sameCreatedAt,
+      }),
+      makeJob({
+        id: '4',
+        date: '2026-08-05',
+        time: '23:30',
+        createdAt: sameCreatedAt,
+      }),
+      // date/time/createdAt เหมือน 'z' ทุกตัว — id ต้องเป็นตัวตัดสินว่ามาก่อน
+      makeJob({
+        id: 'a',
+        date: '2026-08-05',
+        time: '09:00',
+        createdAt: sameCreatedAt,
+      }),
+      makeJob({
+        id: '3',
+        date: '2026-08-05',
+        time: '14:00',
+        createdAt: sameCreatedAt,
+      }),
+      makeJob({
+        id: '6',
+        date: '2026-09-01',
+        time: '00:00',
+        createdAt: sameCreatedAt,
+      }),
     ];
     const sorted = [...jobs].sort(bySchedule);
-    expect(sorted.map((j) => j.id)).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(sorted.map((j) => j.id)).toEqual(['a', 'z', '3', '4', '5', '6']);
   });
 });
 
@@ -179,6 +242,17 @@ describe('รูปร่างเอกสาร: buildNewJob กับ buildJo
   it('JOB_EDITABLE_FIELDS ตรงกับคีย์ที่ buildJobPatch เขียนจริงทุกตัว ไม่ขาดไม่เกิน', () => {
     const patchKeys = Object.keys(buildJobPatch(FULL_INPUT)).sort();
     expect(patchKeys).toEqual([...JOB_EDITABLE_FIELDS].sort());
+  });
+
+  // เทสต์ก่อนหน้าเทียบ JOB_EDITABLE_FIELDS กับ buildJobPatch เท่านั้น — สอง
+  // จุดนั้นแก้พร้อมกันได้โดยที่เทสต์ยังเขียวสนิท (เช่นลบ 'note' ออกทั้งคู่)
+  // แล้ว updateJob จะเลิกบันทึกฟิลด์ note เงียบ ๆ ทั้งที่ฟอร์มยังส่งมา ผูกไว้กับ
+  // jobInputSchema ซึ่งเป็นแหล่งความจริงของฟิลด์ที่ฟอร์มส่งจริงแทน — วันนี้ทุก
+  // คีย์ของ JobInput แก้ไขได้หมด (9 ตัวเท่ากัน) จึงต้องเท่ากันเป๊ะ
+  it('JOB_EDITABLE_FIELDS ครอบทุกฟิลด์ที่ฟอร์มส่งมา — ลบพร้อมกันทั้งสองที่ก็ต้องแดง', () => {
+    expect([...JOB_EDITABLE_FIELDS].sort()).toEqual(
+      Object.keys(jobInputSchema.shape).sort()
+    );
   });
 
   it('คีย์ที่ buildJobPatch เขียน ต้องเป็นชุดย่อยของคีย์ที่ buildNewJob สร้าง', () => {

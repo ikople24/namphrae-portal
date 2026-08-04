@@ -11,6 +11,17 @@ import type { CalendarJob, JobStatus } from '@/types/portal';
 //
 // แบ็กเอนด์เหมือน config-store: Mongo เมื่อมี MONGODB_URI ไม่งั้นใช้ไฟล์ในเครื่อง
 // (Vercel/Railway filesystem เป็น read-only ตอน runtime — production ต้องใช้ Mongo)
+//
+// แบ็กเอนด์ไฟล์ไม่มี lock: ทุกฟังก์ชันอ่าน-แก้-เขียนทั้งอาเรย์ สอง request ที่
+// เขียนพร้อมกัน (next dev เสิร์ฟพร้อมกันได้จริง) แข่งกันได้ งานหนึ่งหายเงียบ ๆ
+// ยอมรับได้เพราะเป็น dev fallback เจ้าเดียวแก้ ไม่ใช่โมเดลของ production
+//
+// ค่า date ที่เก็บไว้ (ทั้ง Mongo และไฟล์) เป็น 'YYYY-MM-DD' ที่มีอยู่จริงเสมอ
+// เพราะทุกจุดที่เขียนงานผ่าน jobInputSchema ซึ่ง refine() ปฏิเสธวันที่ไม่มีจริง
+// เช่น 2026-02-30 — matches() และ query ช่วง -31 ใน listJobs() พึ่งพาสมมติฐาน
+// นี้อยู่ (ดูคอมเมนต์ตรงนั้น) ตัวเขียนงานใหม่ในอนาคต เช่น importer ย้ายข้อมูล
+// จาก Google Calendar ต้องผ่าน schema เดียวกันนี้เสมอ ไม่งั้นวันที่เพี้ยนจะ
+// มองไม่เห็นทั้งใน production และ dev เหมือนกัน สลับแบ็กเอนด์ก็ไม่ช่วยให้เจอบั๊ก
 
 const COLLECTION = 'calendarJobs';
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -27,8 +38,13 @@ function usingMongo(): boolean {
 async function fileRead(): Promise<CalendarJob[]> {
   try {
     return JSON.parse(await fs.readFile(RUNTIME_FILE, 'utf8')) as CalendarJob[];
-  } catch {
-    return []; // ยังไม่เคยมีงาน — ต่างจาก config ตรงที่ไม่มี seed
+  } catch (err) {
+    // ENOENT คือยังไม่เคยมีงาน (ต่างจาก config ตรงที่ไม่มี seed) — ต้องแยกจาก
+    // error อื่นทุกแบบ เช่นไฟล์ถูกตัดกลางคันเพราะ fs.writeFile ไม่ atomic แล้ว
+    // โปรเซสถูก kill ระหว่างเขียน ถ้ากลืน error พวกนั้นเป็น [] เงียบ ๆ เหมือนกัน
+    // createJob ครั้งถัดไปจะเขียนทับไฟล์เดิมด้วยอาเรย์ตัวเดียวโดยไม่มีสัญญาณเตือน
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
   }
 }
 
@@ -47,20 +63,40 @@ export function matches(job: CalendarJob, filter: JobFilter): boolean {
   return true;
 }
 
+// ไล่เปรียบเทียบลงไปจนถึง id ซึ่งไม่ซ้ำกัน ทำให้ลำดับเป็น total order — Mongo
+// ไม่รับประกันลำดับของเอกสารที่ sort key เท่ากันเป๊ะ (และลำดับนั้นเปลี่ยนได้
+// ระหว่างการรัน query สองครั้ง เช่น plan เปลี่ยนหรือ storage ถูก compact) ส่วน
+// Array.prototype.sort เสถียรมาตั้งแต่ ES2019 จึงคืนลำดับตามการสร้างเสมอ ถ้า
+// เทียบไม่ครบถึง id งานสองงานเวลาเดียวกัน (เช่นรถส่งผู้ป่วย 06:00 สองคัน) จะ
+// เรียงคงที่ตอน dev แต่เรียงไม่แน่นอนใน production — คนละพฤติกรรมที่ dev ทำซ้ำ
+// ปัญหาไม่ได้เลย ต้องให้ Mongo sort ({ date: 1, time: 1, createdAt: 1, id: 1 })
+// ใน listJobs() ไล่ถึงระดับเดียวกันนี้ด้วยเสมอ
 export function bySchedule(a: CalendarJob, b: CalendarJob): number {
-  return a.date === b.date
-    ? a.time.localeCompare(b.time)
-    : a.date.localeCompare(b.date);
+  return (
+    a.date.localeCompare(b.date) ||
+    a.time.localeCompare(b.time) ||
+    a.createdAt.localeCompare(b.createdAt) ||
+    a.id.localeCompare(b.id)
+  );
 }
 
 // ---- mongo backend ---------------------------------------------------------
 
 let indexesEnsured = false;
+let indexAttempts = 0;
+// เพดานจำนวนครั้งที่ยอมลองใหม่ก่อนเลิกเงียบ ๆ — ความล้มเหลวชั่วคราว (เครือข่าย
+// สะดุดตอน cold start) ควรลองใหม่ได้ แต่ความล้มเหลวถาวร (Atlas user ไม่มีสิทธิ์
+// createIndex, หรือมี index ชื่อชนกันจากคนละ definition) ไม่มีทางหายเองด้วยการ
+// retry เลย ถ้าไม่มีเพดาน ทุก listJobs/createJob จะเสีย round trip ที่ล้มเหลว
+// และ log warning ไปตลอดอายุ process — นี่คือปัญหา deploy ที่ต้องแก้ที่ Atlas
+// ไม่ใช่ retry แก้ได้
+const MAX_INDEX_ATTEMPTS = 3;
 
 // createIndex เป็น no-op เมื่อ index มีอยู่แล้ว จึงเรียกครั้งเดียวต่อ process
 // ก็พอ (serverless cold start ใหม่ก็เรียกใหม่ ราคาถูกกว่าการมี migration แยก)
 async function ensureIndexes(): Promise<void> {
-  if (indexesEnsured) return;
+  if (indexesEnsured || indexAttempts >= MAX_INDEX_ATTEMPTS) return;
+  indexAttempts += 1;
   indexesEnsured = true;
   try {
     const db = await getDb();
@@ -70,8 +106,11 @@ async function ensureIndexes(): Promise<void> {
       { key: { id: 1 }, unique: true },
     ]);
   } catch (err) {
-    indexesEnsured = false; // ให้ลองใหม่ครั้งหน้า
-    console.warn('calendarJobs: createIndexes failed', err);
+    indexesEnsured = false; // ให้ลองใหม่ครั้งหน้า (จนกว่าจะครบเพดาน)
+    console.warn(
+      `calendarJobs: createIndexes failed (attempt ${indexAttempts}/${MAX_INDEX_ATTEMPTS})`,
+      err
+    );
   }
 }
 
@@ -91,7 +130,9 @@ export async function listJobs(filter: JobFilter = {}): Promise<CalendarJob[]> {
     return db
       .collection<CalendarJob>(COLLECTION)
       .find(query, { projection: { _id: 0 } })
-      .sort({ date: 1, time: 1 })
+      // ไล่ถึง id เพื่อให้เป็น total order เดียวกับ bySchedule() ของแบ็กเอนด์
+      // ไฟล์ — ไม่งั้น Mongo จะคืนงานเวลาเดียวกันในลำดับที่ไม่แน่นอน
+      .sort({ date: 1, time: 1, createdAt: 1, id: 1 })
       .toArray();
   }
   return (await fileRead()).filter((j) => matches(j, filter)).sort(bySchedule);
