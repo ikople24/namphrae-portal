@@ -7,7 +7,11 @@
  * Requires MONGODB_URI (loaded from .env.local via dotenv). Without it, the app
  * uses the local JSON file store and this script is unnecessary.
  */
-import 'dotenv/config';
+// โหลด .env.local ก่อน .env ให้ตรงกับลำดับที่ Next.js ใช้ — `import 'dotenv/config'`
+// เฉย ๆ อ่านแค่ .env ทำให้ค่าที่ README บอกให้ใส่ใน .env.local ไม่ถูกอ่านเลย
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: ['.env.local', '.env'], quiet: true });
+
 import { promises as fs } from 'fs';
 import path from 'path';
 import { MongoClient } from 'mongodb';

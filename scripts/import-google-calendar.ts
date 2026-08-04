@@ -14,7 +14,11 @@
  * ⚠️ ข้อมูลที่ดึงมาเป็นข้อมูลผู้ป่วยจริง — สคริปต์นี้ไม่เขียนอะไรลงไฟล์ในโปรเจกต์
  * และ log แค่จำนวนกับวันเวลา ไม่พิมพ์ชื่อหรือเบอร์ออกมา
  */
-import 'dotenv/config';
+// โหลด .env.local ก่อน .env ให้ตรงกับลำดับที่ Next.js ใช้ — `import 'dotenv/config'`
+// เฉย ๆ อ่านแค่ .env ทั้งที่ README บอกให้ใส่ค่าไว้ใน .env.local
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: ['.env.local', '.env'], quiet: true });
+
 import crypto from 'node:crypto';
 import { MongoClient } from 'mongodb';
 import { jobInputSchema } from '../src/lib/schema';
