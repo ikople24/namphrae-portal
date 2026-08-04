@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useSWR, { type KeyedMutator } from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getMemberSsrProps } from '@/lib/auth-server';
 import ImageUploadField from '@/components/admin/ImageUploadField';
-import { adminFetcher, updateSite, uploadMedia } from '@/lib/admin-api';
+import Icon from '@/components/Icon';
+import {
+  adminFetcher,
+  updateLineGroupId,
+  updateSite,
+  uploadMedia,
+} from '@/lib/admin-api';
 import { siteSettingsSchema } from '@/lib/schema';
 import type { PortalConfig, SiteSettings } from '@/types/portal';
 
@@ -234,8 +240,110 @@ function SettingsForm({
             </button>
           </div>
         </Section>
+
+        <LineGroupSection />
       </div>
     </AdminLayout>
+  );
+}
+
+type LineGroupStatus = { lineGroupId: string | null; configured: boolean };
+
+// การบันทึกกลุ่ม LINE เป็นคนละ action จากปุ่ม "บันทึก" ด้านบน (ซึ่งเซฟ
+// site settings ทั้งก้อนผ่าน onSave) โดยตั้งใจ — groupId ปกติมาจาก webhook เอง
+// ไม่ใช่ฟิลด์ที่กรอกแล้วรอกดบันทึกรวม การแยกปุ่มทำให้กด "บันทึก" หลักแล้วไม่มี
+// ผลกับกลุ่ม LINE โดยไม่ตั้งใจ (และกลับกัน)
+//
+// ดึงสถานะจาก GET /api/admin/line-group แยกจาก config เพราะ `configured` มาจาก
+// env ฝั่ง server (LINE_CHANNEL_SECRET ไม่ใช่ NEXT_PUBLIC_) หน้านี้อ่านเองไม่ได้
+function LineGroupSection() {
+  const query = useSWR<LineGroupStatus>('/api/admin/line-group', adminFetcher);
+  const [lineGroupId, setLineGroupId] = useState('');
+  const [lineMsg, setLineMsg] = useState<string | null>(null);
+  const [savingLine, setSavingLine] = useState(false);
+
+  // เซ็ตค่าเริ่มต้นของช่องกรอกจากข้อมูลที่โหลดมา "ครั้งแรกครั้งเดียว" ไม่ใช่ทุก
+  // ครั้งที่ query.data เปลี่ยน — ไม่งั้นค่าที่เจ้าหน้าที่เพิ่งพิมพ์ (ยังไม่กดบันทึก)
+  // จะถูกเขียนทับทุกครั้งที่ SWR revalidate เบื้องหลัง
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (query.data && !seeded.current) {
+      setLineGroupId(query.data.lineGroupId ?? '');
+      seeded.current = true;
+    }
+  }, [query.data]);
+
+  async function onSaveLineGroup() {
+    setLineMsg(null);
+    setSavingLine(true);
+    try {
+      await updateLineGroupId(lineGroupId.trim());
+      // ไม่มีบรรทัดนี้ กล่องสถานะด้านบนจะยังโชว์ค่าเก่าแม้บันทึกสำเร็จแล้ว
+      await query.mutate();
+      setLineMsg('บันทึกกลุ่ม LINE แล้ว');
+    } catch (err) {
+      setLineMsg(err instanceof Error ? err.message : 'บันทึกไม่สำเร็จ');
+    } finally {
+      setSavingLine(false);
+    }
+  }
+
+  return (
+    <Section title="แจ้งเตือน LINE">
+      {/* สองบรรทัดนี้คือทางเดียวที่เจ้าหน้าที่จะรู้ว่าแจ้งเตือนใช้ได้จริงหรือยัง
+          และกำลังส่งเข้ากลุ่มไหน — ข้อความที่ส่งมีชื่อผู้ป่วย เบอร์โทร ต้นทาง
+          ปลายทางครบ ถ้าบอทถูกเชิญเข้ากลุ่มผิดจะไม่มีอะไรเตือนเลย */}
+      {query.data ? (
+        <div className="rounded-lg border border-black/15 bg-paper-deep px-4 py-3 text-sm">
+          <p className="flex items-center gap-2">
+            <Icon
+              name={query.data.configured ? 'check_circle' : 'warning'}
+              size={18}
+            />
+            {query.data.configured
+              ? 'ตั้งค่า LINE ครบแล้ว — งานใหม่จะถูกส่งแจ้งเตือนเข้ากลุ่มด้านล่างทันที'
+              : 'ยังไม่ได้ตั้งค่าระบบแจ้งเตือน LINE — เจ้าหน้าที่จะไม่ได้รับแจ้งเตือนเมื่อมีงานใหม่ (ผู้ดูแลระบบ: ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN และ LINE_CHANNEL_SECRET ใน environment)'}
+          </p>
+          <p className="mt-1 text-ink-soft">
+            กลุ่มปัจจุบัน:{' '}
+            {query.data.lineGroupId ? (
+              <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs">
+                {query.data.lineGroupId}
+              </code>
+            ) : (
+              'ยังไม่มี — เชิญบอท OA เข้ากลุ่มเจ้าหน้าที่'
+            )}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-ink-soft">กำลังโหลด…</p>
+      )}
+
+      <p className="mt-3 text-sm text-ink-soft">
+        ปกติช่องนี้ถูกกรอกให้อัตโนมัติเมื่อเชิญบอท OA เข้ากลุ่มเจ้าหน้าที่ (ต้องตั้ง
+        Webhook URL เป็น <code>/api/line/webhook</code> ในคอนโซล LINE) — กรอกเอง
+        เมื่อต้องการย้ายกลุ่มโดยไม่เชิญบอทใหม่
+      </p>
+      <Field label="LINE group id">
+        <input
+          className={inputCls}
+          value={lineGroupId}
+          onChange={(e) => setLineGroupId(e.target.value)}
+          placeholder="Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        />
+      </Field>
+      <button
+        type="button"
+        onClick={onSaveLineGroup}
+        disabled={savingLine}
+        className="mt-1 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-ink-soft transition hover:bg-black/[0.04] disabled:opacity-50"
+      >
+        {savingLine ? 'กำลังบันทึก…' : 'บันทึกกลุ่ม LINE'}
+      </button>
+      {lineMsg ? (
+        <p className="mt-2 text-sm text-ink-soft">{lineMsg}</p>
+      ) : null}
+    </Section>
   );
 }
 

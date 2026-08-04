@@ -50,7 +50,11 @@ function EditJobPage() {
       </Link>
       {error ? (
         <p className="text-red-700">
-          {error instanceof Error ? error.message : 'โหลดข้อมูลไม่สำเร็จ'}
+          {error instanceof Error && error.message.startsWith('คำขอล้มเหลว: 404')
+            ? 'ไม่พบงานนี้ (อาจถูกลบไปแล้ว)'
+            : error instanceof Error
+              ? error.message
+              : 'โหลดข้อมูลไม่สำเร็จ'}
         </p>
       ) : isLoading || !job ? (
         <p className="text-ink-soft">กำลังโหลด…</p>
