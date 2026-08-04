@@ -113,13 +113,13 @@ export const jobInputSchema = z.object({
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'เวลาต้องเป็นรูปแบบ HH:mm'),
   title: z.string().trim().min(1, 'ต้องระบุชื่อผู้ป่วย/ชื่องาน').max(200),
-  village: z.string().max(200).optional().default(''),
-  origin: z.string().max(200).optional().default(''),
-  destination: z.string().max(200).optional().default(''),
-  phone: z.string().max(30).optional().default(''),
+  village: z.string().trim().max(200).optional().default(''),
+  origin: z.string().trim().max(200).optional().default(''),
+  destination: z.string().trim().max(200).optional().default(''),
+  phone: z.string().trim().max(30).optional().default(''),
   // เก็บ note ให้พอส่งต่อเป็นข้อความ LINE push ได้ (LINE จำกัดข้อความที่ 5000
   // ตัวอักษร ค่านี้เว้นระยะกว้าง ๆ ไว้ไม่ให้การ push ล้มเพราะ note ยาวเกิน)
-  note: z.string().max(1000).optional().default(''),
+  note: z.string().trim().max(1000).optional().default(''),
 });
 
 export type JobInput = z.infer<typeof jobInputSchema>;
