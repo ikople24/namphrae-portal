@@ -77,6 +77,7 @@ export const portalConfigSchema = z.object({
   site: siteSettingsSchema,
   categories: z.array(categorySchema),
   links: z.array(serviceLinkSchema),
+  lineGroupId: z.string().optional(),
 });
 
 // Import payload: what /admin/data accepts. _id/updatedAt/version are optional
@@ -90,3 +91,32 @@ export const importConfigSchema = portalConfigSchema.partial({
 
 export type LinkInput = z.infer<typeof linkInputSchema>;
 export type ImportConfig = z.infer<typeof importConfigSchema>;
+
+// ── ปฏิทินปฏิบัติงาน ────────────────────────────────────────────────────────
+
+export const jobKindSchema = z.enum(['ems', 'rescue']);
+export const jobStatusSchema = z.enum([
+  'pending',
+  'approved',
+  'done',
+  'cancelled',
+]);
+
+// ฟอร์มเดียวชุดฟิลด์เดียวใช้ทั้งงานกู้ชีพและกู้ภัย — งานกู้ภัยเว้นฟิลด์ที่ไม่ใช้ว่างไว้
+export const jobInputSchema = z.object({
+  kind: jobKindSchema,
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'วันที่ต้องเป็นรูปแบบ YYYY-MM-DD'),
+  time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'เวลาต้องเป็นรูปแบบ HH:mm'),
+  title: z.string().min(1, 'ต้องระบุชื่อผู้ป่วย/ชื่องาน'),
+  village: z.string().optional().default(''),
+  origin: z.string().optional().default(''),
+  destination: z.string().optional().default(''),
+  phone: z.string().optional().default(''),
+  note: z.string().optional().default(''),
+});
+
+export type JobInput = z.infer<typeof jobInputSchema>;

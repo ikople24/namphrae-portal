@@ -65,6 +65,9 @@ export type PortalConfig = {
   site: SiteSettings;
   categories: Category[];
   links: ServiceLink[];
+  // LINE group ที่บอท OA ถูกเชิญเข้าไป — เก็บที่ระดับบนสุด ไม่ใช่ใน `site`
+  // เพราะ toPublicConfig() คืน `site` ทั้งก้อนสู่สาธารณะ
+  lineGroupId?: string;
 };
 
 // Public-facing config: admin-only fields stripped, inactive links removed.
@@ -78,5 +81,56 @@ export type PublicConfig = {
 };
 
 export type PublicLink = Omit<ServiceLink, 'isActive'>;
+
+// ── ปฏิทินปฏิบัติงาน ────────────────────────────────────────────────────────
+// งานปฏิทินอยู่คนละ collection กับ PortalConfig (ดู src/lib/jobs-store.ts):
+// config เป็นเอกสารก้อนเดียวที่เขียนทับทั้งก้อนทุกครั้ง ส่วนงานโตไม่จำกัด
+
+export type JobKind = 'ems' | 'rescue'; // กู้ชีพ (รับ-ส่งผู้ป่วย) | กู้ภัย (งานป้องกัน)
+export type JobStatus = 'pending' | 'approved' | 'done' | 'cancelled';
+
+export type CalendarJob = {
+  id: string;
+  kind: JobKind;
+  status: JobStatus;
+  date: string; // 'YYYY-MM-DD' ตามเวลาไทยตรง ๆ — ไม่แปลง UTC จึงไม่มีวันเพี้ยน
+  time: string; // 'HH:mm' 24 ชม.
+  title: string; // ชื่อผู้ป่วย / ชื่องาน            ← PII
+  village?: string; // 'ม.3 ต.น้ำแพร่'
+  origin?: string; // ต้นทาง                       ← PII
+  destination?: string; // ปลายทาง                 ← PII
+  phone?: string; //                               ← PII
+  note?: string;
+  createdAt: string;
+  createdBy: string;
+  decidedAt?: string; // ตอนอนุมัติ / ยกเลิก
+  decidedBy?: string;
+  doneAt?: string; // ตอนปิดงาน
+  doneBy?: string;
+};
+
+// สิ่งที่หลุดออกสู่สาธารณะได้เท่านั้น — ดู src/lib/job-public.ts
+export type PublicJob = Pick<
+  CalendarJob,
+  'id' | 'kind' | 'date' | 'time' | 'status'
+> & { village?: string };
+
+export const JOB_KIND_LABEL: Record<JobKind, string> = {
+  ems: 'รับ-ส่งผู้ป่วย',
+  rescue: 'งานป้องกัน',
+};
+
+// สีเดิมจาก legend ของปฏิทินที่ระบบนี้มาแทน
+export const JOB_KIND_COLOR: Record<JobKind, string> = {
+  ems: '#0b8043',
+  rescue: '#d81b60',
+};
+
+export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
+  pending: 'รออนุมัติ',
+  approved: 'อนุมัติแล้ว',
+  done: 'ดำเนินการแล้ว',
+  cancelled: 'ยกเลิก',
+};
 
 export const CONFIG_ID = 'portalConfig';

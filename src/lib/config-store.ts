@@ -176,6 +176,7 @@ function normalise(config: PortalConfig): PortalConfig {
     visitorCount: config.visitorCount ?? 0,
     site: config.site,
     categories: config.categories ?? [],
+    lineGroupId: config.lineGroupId,
     links: (config.links ?? []).map((l) => ({
       ...l,
       clickCount: l.clickCount ?? 0,
