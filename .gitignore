@@ -37,6 +37,8 @@ yarn-error.log*
 # local JSON config store (dev fallback runtime state; production uses MongoDB).
 # The committed seed lives at data/portal-config.seed.json.
 /data/portal-config.json
+# ปฏิทินปฏิบัติงานเริ่มจากศูนย์ ไม่มี seed — ไฟล์นี้คือ dev fallback ของ Mongo
+/data/calendar-jobs.json
 
 # vercel
 .vercel
