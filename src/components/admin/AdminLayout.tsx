@@ -8,6 +8,7 @@ import { isClerkPublicConfigured } from '@/lib/clerk-config';
 
 const NAV = [
   { href: '/admin', label: 'ลิงก์บริการ', icon: 'link', exact: true },
+  { href: '/admin/calendar', label: 'ปฏิทินปฏิบัติงาน', icon: 'calendar_month', exact: false },
   { href: '/admin/categories', label: 'หมวดหมู่', icon: 'category', exact: false },
   { href: '/admin/settings', label: 'ตั้งค่าเว็บไซต์', icon: 'tune', exact: false },
   { href: '/admin/data', label: 'นำเข้า/ส่งออก', icon: 'swap_vert', exact: false },
