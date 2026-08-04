@@ -91,6 +91,7 @@ export default async function handler(
       if (nextStatus) {
         const updated = await setJobStatus(
           id,
+          current.status,
           nextStatus,
           admin.email ?? admin.userId
         );

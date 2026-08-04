@@ -3,11 +3,13 @@ import {
   bySchedule,
   buildJobPatch,
   buildNewJob,
+  buildStatusPatch,
   JOB_EDITABLE_FIELDS,
   matches,
 } from '@/lib/jobs-store';
+import { canTransition } from '@/lib/job-status';
 import { jobInputSchema, type JobInput } from '@/lib/schema';
-import type { CalendarJob } from '@/types/portal';
+import { JOB_STATUSES, type CalendarJob, type JobStatus } from '@/types/portal';
 
 // เทสต์นี้ครอบเฉพาะ matches() และ bySchedule() — ฟังก์ชันบริสุทธิ์ล้วน ๆ
 // ไม่แตะ DB/filesystem เลย จุดที่ต้องระวังคือ matches() พูดกฎกรองเดียวกับ
@@ -278,6 +280,111 @@ describe('รูปร่างเอกสาร: buildNewJob กับ buildJo
     ];
     for (const key of forbidden) {
       expect(key in patch, key).toBe(false);
+    }
+  });
+});
+
+// ---- buildStatusPatch: audit stamp ต้องถูกต้องทั้งไปข้างหน้าและถอยหลัง ------
+//
+// I-3 (รีวิวรอบสุดท้ายก่อน merge): setJobStatus เดิมเลือกฟิลด์ที่จะประทับจาก
+// `next` อย่างเดียว ไม่เคยล้างฟิลด์ที่ตกยุคเมื่อทรานซิชันเดินถอยหลัง —
+// approved -> pending (ถอนอนุมัติ) ไม่ประทับอะไรเลย ปล่อย decidedAt/decidedBy
+// ของการอนุมัติที่เพิ่งถูกถอนไว้เหมือนเดิม และ done -> approved (เปิดงานใหม่)
+// ประทับ decidedAt/decidedBy ใหม่แต่ไม่ล้าง doneAt/doneBy ปล่อยงานที่ยังไม่เสร็จ
+// ให้มีเวลา/ชื่อคนปิดงานค้างอยู่ เทสต์ชุดนี้ตรึงพฤติกรรมที่ถูกต้องของทั้ง 7 คู่
+// (from, to) ที่ ALLOWED ใน job-status.ts อนุญาต — นับได้ 7 คู่จริง ๆ ไม่ใช่ 8
+// (pending: 2, approved: 3, done: 1, cancelled: 1) ตรงกับ ALLOWED array ใน
+// job-status.test.ts
+describe('buildStatusPatch — set/clear ต่อทรานซิชัน (ครบทั้ง 7 คู่ที่ ALLOWED อนุญาต)', () => {
+  const ACTOR = 'staff@example.com';
+  const NOW = '2026-08-05T09:00:00.000Z';
+
+  it('pending -> approved: ประทับ decided ใหม่ ไม่แตะ done (pending ไม่เคยมี done มาก่อน)', () => {
+    const { set, clear } = buildStatusPatch('pending', 'approved', ACTOR, NOW);
+    expect(set).toEqual({
+      status: 'approved',
+      decidedAt: NOW,
+      decidedBy: ACTOR,
+    });
+    expect(clear).toEqual([]);
+  });
+
+  it('pending -> cancelled: ประทับ decided (การตัดสินใจคือยกเลิก) ไม่แตะ done', () => {
+    const { set, clear } = buildStatusPatch('pending', 'cancelled', ACTOR, NOW);
+    expect(set).toEqual({
+      status: 'cancelled',
+      decidedAt: NOW,
+      decidedBy: ACTOR,
+    });
+    expect(clear).toEqual([]);
+  });
+
+  it('approved -> done: ประทับ done ใหม่ ไม่แตะ decided (ข้อมูลว่าใครอนุมัติยังจริงอยู่)', () => {
+    const { set, clear } = buildStatusPatch('approved', 'done', ACTOR, NOW);
+    expect(set).toEqual({ status: 'done', doneAt: NOW, doneBy: ACTOR });
+    expect(clear).toEqual([]);
+  });
+
+  it('approved -> cancelled: ประทับ decided ใหม่ทับของเดิม (การตัดสินใจล่าสุดคือยกเลิก ไม่ใช่การอนุมัติเก่า) ไม่แตะ done', () => {
+    const { set, clear } = buildStatusPatch(
+      'approved',
+      'cancelled',
+      ACTOR,
+      NOW
+    );
+    expect(set).toEqual({
+      status: 'cancelled',
+      decidedAt: NOW,
+      decidedBy: ACTOR,
+    });
+    expect(clear).toEqual([]);
+  });
+
+  it('approved -> pending (ถอนอนุมัติ): ล้าง decided — จุดที่ I-3 พบว่าเดิมไม่ล้างอะไรเลย', () => {
+    const { set, clear } = buildStatusPatch('approved', 'pending', ACTOR, NOW);
+    expect(set).toEqual({ status: 'pending' });
+    expect([...clear].sort()).toEqual(['decidedAt', 'decidedBy']);
+  });
+
+  it('done -> approved (เปิดงานใหม่): ประทับ decided ใหม่ (การตัดสินใจคือเปิดงานกลับมา) และล้าง done — จุดที่ I-3 พบว่าเดิมประทับ decided แต่ไม่ล้าง done', () => {
+    const { set, clear } = buildStatusPatch('done', 'approved', ACTOR, NOW);
+    expect(set).toEqual({
+      status: 'approved',
+      decidedAt: NOW,
+      decidedBy: ACTOR,
+    });
+    expect([...clear].sort()).toEqual(['doneAt', 'doneBy']);
+  });
+
+  it('cancelled -> pending (กู้คืนงาน): ล้าง decided เช่นกัน ให้รูปร่างตรงกับงานที่เพิ่งสร้าง (buildNewJob ไม่เคยเซ็ต decided/done เลย)', () => {
+    const { set, clear } = buildStatusPatch(
+      'cancelled',
+      'pending',
+      ACTOR,
+      NOW
+    );
+    expect(set).toEqual({ status: 'pending' });
+    expect([...clear].sort()).toEqual(['decidedAt', 'decidedBy']);
+  });
+
+  // เทสต์ก่อนหน้าเขียน 7 คู่ไว้ตรง ๆ ทีละเคส — เทสต์นี้ผูกจำนวนคู่ที่ครอบกลับไป
+  // หา canTransition() จริง (ไม่ใช่เขียนเลข 7 ไว้เฉย ๆ) กันไม่ให้มีคนเพิ่ม
+  // ทรานซิชันใหม่ใน ALLOWED ของ job-status.ts แล้วลืมเพิ่มเทสต์ set/clear คู่กัน
+  it('ครอบทุกคู่ (from, to) ที่ canTransition() อนุญาตจริง — ไม่ขาดไม่เกิน', () => {
+    const covered: ReadonlyArray<[JobStatus, JobStatus]> = [
+      ['pending', 'approved'],
+      ['pending', 'cancelled'],
+      ['approved', 'done'],
+      ['approved', 'cancelled'],
+      ['approved', 'pending'],
+      ['done', 'approved'],
+      ['cancelled', 'pending'],
+    ];
+    for (const from of JOB_STATUSES) {
+      for (const to of JOB_STATUSES) {
+        const isCovered = covered.some(([f, t]) => f === from && t === to);
+        expect(isCovered, `${from} -> ${to}`).toBe(canTransition(from, to));
+      }
     }
   });
 });

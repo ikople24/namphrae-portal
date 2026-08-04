@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'node:crypto';
+import type { UpdateFilter } from 'mongodb';
 import { getDb, isMongoConfigured } from '@/lib/mongodb';
 import type { JobInput } from '@/lib/schema';
 import type { CalendarJob, JobStatus } from '@/types/portal';
@@ -195,25 +196,45 @@ export async function createJob(
   return job;
 }
 
+// ฟิลด์ audit ที่ตกยุคได้เมื่อ setJobStatus() เดินสถานะถอยหลัง (approved →
+// pending, done → approved) — จำกัด union ให้เหลือแค่สี่ตัวนี้ (แทนที่จะเป็น
+// keyof CalendarJob เฉย ๆ) เพื่อให้ `delete merged[key]` ใน patchJob() ผ่าน
+// tsc strict: TypeScript ยอม delete เฉพาะ property ที่ optional เท่านั้น ฟิลด์
+// บังคับอย่าง id/status/date จะหลุดเข้ามาไม่ได้แม้แต่ตอน type-check
+type JobAuditField = 'decidedAt' | 'decidedBy' | 'doneAt' | 'doneBy';
+
 async function patchJob(
   id: string,
-  patch: Partial<CalendarJob>
+  patch: Partial<CalendarJob>,
+  clear: readonly JobAuditField[] = []
 ): Promise<CalendarJob | null> {
   if (usingMongo()) {
     const db = await getDb();
+    // Mongo driver serialize ค่า undefined ใน $set เป็น BSON null เฉย ๆ
+    // (ignoreUndefined ปิดอยู่โดยปริยาย — ดูคอมเมนต์เดียวกันใน config-store.ts
+    // normalise()) ไม่ได้ลบคีย์ทิ้งเหมือนที่ optional string ของ CalendarJob
+    // ควรจะเป็น จึงต้องใช้ $unset แยกต่างหากสำหรับฟิลด์ที่ต้องการ "ล้าง" จริง ๆ
+    const update: UpdateFilter<CalendarJob> = {};
+    if (Object.keys(patch).length > 0) update.$set = patch;
+    if (clear.length > 0) {
+      const unset: Partial<Record<JobAuditField, ''>> = {};
+      for (const key of clear) unset[key] = '';
+      update.$unset = unset;
+    }
     const updated = await db
       .collection<CalendarJob>(COLLECTION)
-      .findOneAndUpdate(
-        { id },
-        { $set: patch },
-        { returnDocument: 'after', projection: { _id: 0 } }
-      );
+      .findOneAndUpdate({ id }, update, {
+        returnDocument: 'after',
+        projection: { _id: 0 },
+      });
     return updated ?? null;
   }
   const jobs = await fileRead();
   const index = jobs.findIndex((j) => j.id === id);
   if (index === -1) return null;
-  jobs[index] = { ...jobs[index], ...patch };
+  const merged: CalendarJob = { ...jobs[index], ...patch };
+  for (const key of clear) delete merged[key];
+  jobs[index] = merged;
   await fileWrite(jobs);
   return jobs[index];
 }
@@ -267,25 +288,83 @@ export async function updateJob(
 }
 
 /**
- * เปลี่ยนสถานะพร้อมประทับว่าใครทำเมื่อไร
- * ผู้เรียกต้องตรวจ canTransition() มาก่อน — ที่นี่ไม่ตัดสินใจแทน
+ * ประกอบ patch ของ setJobStatus จาก (from, to) ที่ผ่าน canTransition() แล้ว —
+ * แยกออกมาเป็นฟังก์ชันบริสุทธิ์ด้วยเหตุผลเดียวกับ buildNewJob/buildJobPatch:
+ * ให้เทสต์ครบทุกทรานซิชันที่อนุญาต (ดู ALLOWED ใน job-status.ts) ได้โดยไม่ต้อง
+ * แตะ Mongo หรือไฟล์
+ *
+ * กติกา: สถานะปลายทาง (`next`) เป็นตัวกำหนดว่า stamp คู่ไหน "ยังใช้ได้จริง" —
+ * เขียนทับคู่ที่ตรงกับปลายทางเสมอ (ประทับเวลา/ผู้ทำใหม่) ส่วนคู่ที่ไม่ตรงกับ
+ * ปลายทางอีกต่อไปต้องถูกล้าง ไม่ใช่ปล่อยค้างจากทรานซิชันก่อนหน้า — เดิมโค้ด
+ * ดูแค่ next แล้วเขียนคู่ที่ next ต้องการ แต่ไม่เคยล้างคู่ตรงข้ามเวลาทรานซิชัน
+ * เดินถอยหลัง (approved → pending คือถอนอนุมัติ, done → approved คือเปิดงาน
+ * ใหม่) ทำให้ audit trail โกหก: งานที่เพิ่งถอนอนุมัติยังโชว์ "ใครอนุมัติเมื่อไร"
+ * งานที่เพิ่งเปิดใหม่ยังโชว์ "ใครปิดงานเมื่อไร" ทั้งที่ทั้งคู่ไม่จริงแล้ว (ดู I-3
+ * ในรีวิวรอบสุดท้ายก่อน merge)
+ *
+ * รับ `from` เป็นพารามิเตอร์แทนที่จะอ่าน getJob(id) เองอีกรอบ เพราะผู้เรียก
+ * เดียว (PATCH /api/admin/calendar/[id]) อ่านงานปัจจุบันมาเช็ค canTransition()
+ * อยู่แล้วก่อนเรียกฟังก์ชันนี้ — อ่านซ้ำเสีย round trip เปล่า ๆ และเปิดช่องให้
+ * สถานะที่ใช้ตัดสิน canTransition() กับสถานะที่ใช้ประทับ stamp ไม่ใช่ค่า
+ * เดียวกันถ้ามีคำขออื่นแก้ job แทรกกลางระหว่างสองการอ่าน
+ */
+export function buildStatusPatch(
+  from: JobStatus,
+  next: JobStatus,
+  actor: string,
+  now: string
+): { set: Partial<CalendarJob>; clear: readonly JobAuditField[] } {
+  const set: Partial<CalendarJob> = { status: next };
+  const clear: JobAuditField[] = [];
+
+  // decidedAt/decidedBy คือ "การตัดสินใจล่าสุด" (อนุมัติหรือยกเลิก) — เขียนทับ
+  // ทุกครั้งที่ลงเอยที่ approved หรือ cancelled ไม่ว่าจะมาจากไหน (แม้แต่
+  // done → approved ก็นับเป็นการตัดสินใจใหม่ คือ "เปิดงานนี้กลับมา") ส่วน
+  // ปลายทาง pending แปลว่า "ยังไม่เคยตัดสินใจ" เหมือนงานที่เพิ่งสร้างจาก
+  // buildNewJob (ซึ่งไม่เคยเซ็ตสองฟิลด์นี้เลย) จึงต้องล้าง ไม่ว่าจะถอนอนุมัติ
+  // (approved → pending) หรือกู้คืนงานที่ยกเลิกไปแล้ว (cancelled → pending) —
+  // การตัดสินใจเดิมไม่มีผลกับสถานะ "รออนุมัติ" ใหม่นี้อีกต่อไป
+  if (next === 'approved' || next === 'cancelled') {
+    set.decidedAt = now;
+    set.decidedBy = actor;
+  } else if (next === 'pending') {
+    clear.push('decidedAt', 'decidedBy');
+  }
+
+  // doneAt/doneBy มีความหมายเฉพาะตอนสถานะเป็น done เท่านั้น ทางเดียวที่จะออก
+  // จาก done ได้คือ done → approved (เปิดงานใหม่) ต้องล้างสองฟิลด์นี้ ไม่งั้น
+  // งานที่เพิ่งเปิดใหม่จะยังโชว์เวลา/คนปิดงานเดิมราวกับปิดไปแล้วจริง ๆ —
+  // ทรานซิชันอื่นที่ไม่ได้มาจาก done ไม่ต้องแตะเพราะไม่มีทางมี doneAt ค้างอยู่
+  // ตั้งแต่แรก (เข้า done ได้ทางเดียวคือ approved → done ซึ่งเซ็ตให้ตรงนี้เอง)
+  if (next === 'done') {
+    set.doneAt = now;
+    set.doneBy = actor;
+  } else if (from === 'done') {
+    clear.push('doneAt', 'doneBy');
+  }
+
+  return { set, clear };
+}
+
+/**
+ * เปลี่ยนสถานะพร้อมประทับว่าใครทำเมื่อไร และล้าง stamp ที่ตกยุคเมื่อทรานซิชัน
+ * เดินถอยหลัง (ดู buildStatusPatch) — ผู้เรียกต้องตรวจ canTransition() มาก่อน
+ * และรู้ค่า `from` อยู่แล้ว (เพราะต้องใช้เช็ค canTransition) ที่นี่ไม่ตัดสินใจ
+ * แทน แค่ประกอบ patch จากคู่ (from, next) ที่ผู้เรียกยืนยันมาแล้วว่าอนุญาต
  */
 export async function setJobStatus(
   id: string,
+  from: JobStatus,
   next: JobStatus,
   actor: string
 ): Promise<CalendarJob | null> {
-  const now = new Date().toISOString();
-  const patch: Partial<CalendarJob> = { status: next };
-  if (next === 'approved' || next === 'cancelled') {
-    patch.decidedAt = now;
-    patch.decidedBy = actor;
-  }
-  if (next === 'done') {
-    patch.doneAt = now;
-    patch.doneBy = actor;
-  }
-  return patchJob(id, patch);
+  const { set, clear } = buildStatusPatch(
+    from,
+    next,
+    actor,
+    new Date().toISOString()
+  );
+  return patchJob(id, set, clear);
 }
 
 export async function deleteJob(id: string): Promise<boolean> {
