@@ -1410,6 +1410,15 @@ outage must not fail the request. Callers surface the boolean instead."
 - Create: `src/pages/api/admin/calendar/[id].ts`
 - Modify: `src/lib/admin-api.ts`
 
+> **หมายเหตุจาก review ของ Task 2 — เปลี่ยนเป็นสถานะเดิมต้องไม่ตอบ 409:**
+> ตาราง `canTransition` ไม่มี self-edge ซึ่งถูกแล้ว แต่เจ้าหน้าที่สองคนเปิดตารางพร้อมกันได้
+> A กดอนุมัติไปแล้ว ส่วนแถวของ B ยังเป็นข้อมูลเก่าจาก SWR cache แล้ว B กด "อนุมัติ" ตาม →
+> server เห็น `approved → approved` → ตอบ 409 "เปลี่ยนสถานะไม่ได้" ทั้งที่ผลลัพธ์ที่ต้องการ
+> เกิดขึ้นเรียบร้อยแล้ว
+>
+> **ใน handler ของ `PATCH` ให้เช็คก่อนเรียก `canTransition`:** ถ้า `current.status === nextStatus`
+> ให้ตอบ 200 พร้อมงานปัจจุบัน (idempotent) ไม่ต้องเขียนอะไรและไม่ต้องประทับ `decidedAt` ใหม่
+
 - [ ] **Step 1: เขียน `src/pages/api/admin/calendar/index.ts`**
 
 ```ts
@@ -2970,6 +2979,19 @@ npm run start   # รัน production build
 npm run seed    # seed Mongo จาก seed.json
 npm run lint    # eslint
 npm test        # vitest (logic บริสุทธิ์: PII masking, สถานะ, ปฏิทิน, LINE)
+```
+
+และเพิ่มย่อหน้านี้ต่อท้ายหัวข้อ Scripts:
+
+```markdown
+> **ไฟล์เทสต์ห้ามอยู่ใต้ `src/pages/**`** — Pages Router ใช้ `pageExtensions` ค่าเริ่มต้น
+> `['tsx','ts','jsx','js']` ไฟล์ `*.test.ts` ในนั้นจะกลายเป็น **route จริง** (เช่น
+> `/admin/calendar/index.test` หรือ endpoint สาธารณะใต้ `/api/`) และถูก bundle เข้า production
+> วางไว้ข้างซอร์สใน `src/lib/` หรือ `src/components/` เท่านั้น
+>
+> `tsconfig.json` include `**/*.ts` ไฟล์เทสต์จึงถูก typecheck ตอน `next build` ด้วย —
+> แปลว่า **`vitest` ต้องถูกติดตั้งตอน build** ห้ามใช้ `npm ci --omit=dev` ก่อน build บน
+> Railway/Vercel ไม่งั้น build พัง (ค่าเริ่มต้นของทั้งสองเจ้าติดตั้ง devDependencies อยู่แล้ว)
 ```
 
 - [ ] **Step 4: ตรวจครบทุกอย่าง**
