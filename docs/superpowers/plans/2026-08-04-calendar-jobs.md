@@ -38,7 +38,7 @@
 
 **แก้ไข:** `src/types/portal.ts` · `src/lib/schema.ts` · `src/lib/config-store.ts` (⚠️ `normalise`) · `src/lib/admin-api.ts` · `src/components/admin/AdminLayout.tsx` · `src/lib/icons.ts` · `src/pages/admin/settings.tsx` · `package.json` · `.gitignore` · `.env.example` · `README.md`
 
-> **`calendar_month` มีอยู่ใน `ICON_NAMES` แล้ว** (ใช้โดยบริการ `npdrh-calendar`) — ต้องเพิ่มเฉพาะ `check_circle`, `cancel`, `schedule`
+> **`calendar_month` และ `chevron_right` มีอยู่ใน `ICON_NAMES` แล้ว** — ต้องเพิ่ม 3 ตัว: `chevron_left` (Task 11), `schedule` (Task 13), `check_circle` (Task 15)
 
 ---
 
@@ -1832,12 +1832,18 @@ export default async function handler(
 ```ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAdmin } from '@/lib/auth-server';
-import { setLineGroupId } from '@/lib/line';
+import { getLineGroupId, isLineConfigured, setLineGroupId } from '@/lib/line';
 
+// GET   /api/admin/line-group  → { lineGroupId, configured }
 // PATCH /api/admin/line-group  body { lineGroupId: string }
 //
-// ปกติ webhook เก็บให้เองตอนบอทถูกเชิญเข้ากลุ่ม เส้นทางนี้ไว้กรอกเองเมื่อ
+// ปกติ webhook เก็บ groupId ให้เองตอนบอทถูกเชิญเข้ากลุ่ม PATCH ไว้กรอกเองเมื่อ
 // webhook ยังไม่ได้ตั้ง หรือต้องย้ายไปกลุ่มอื่นโดยไม่เชิญบอทใหม่
+//
+// GET มีไว้เพราะ LINE_CHANNEL_SECRET ไม่ใช่ NEXT_PUBLIC_ หน้า settings ที่รันฝั่ง
+// client จึงเรียก isLineConfigured() เองไม่ได้ ต้องถามผ่านเส้นทางนี้ — ถ้าไม่มี
+// ตัวบอก เจ้าหน้าที่จะไม่รู้เลยว่าระบบแจ้งเตือนพร้อมทำงานหรือยัง จนกว่างานจะ
+// ถูกสร้างแล้วไม่มีใครได้รับแจ้ง
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -1845,21 +1851,31 @@ export default async function handler(
   const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  if (req.method !== 'PATCH') {
-    res.setHeader('Allow', 'PATCH');
-    return res.status(405).json({ error: 'method_not_allowed' });
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      lineGroupId: (await getLineGroupId()) ?? null,
+      configured: isLineConfigured(),
+    });
   }
 
-  const value = (req.body as { lineGroupId?: unknown })?.lineGroupId;
-  if (typeof value !== 'string') {
-    return res.status(400).json({ error: 'invalid_group_id' });
+  if (req.method === 'PATCH') {
+    const value = (req.body as { lineGroupId?: unknown })?.lineGroupId;
+    if (typeof value !== 'string') {
+      return res.status(400).json({ error: 'invalid_group_id' });
+    }
+
+    const trimmed = value.trim();
+    await setLineGroupId(trimmed || undefined, admin.email ?? admin.userId);
+    return res.status(200).json({ lineGroupId: trimmed || null });
   }
 
-  const trimmed = value.trim();
-  await setLineGroupId(trimmed || undefined, admin.email ?? admin.userId);
-  return res.status(200).json({ lineGroupId: trimmed || null });
+  res.setHeader('Allow', 'GET, PATCH');
+  return res.status(405).json({ error: 'method_not_allowed' });
 }
 ```
+
+> **อย่าคืนค่า token หรือ secret ออกไปเด็ดขาด** — `configured` เป็น boolean ล้วน
+> บอกแค่ว่า "ตั้งครบหรือยัง" ไม่ได้บอกว่าตั้งค่าอะไรไว้
 
 - [ ] **Step 3: ตรวจ type และ lint**
 
@@ -2070,10 +2086,13 @@ export default function MonthGrid<T extends CalendarEntry>({
 
 `calendar_month` มีอยู่แล้ว (บริการ `npdrh-calendar` ใช้อยู่) และ `chevron_right` ก็มีแล้ว — ขาดอยู่ 2 ตัว
 
-เพิ่ม `'chevron_left'` (ปุ่มเดือนก่อนหน้าใน MonthGrid) ก่อน `'chevron_right'`:
+เพิ่ม `'check_circle'` (สถานะ LINE ในหน้า settings — Task 15) และ `'chevron_left'`
+(ปุ่มเดือนก่อนหน้าใน MonthGrid) โดยคงลำดับตัวอักษร:
 
 ```ts
+  'category',
   'chat',
+  'check_circle',
   'chevron_left',
   'chevron_right',
   'compost',
@@ -2926,13 +2945,50 @@ patient name because the API never sends one."
   }
 ```
 
-เพิ่ม prop `initialLineGroupId` เข้า signature ของ `SettingsForm` และส่งค่า `data.lineGroupId` มาจาก `SettingsPage` แล้วเพิ่ม section ท้ายฟอร์ม (ก่อนปุ่มบันทึกรวม):
+ส่วนนี้ดึงสถานะจาก `GET /api/admin/line-group` ด้วย SWR (ไม่ใช่จาก `data.lineGroupId`
+ของ config) เพราะต้องได้ `configured` ที่มาจาก env ฝั่ง server มาด้วย — `LINE_CHANNEL_SECRET`
+ไม่ใช่ `NEXT_PUBLIC_` หน้านี้จึงอ่านเองไม่ได้
+
+```tsx
+  const lineQuery = useSWR<{ lineGroupId: string | null; configured: boolean }>(
+    '/api/admin/line-group',
+    adminFetcher
+  );
+```
+
+แล้วเพิ่ม section ท้ายฟอร์ม (ก่อนปุ่มบันทึกรวม):
 
 ```tsx
         <section className="mb-6">
           <h2 className="mb-2 font-display text-[15px] font-semibold text-ink">
             แจ้งเตือน LINE
           </h2>
+
+          {/* สองบรรทัดนี้คือทางเดียวที่เจ้าหน้าที่จะรู้ว่าแจ้งเตือนใช้ได้จริงหรือยัง
+              และกำลังส่งเข้ากลุ่มไหน — ข้อความที่ส่งมีชื่อผู้ป่วย เบอร์โทร ต้นทาง
+              ปลายทางครบ ถ้าบอทถูกเชิญเข้ากลุ่มผิดจะไม่มีอะไรเตือนเลย */}
+          {lineQuery.data ? (
+            <div className="mb-3 rounded-xl border border-black/[0.08] bg-paper p-3 text-[12.5px]">
+              <p className="flex items-center gap-1.5">
+                <Icon
+                  name={lineQuery.data.configured ? 'check_circle' : 'warning'}
+                  size={17}
+                />
+                {lineQuery.data.configured
+                  ? 'ตั้งค่า LINE ครบแล้ว'
+                  : 'ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET — ระบบจะไม่ส่งแจ้งเตือน'}
+              </p>
+              <p className="mt-1 text-ink-soft">
+                กลุ่มปัจจุบัน:{' '}
+                {lineQuery.data.lineGroupId ? (
+                  <code>{lineQuery.data.lineGroupId}</code>
+                ) : (
+                  'ยังไม่มี — เชิญบอท OA เข้ากลุ่มเจ้าหน้าที่'
+                )}
+              </p>
+            </div>
+          ) : null}
+
           <p className="mb-3 text-[12.5px] text-ink-soft">
             ปกติช่องนี้ถูกกรอกให้อัตโนมัติเมื่อเชิญบอท OA เข้ากลุ่มเจ้าหน้าที่
             (ต้องตั้ง Webhook URL เป็น <code>/api/line/webhook</code> ในคอนโซล LINE)
@@ -2959,7 +3015,10 @@ patient name because the API never sends one."
         </section>
 ```
 
-เพิ่ม `updateLineGroupId` เข้า import จาก `@/lib/admin-api` ที่บรรทัด 7
+`onSaveLineGroup` ต้องเรียก `lineQuery.mutate()` หลังบันทึกสำเร็จ ไม่งั้นกล่องสถานะ
+ด้านบนยังโชว์ค่าเก่า · เพิ่ม `updateLineGroupId` เข้า import จาก `@/lib/admin-api`
+และ `Icon` จาก `@/components/Icon` (`check_circle` กับ `warning` ต้องอยู่ใน `ICON_NAMES`
+— `warning` มีแล้ว ส่วน `check_circle` เพิ่มใน Task 11)
 
 - [ ] **Step 2: เพิ่ม env ท้าย `.env.example`**
 
