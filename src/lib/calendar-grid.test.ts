@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildMonthGrid,
   currentMonthInBangkok,
+  nextDate,
   parseMonth,
   shiftMonth,
   thaiMonthLabel,
@@ -171,5 +172,27 @@ describe('todayInBangkok / currentMonthInBangkok', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-31T17:30:00Z'));
     expect(currentMonthInBangkok()).toBe('2026-08');
+  });
+});
+
+describe('nextDate — บวกหนึ่งวันบน UTC ล้วน ไม่ผ่าน timezone ของเครื่อง', () => {
+  it('กลางเดือน', () => {
+    expect(nextDate('2026-08-05')).toBe('2026-08-06');
+  });
+
+  it('ข้ามสิ้นเดือน', () => {
+    expect(nextDate('2026-08-31')).toBe('2026-09-01');
+  });
+
+  it('ข้ามสิ้นปี', () => {
+    expect(nextDate('2026-12-31')).toBe('2027-01-01');
+  });
+
+  it('ปีอธิกสุรทิน — 28 ก.พ. ไป 29 ก.พ.', () => {
+    expect(nextDate('2028-02-28')).toBe('2028-02-29');
+  });
+
+  it('ปีปกติ — 28 ก.พ. ไป 1 มี.ค.', () => {
+    expect(nextDate('2026-02-28')).toBe('2026-03-01');
   });
 });

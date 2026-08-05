@@ -118,3 +118,19 @@ export function todayInBangkok(): string {
 export function currentMonthInBangkok(): string {
   return todayInBangkok().slice(0, 7);
 }
+
+/**
+ * '2026-08-31' → '2026-09-01' — เลขคณิตบน Date.UTC ล้วน ไม่แตะ local timezone
+ * ของเครื่อง (server อาจไม่ได้ตั้ง TZ เป็นไทย) Date.UTC จัดการข้ามเดือน/ปี/
+ * อธิกสุรทินให้เอง
+ */
+export function nextDate(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
+}
+
+/** วันพรุ่งนี้ตามเวลาไทย — ใช้ตัดสินว่า digest 17:00 ต้องสรุปงานของวันไหน */
+export function tomorrowInBangkok(): string {
+  return nextDate(todayInBangkok());
+}
