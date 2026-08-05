@@ -10,7 +10,7 @@ import type { CalendarJob } from '@/types/portal';
 const PUSH_URL = 'https://api.line.me/v2/bot/message/push';
 
 // สองความพร้อมนี้เป็นคนละเรื่องกัน ใช้คนละ env var: ส่งแจ้งเตือน (push) ใช้แค่
-// LINE_CHANNEL_ACCESS_TOKEN (ดู pushNewJobNotice ด้านล่าง) ส่วนรับ event จาก
+// LINE_CHANNEL_ACCESS_TOKEN (ดู pushGroupText ด้านล่าง) ส่วนรับ event จาก
 // LINE (webhook เก็บ groupId ตอนบอทเข้ากลุ่ม) ใช้แค่ LINE_CHANNEL_SECRET ตรวจ
 // ลายเซ็น (ดู src/pages/api/line/webhook.ts) ตั้งแค่ token อย่างเดียวก็ยิง
 // แจ้งเตือนได้จริง แต่ webhook จะ 503 ตลอด — เดิม isLineConfigured() เดียว
@@ -43,14 +43,14 @@ export async function setLineGroupId(
 }
 
 /**
- * แจ้งกลุ่มเจ้าหน้าที่ว่ามีงานใหม่ — best effort ไม่โยน error ออกไป
+ * ส่งข้อความ text เข้ากลุ่มเจ้าหน้าที่ — best effort ไม่โยน error ออกไป
  *
- * งานถูกบันทึกลงฐานข้อมูลไปแล้วก่อนถึงบรรทัดนี้ LINE ล่มจึงต้องไม่ทำให้คำขอ
- * ล้มเหลวและงานหาย ผู้เรียกเอาค่าที่คืนไปบอกผู้ใช้ว่าส่งแจ้งเตือนไม่สำเร็จ
+ * ทางส่งข้อความเดียวของระบบ ใช้ทั้งแจ้งงานใหม่ (pushNewJobNotice) และสรุป
+ * ประจำวัน (/api/cron/daily-digest) — token/groupId/timeout อยู่ที่นี่ที่เดียว
  *
  * @returns true เมื่อข้อความออกไปจริง
  */
-export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
+export async function pushGroupText(text: string): Promise<boolean> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
     console.warn('LINE push ข้าม: ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN');
@@ -69,10 +69,6 @@ export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
     return false;
   }
 
-  // ตัด / ท้าย URL ทิ้ง — ค่าที่ก๊อปมาจากช่อง address bar มักติดมาด้วย แล้วจะได้
-  // ลิงก์ //admin/calendar ที่บาง host ยอม บาง host ตอบ 404 พังไม่เหมือนกันทุกที่
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
-
   try {
     const res = await fetch(PUSH_URL, {
       method: 'POST',
@@ -80,21 +76,12 @@ export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
         'content-type': 'application/json',
         authorization: `Bearer ${token}`,
       },
-      // งานถูกบันทึกแล้วก่อนถึงบรรทัดนี้ ไม่มีใครควรรอผลของ noti — ตั้ง timeout
-      // สั้น ๆ กัน LINE ค้างแล้วลาก request บันทึกงานให้เจ้าหน้าที่นั่งรอตาม
+      // ไม่มีใครควรนั่งรอผลของ noti — ตั้ง timeout สั้น ๆ กัน LINE ค้างแล้วลาก
+      // request ของผู้เรียก (บันทึกงาน / cron) ให้ค้างตาม
       signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         to,
-        // ส่ง base URL เข้าไปให้ formatter เติมลิงก์ท้ายข้อความ — ไม่ตั้ง env ก็แค่
-        // ไม่มีบรรทัดลิงก์ ข้อความอื่นเหมือนเดิม (แบบเดียวกับที่ Cloudinary ทำ)
-        // จุดสำคัญ: ตัวแจ้งเตือนมีไว้ให้คนกดเข้าไปอนุมัติ ถ้าไม่มีอะไรให้กด
-        // เจ้าหน้าที่ต้องจำ URL แล้วพิมพ์เองบนมือถือตอนหกโมงเช้า
-        messages: [
-          {
-            type: 'text',
-            text: formatNewJobMessage(job, siteUrl),
-          },
-        ],
+        messages: [{ type: 'text', text }],
       }),
     });
     if (!res.ok) {
@@ -106,4 +93,19 @@ export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
     console.warn('LINE push ล้มเหลว', err);
     return false;
   }
+}
+
+/**
+ * แจ้งกลุ่มเจ้าหน้าที่ว่ามีงานใหม่ — best effort เหมือน pushGroupText
+ *
+ * งานถูกบันทึกลงฐานข้อมูลไปแล้วก่อนถึงบรรทัดนี้ LINE ล่มจึงต้องไม่ทำให้คำขอ
+ * ล้มเหลวและงานหาย ผู้เรียกเอาค่าที่คืนไปบอกผู้ใช้ว่าส่งแจ้งเตือนไม่สำเร็จ
+ */
+export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
+  // ตัด / ท้าย URL ทิ้ง — ค่าที่ก๊อปมาจากช่อง address bar มักติดมาด้วย แล้วจะได้
+  // ลิงก์ //admin/calendar ที่บาง host ยอม บาง host ตอบ 404 พังไม่เหมือนกันทุกที่
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
+  // ส่ง base URL เข้าไปให้ formatter เติมลิงก์ท้ายข้อความ — ไม่ตั้ง env ก็แค่
+  // ไม่มีบรรทัดลิงก์ ข้อความอื่นเหมือนเดิม ตัวแจ้งเตือนมีไว้ให้คนกดเข้าไปอนุมัติ
+  return pushGroupText(formatNewJobMessage(job, siteUrl));
 }
