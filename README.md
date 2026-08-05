@@ -111,6 +111,7 @@ src/
       track/[id].ts               POST +1 clickCount (rate-limited)
       visit.ts                    GET/POST ตัวนับผู้เข้าชม
       line/webhook.ts             POST รับ event join/leave จาก LINE
+      cron/daily-digest.ts        POST สรุปตารางงานพรุ่งนี้เข้ากลุ่ม LINE (n8n ยิงทุก 17:00)
       admin/                      CRUD หลังบ้าน (ต้องเป็น admin) รวม calendar/, line-group.ts
   components/                     Hero, ServiceCard, CategorySection, Footer, admin/*
     MonthGrid.tsx                 ปฏิทินเดือน ใช้ร่วม `/calendar` และ `/admin/calendar` — ไม่รู้จัก PII
@@ -215,6 +216,20 @@ export ไปด้วย** ยังไม่มีทาง backup/restore ง
 > อัตโนมัติ ถ้าบอทถูกเชิญเข้ากลุ่มผิด ข้อมูลจะไหลไปที่นั่นทันทีโดยไม่มีอะไรเตือน
 > **กล่องสถานะที่ `/admin/settings` จึงต้องแสดงค่าปัจจุบันให้เห็นเสมอ** ไม่ใช่แค่
 > ช่องว่างให้กรอก — มันเป็นทางเดียวที่เจ้าหน้าที่จะสังเกตได้ว่ากลุ่มเปลี่ยนไป
+
+### สรุปตารางงานประจำวัน (17:00)
+
+ทุกวัน 17:00 ระบบส่งสรุป**งานของวันพรุ่งนี้** (อนุมัติแล้ว + รออนุมัติ) เข้ากลุ่ม LINE
+เดียวกับแจ้งเตือนงานใหม่ — วันว่างก็ส่ง "ไม่มีงานในตาราง" เสมอ (เงียบ = ผิดปกติ)
+
+ตัวตั้งเวลาอยู่ที่ **n8n** (workflow "แจ้งตารางงานพรุ่งนี้เข้ากลุ่ม LINE") ไม่ใช่ cron
+ของ Railway — n8n ยิง `POST /api/cron/daily-digest` พร้อม header `x-cron-secret`
+ทุกวัน จะแก้เวลา/หยุดชั่วคราว ทำที่ n8n ที่เดียว
+
+ตั้งค่า: generate secret (`openssl rand -hex 32`) → ใส่ `CRON_SECRET` ใน Railway
+และใน header `x-cron-secret` ของ HTTP Request node ที่ n8n ให้ตรงกัน · ถ้า run ใน n8n ขึ้น fail:
+502 = LINE ส่งไม่ออก (ดู log ที่ Railway — token/groupId หาย หรือยังไม่ตั้งค่า LINE),
+401 = secret สองที่ไม่ตรงกัน, 503 = ยังไม่ได้ตั้ง `CRON_SECRET` ที่ Railway
 
 ---
 
