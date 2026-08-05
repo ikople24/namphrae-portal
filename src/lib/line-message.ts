@@ -41,3 +41,65 @@ export function formatNewJobMessage(job: CalendarJob, adminUrl?: string): string
 
   return lines.join('\n');
 }
+
+// เพดานข้อความ text ของ LINE Messaging API — เกินแล้ว push ทั้งก้อนโดน 400
+const LINE_TEXT_LIMIT = 5000;
+
+function digestJobLine(job: CalendarJob): string {
+  const head = `${KIND_EMOJI[job.kind] ?? '🔔'} ${job.time} ${job.title}`;
+  return job.village ? `${head} (${job.village})` : head;
+}
+
+/** สรุปตารางงานพรุ่งนี้ ส่งเข้ากลุ่มทุก 17:00 (ดู /api/cron/daily-digest)
+ *
+ * @param jobs งานของวันนั้นสถานะ approved + pending เรียงลำดับแล้ว (listJobs
+ * เรียง (date, time, createdAt, id) มาให้อยู่แล้ว) — ฟังก์ชันนี้ไม่กรอง/ไม่ sort
+ * @param adminUrl origin ของพอร์ทัล — ไม่ใส่ก็ไม่มีบรรทัดลิงก์ (แนวเดียวกับ
+ * formatNewJobMessage)
+ */
+export function formatDailyDigestMessage(
+  jobs: CalendarJob[],
+  dateISO: string,
+  adminUrl?: string
+): string {
+  const dateLabel = thaiShortDate(dateISO);
+  // ส่งทุกวันแม้วันว่าง — เงียบ = ผิดปกติ ไม่ใช่ไม่มีงาน (ตัดสินใจใน spec)
+  if (jobs.length === 0) return `📋 พรุ่งนี้ (${dateLabel}) ไม่มีงานในตาราง`;
+
+  // ประกอบจากงาน count รายการแรก — ถ้ายาวเกินเพดาน ตัดงานท้าย ๆ ออกทีละงาน
+  // แล้วปิดด้วยบรรทัด "…และอีก N งาน" แทนการปล่อยให้ LINE ปฏิเสธทั้งข้อความ
+  const build = (count: number): string => {
+    const shown = jobs.slice(0, count);
+    const approved = shown.filter((j) => j.status !== 'pending');
+    const pending = shown.filter((j) => j.status === 'pending');
+
+    const sections: string[] = [
+      [`📋 ตารางงานพรุ่งนี้ — ${dateLabel}`, ...approved.map(digestJobLine)].join('\n'),
+    ];
+    if (pending.length > 0) {
+      const lines = [
+        `⏳ รออนุมัติ ${pending.length} งาน — รีบอนุมัติก่อนถึงวันงาน`,
+        ...pending.map(digestJobLine),
+      ];
+      if (adminUrl) lines.push(`👉 ${adminUrl}/admin/calendar`);
+      sections.push(lines.join('\n'));
+    }
+    if (count < jobs.length) {
+      const rest = jobs.length - count;
+      sections.push(
+        adminUrl
+          ? `…และอีก ${rest} งาน ดูทั้งหมดที่ ${adminUrl}/admin/calendar`
+          : `…และอีก ${rest} งาน`
+      );
+    }
+    return sections.join('\n\n');
+  };
+
+  for (let count = jobs.length; count > 1; count--) {
+    const msg = build(count);
+    if (msg.length <= LINE_TEXT_LIMIT) return msg;
+  }
+  // เหลืองานเดียวก็ยังเกินได้ในทางทฤษฎี (title ยาวผิดปกติ) — ยอมส่งตามนั้น
+  // ให้ pushGroupText รายงาน 400 ใน log ดีกว่าเงียบหาย
+  return build(1);
+}

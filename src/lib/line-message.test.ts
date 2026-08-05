@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatNewJobMessage } from '@/lib/line-message';
+import { formatDailyDigestMessage, formatNewJobMessage } from '@/lib/line-message';
 import { jobInputSchema } from '@/lib/schema';
 import type { CalendarJob } from '@/types/portal';
 
@@ -186,5 +186,102 @@ describe('formatNewJobMessage', () => {
 
   it('ไม่มี adminUrl ก็ไม่ขึ้นบรรทัดลิงก์ — graceful degradation แบบเดียวกับ Cloudinary', () => {
     expect(formatNewJobMessage(BASE)).not.toContain('👉');
+  });
+});
+
+describe('formatDailyDigestMessage', () => {
+  const APPROVED: CalendarJob = { ...BASE, id: 'a1', status: 'approved' };
+
+  it('มีทั้งอนุมัติแล้วและรออนุมัติ — สองส่วน มีลิงก์ท้ายส่วนรออนุมัติ', () => {
+    const jobs: CalendarJob[] = [
+      { ...APPROVED, time: '06:00', title: 'ส่งผู้ป่วยฟอกไต' },
+      {
+        ...APPROVED,
+        id: 'a2',
+        kind: 'rescue',
+        time: '14:00',
+        title: 'ตัดต้นไม้ล้ม',
+        village: 'ม.5 ต.น้ำแพร่',
+      },
+      { ...BASE, id: 'p1', time: '09:00', title: 'รับผู้ป่วยกลับบ้าน' },
+    ];
+    expect(
+      formatDailyDigestMessage(jobs, '2026-08-06', 'https://namphrae-portal.app')
+    ).toBe(
+      [
+        '📋 ตารางงานพรุ่งนี้ — 6 ส.ค. 69',
+        '🚑 06:00 ส่งผู้ป่วยฟอกไต (ม.3 ต.น้ำแพร่)',
+        '🚨 14:00 ตัดต้นไม้ล้ม (ม.5 ต.น้ำแพร่)',
+        '',
+        '⏳ รออนุมัติ 1 งาน — รีบอนุมัติก่อนถึงวันงาน',
+        '🚑 09:00 รับผู้ป่วยกลับบ้าน (ม.3 ต.น้ำแพร่)',
+        '👉 https://namphrae-portal.app/admin/calendar',
+      ].join('\n')
+    );
+  });
+
+  it('วันว่าง — ข้อความบรรทัดเดียว', () => {
+    expect(formatDailyDigestMessage([], '2026-08-06')).toBe(
+      '📋 พรุ่งนี้ (6 ส.ค. 69) ไม่มีงานในตาราง'
+    );
+  });
+
+  it('ไม่มีงานรออนุมัติ — ไม่มีส่วนรออนุมัติและไม่มีลิงก์', () => {
+    const msg = formatDailyDigestMessage(
+      [APPROVED],
+      '2026-08-06',
+      'https://namphrae-portal.app'
+    );
+    expect(msg).not.toContain('รออนุมัติ');
+    expect(msg).not.toContain('👉');
+  });
+
+  it('ไม่มี adminUrl — ส่วนรออนุมัติยังขึ้น แค่ไม่มีบรรทัดลิงก์', () => {
+    const msg = formatDailyDigestMessage([{ ...BASE, id: 'p1' }], '2026-08-06');
+    expect(msg).toContain('⏳ รออนุมัติ 1 งาน');
+    expect(msg).not.toContain('👉');
+  });
+
+  it('ไม่มีหมู่บ้าน — ไม่มีวงเล็บว่าง', () => {
+    const msg = formatDailyDigestMessage(
+      [{ ...APPROVED, village: '' }],
+      '2026-08-06'
+    );
+    expect(msg).not.toContain('()');
+  });
+
+  it('kind นอกตาราง (ข้อมูลเสียจาก storage) — fallback 🔔 ไม่ใช่ undefined', () => {
+    const msg = formatDailyDigestMessage(
+      [{ ...APPROVED, kind: 'flood' as CalendarJob['kind'] }],
+      '2026-08-06'
+    );
+    expect(msg).toContain('🔔');
+    expect(msg).not.toContain('undefined');
+  });
+
+  it('ข้อความเกินเพดาน LINE — ตัดงานท้าย ๆ แล้วปิดด้วยจำนวนที่เหลือ', () => {
+    const many: CalendarJob[] = Array.from({ length: 300 }, (_, i) => ({
+      ...APPROVED,
+      id: `a${i}`,
+      title: `งานทดสอบข้อความยาวลำดับที่ ${i} ของวันพรุ่งนี้`,
+    }));
+    const msg = formatDailyDigestMessage(
+      many,
+      '2026-08-06',
+      'https://namphrae-portal.app'
+    );
+    expect(msg.length).toBeLessThanOrEqual(5000);
+    expect(msg).toMatch(/…และอีก \d+ งาน ดูทั้งหมดที่ https:\/\/namphrae-portal\.app\/admin\/calendar$/);
+  });
+
+  it('ข้อความเกินเพดานและไม่มี adminUrl — บรรทัดปิดไม่มีลิงก์', () => {
+    const many: CalendarJob[] = Array.from({ length: 300 }, (_, i) => ({
+      ...APPROVED,
+      id: `a${i}`,
+      title: `งานทดสอบข้อความยาวลำดับที่ ${i} ของวันพรุ่งนี้`,
+    }));
+    const msg = formatDailyDigestMessage(many, '2026-08-06');
+    expect(msg.length).toBeLessThanOrEqual(5000);
+    expect(msg).toMatch(/…และอีก \d+ งาน$/);
   });
 });
