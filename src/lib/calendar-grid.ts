@@ -123,11 +123,15 @@ export function currentMonthInBangkok(): string {
  * '2026-08-31' → '2026-09-01' — เลขคณิตบน Date.UTC ล้วน ไม่แตะ local timezone
  * ของเครื่อง (server อาจไม่ได้ตั้ง TZ เป็นไทย) Date.UTC จัดการข้ามเดือน/ปี/
  * อธิกสุรทินให้เอง
+ *
+ * ไม่ validate input เพราะผู้เรียกเดียวในโค้ดเบสคือ tomorrowInBangkok() ซึ่งส่ง
+ * ค่าจาก todayInBangkok() เสมอ (รูปแบบ YYYY-MM-DD ที่การันตีถูกต้อง) — อย่าส่ง
+ * ค่าจาก user/ภายนอกเข้ามาโดยไม่ validate ที่ขอบก่อน ไม่งั้นได้ 'NaN-NaN-NaN' เงียบ ๆ
  */
 export function nextDate(date: string): string {
   const [year, month, day] = date.split('-').map(Number);
   const next = new Date(Date.UTC(year, month - 1, day + 1));
-  return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
+  return ymd(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
 }
 
 /** วันพรุ่งนี้ตามเวลาไทย — ใช้ตัดสินว่า digest 17:00 ต้องสรุปงานของวันไหน */

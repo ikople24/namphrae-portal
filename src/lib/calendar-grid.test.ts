@@ -9,6 +9,7 @@ import {
   thaiShortDate,
   THAI_DOW,
   todayInBangkok,
+  tomorrowInBangkok,
 } from '@/lib/calendar-grid';
 
 afterEach(() => {
@@ -194,5 +195,16 @@ describe('nextDate — บวกหนึ่งวันบน UTC ล้วน 
 
   it('ปีปกติ — 28 ก.พ. ไป 1 มี.ค.', () => {
     expect(nextDate('2026-02-28')).toBe('2026-03-01');
+  });
+});
+
+describe('tomorrowInBangkok', () => {
+  // ยึดเวลาไทยจริง ไม่ใช่ UTC — 17:30 UTC ของ 4 ส.ค. คือ 00:30 ของ 5 ส.ค. ที่
+  // กรุงเทพแล้ว พรุ่งนี้จึงต้องเป็น 6 ส.ค. ถ้า logic เผลอคำนวณจาก UTC (ยังเป็น
+  // 4 ส.ค.) จะได้ '2026-08-05' ผิด — เทสต์นี้จับกรณีนั้นได้จริง
+  it('ยึดเวลาไทยจริง ไม่ใช่ UTC — 17:30 UTC คือพรุ่งนี้ของกรุงเทพไปอีกวัน', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-04T17:30:00Z'));
+    expect(tomorrowInBangkok()).toBe('2026-08-06');
   });
 });
