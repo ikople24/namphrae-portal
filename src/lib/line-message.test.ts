@@ -284,4 +284,63 @@ describe('formatDailyDigestMessage', () => {
     expect(msg.length).toBeLessThanOrEqual(5000);
     expect(msg).toMatch(/…และอีก \d+ งาน$/);
   });
+
+  // งาน 2 เทสต์ truncation ข้างบนใช้ approved ล้วน — ไม่เคยตรึง interaction
+  // ระหว่างการตัดท้ายกับ section รออนุมัติ เทสต์นี้ผสม approved 150 + pending
+  // 150 (pending อยู่ท้าย array ตามลำดับที่ listJobs ส่งมาจริง เพราะ pending
+  // ถูกสร้างทีหลังในวันเดียวกันมักมี time/createdAt ท้ายแถว) แล้ว "อ่านตัวเลข
+  // จากข้อความจริง" ด้วย regex/นับบรรทัด ไม่ hardcode ค่าที่คำนวณเอง — กัน
+  // คนอนาคต refactor `pending.length` (นับจาก `shown` หลังตัดแล้ว) กลับไปนับ
+  // จากรายการ pending เต็มก่อนตัด ซึ่งจะทำให้หัวข้อ "⏳ รออนุมัติ N งาน" ไม่
+  // ตรงกับจำนวนบรรทัดที่แสดงจริงอีกต่อไป
+  it('ตัดบางส่วนโดยมี pending ปนอยู่ — ตัวเลขหัว pending และ …และอีก ตรงกับจำนวนบรรทัดจริงในข้อความ', () => {
+    // approved สั้นและน้อย (30 งาน) เพื่อให้อยู่ครบไม่โดนตัด — ตัวแปรของเทสต์
+    // นี้ต้องเป็น pending ที่โดนตัดบางส่วน ไม่ใช่ approved ปนด้วย (สองเทสต์
+    // ข้างบนวัด approved ล้วนไปแล้ว)
+    const approvedJobs: CalendarJob[] = Array.from({ length: 30 }, (_, i) => ({
+      ...APPROVED,
+      id: `a${i}`,
+      title: `งานอนุมัติ ${i}`,
+    }));
+    const pendingJobs: CalendarJob[] = Array.from({ length: 270 }, (_, i) => ({
+      ...BASE,
+      id: `p${i}`,
+      title: `งานรออนุมัติลำดับที่ ${i} ของวันพรุ่งนี้ที่ยาวพอจะดันข้อความเกินเพดาน`,
+    }));
+    const jobs = [...approvedJobs, ...pendingJobs];
+    const msg = formatDailyDigestMessage(
+      jobs,
+      '2026-08-06',
+      'https://namphrae-portal.app'
+    );
+    expect(msg.length).toBeLessThanOrEqual(5000);
+
+    const restMatch = msg.match(/…และอีก (\d+) งาน/);
+    expect(restMatch).not.toBeNull();
+    const rest = Number(restMatch![1]);
+
+    // ทุกงานใน fixture นี้เป็น kind: 'ems' → ทุกบรรทัดงานที่แสดงจริง (ทั้ง
+    // approved และ pending) ขึ้นต้นด้วย 🚑 เสมอ นับได้ตรง ๆ จากข้อความ
+    const totalShownLines = msg
+      .split('\n')
+      .filter((l) => l.startsWith('🚑')).length;
+    expect(jobs.length - rest).toBe(totalShownLines);
+
+    const pendingSection = msg.split('\n\n').find((s) => s.startsWith('⏳'));
+    expect(pendingSection).toBeDefined();
+    const headerMatch = pendingSection!.match(/^⏳ รออนุมัติ (\d+) งาน/);
+    expect(headerMatch).not.toBeNull();
+    const headerCount = Number(headerMatch![1]);
+    const pendingLinesShown = pendingSection!
+      .split('\n')
+      .filter((l) => l.startsWith('🚑')).length;
+    expect(headerCount).toBe(pendingLinesShown);
+
+    // เทสต์พิสูจน์ตัวเองว่าจับ interaction ได้จริง: ต้องมี truncation เกิดขึ้น
+    // (rest > 0) และ pending ต้องโดนตัดบางส่วนจริง (ไม่ใช่ครบ 150 หรือ 0)
+    // ไม่งั้นเทสต์นี้ไม่ได้ทดสอบอะไรที่ต่างจากสองเทสต์ข้างบน
+    expect(rest).toBeGreaterThan(0);
+    expect(pendingLinesShown).toBeGreaterThan(0);
+    expect(pendingLinesShown).toBeLessThan(270);
+  });
 });

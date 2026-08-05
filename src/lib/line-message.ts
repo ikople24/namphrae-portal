@@ -70,6 +70,12 @@ export function formatDailyDigestMessage(
   // แล้วปิดด้วยบรรทัด "…และอีก N งาน" แทนการปล่อยให้ LINE ปฏิเสธทั้งข้อความ
   const build = (count: number): string => {
     const shown = jobs.slice(0, count);
+    // จงใจใช้ `!== 'pending'` ไม่ใช่ `=== 'approved'` — ถ้าผู้เรียกลืมกรอง
+    // แล้วมีงาน done/cancelled หลุดเข้ามา (นอกสัญญาของฟังก์ชันนี้) ให้มันโผล่
+    // ในส่วนงาน "อนุมัติแล้ว" แบบเพี้ยน ดีกว่าใช้ `=== 'approved'` ที่จะกรอง
+    // งานพวกนี้ทิ้งเงียบ ๆ จนหายไปจากข้อความทั้งที่ listJobs ส่งมาจริง —
+    // แนวเดียวกับ fallback 🔔 ของ kind เสีย: ข้อมูลนอกสัญญาต้อง "เห็นได้" ไม่ใช่
+    // "หายเงียบ"
     const approved = shown.filter((j) => j.status !== 'pending');
     const pending = shown.filter((j) => j.status === 'pending');
 
@@ -95,6 +101,11 @@ export function formatDailyDigestMessage(
     return sections.join('\n\n');
   };
 
+  // trade-off ที่ยอมรับ: ในเคสสุดขั้ว (งานเยอะจนต้องตัดจน pending ทั้งหมดหลุด
+  // ออกจาก `shown`) section "รออนุมัติ" จะหายไปทั้ง section เหลือแค่บรรทัด
+  // "…และอีก N งาน" ปิดท้าย — ยอมรับเพราะต้องมีงานวันเดียวเกิน 5,000
+  // ตัวอักษรถึงจะเกิด ซึ่งไม่เกิดจริงในสเกลของเทศบาล และลิงก์ในบรรทัดปิดยัง
+  // พาไปดูงานที่ถูกตัดออก (รวมถึง pending) ได้ครบอยู่ดี
   for (let count = jobs.length; count > 1; count--) {
     const msg = build(count);
     if (msg.length <= LINE_TEXT_LIMIT) return msg;
