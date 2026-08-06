@@ -186,3 +186,13 @@ button:focus-visible {
 .leaflet-container {
   font: inherit;
 }
+.np-popup-title:not(:first-child) {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(0 0 0 / 0.08);
+}
+.np-popup-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-mute);
+}

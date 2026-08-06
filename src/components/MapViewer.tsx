@@ -1,6 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useEffect, useRef, useState } from 'react';
+import { findHits, indexFeatures, type Hit, type HitLayer } from '@/lib/map-hit';
 import { LAYER_STYLES, labelOf, styleOf } from '@/lib/map-style';
 import type { FeatureCollection } from '@/types/map';
 
@@ -59,10 +60,39 @@ export default function MapViewer({
   const map = useRef<L.Map | null>(null);
   const base = useRef<L.TileLayer | null>(null);
   const groups = useRef<Map<string, L.GeoJSON>>(new Map());
+  const hitIndex = useRef<Map<string, HitLayer>>(new Map());
 
   const [basemap, setBasemap] = useState<BasemapKey>('satellite');
   const [state, setState] = useState<Record<string, LoadState>>({});
   const [problem, setProblem] = useState<string | null>(null);
+
+  // รัศมีการ "แตะโดน" บนหน้าจอ — นิ้วคนหนากว่าเส้นถนนหนึ่งพิกเซลมาก แปลงเป็น
+  // องศาตามระดับซูมปัจจุบันทุกครั้ง เพื่อให้ความรู้สึกเท่ากันไม่ว่าซูมอยู่ระดับไหน
+  const TOLERANCE_PX = 8;
+
+  function handleClick(e: L.LeafletMouseEvent) {
+    const m = map.current;
+    if (!m) return;
+
+    const p = m.latLngToContainerPoint(e.latlng);
+    const edge = m.containerPointToLatLng(L.point(p.x + TOLERANCE_PX, p.y));
+    const tolerance = Math.abs(edge.lng - e.latlng.lng);
+
+    // ถามเฉพาะเลเยอร์ที่เปิดอยู่จริง — เลเยอร์ที่โหลดแล้วแต่ปิดสวิตช์ไว้ยังอยู่ใน
+    // ดัชนี (เพื่อให้เปิดกลับมาได้ทันที) แต่ต้องไม่ตอบคลิก
+    const active = [...hitIndex.current.values()].filter((l) => {
+      const g = groups.current.get(l.layerId);
+      return g ? m.hasLayer(g) : false;
+    });
+
+    const hits = findHits(active, e.latlng.lng, e.latlng.lat, tolerance);
+    if (hits.length === 0) return;
+
+    L.popup({ maxHeight: 340, maxWidth: 340 })
+      .setLatLng(e.latlng)
+      .setContent(popupHtml(hits))
+      .openOn(m);
+  }
 
   // สร้างแผนที่ครั้งเดียว
   useEffect(() => {
@@ -89,6 +119,7 @@ export default function MapViewer({
     for (const [id, style] of Object.entries(LAYER_STYLES)) {
       m.createPane(paneOf(id)).style.zIndex = String(410 + style.order);
     }
+    m.on('click', handleClick);
     map.current = m;
 
     // เก็บ Map ตัวเดียวกันไว้ในตัวแปรของ effect นี้ ไม่อ่าน groups.current ตอน
@@ -165,31 +196,26 @@ export default function MapViewer({
         // ไม่ต้องส่ง renderer เอง: Map.getRenderer() ของ Leaflet สร้าง canvas
         // renderer ให้ pane ที่ไม่ใช่ overlayPane โดยอัตโนมัติ (_getPaneRenderer)
         pane: m.getPane(pane) ? pane : undefined,
+        // ปิดระบบคลิกของ Leaflet ทั้งหมด — มันเลือกเลเยอร์บนสุดตาม z-index ตัวเดียว
+        // ซึ่งคือขอบเขตหมู่ที่คลุมทั้งตำบล คลิกตรงไหนก็ได้แต่หมู่บ้าน การหาว่าอะไร
+        // อยู่ใต้เคอร์เซอร์ทำเองที่ handleClick ด้านล่างแทน (src/lib/map-hit.ts)
+        interactive: false,
         style: () => ({
           color: style.color,
           weight: style.weight,
           fillColor: style.fillColor ?? style.color,
           fillOpacity: style.fillOpacity,
         }),
-        onEachFeature: (feature, lyr) => {
-          const props = (feature.properties ?? {}) as Record<string, unknown>;
-          const rows = Object.entries(props).filter(
-            ([, v]) => v !== null && v !== undefined && v !== ''
-          );
-          if (rows.length === 0) return;
-          lyr.bindPopup(
-            `<div class="np-popup"><p class="np-popup-title">${escapeHtml(layer.title)}</p><table>${rows
-              .map(
-                ([k, v]) =>
-                  `<tr><th>${escapeHtml(labelOf(k))}</th><td>${escapeHtml(String(v))}</td></tr>`
-              )
-              .join('')}</table></div>`,
-            { maxHeight: 320, maxWidth: 320 }
-          );
-        },
       });
       group.addTo(m);
       groups.current.set(layer.id, group);
+      // ดัชนีกรอบล้อมของทุก feature — คิดครั้งเดียวตอนโหลด ไม่ใช่ทุกครั้งที่คลิก
+      hitIndex.current.set(layer.id, {
+        layerId: layer.id,
+        title: layer.title,
+        order: style.order,
+        features: indexFeatures(fc),
+      });
       setState((s) => ({ ...s, [layer.id]: 'on' }));
     } catch (err) {
       // แถบบนหน้าบอกผู้ใช้ว่าเลเยอร์ไหนไม่ขึ้น ส่วน console เก็บ stack ไว้ให้คน
@@ -273,6 +299,33 @@ export default function MapViewer({
       </div>
     </div>
   );
+}
+
+// ป๊อปอัปเดียวที่รวมทุกอย่างใต้จุดที่คลิก เรียงจากละเอียดที่สุดลงไป — แปลงที่ดิน
+// ก่อน แล้วค่อยอาคาร ถนน แล้วจบที่หมู่บ้าน เหมือนเครื่องมือ identify ของ QGIS
+function popupHtml(hits: Hit[]): string {
+  const blocks: string[] = [];
+  let current = '';
+  for (const hit of hits) {
+    if (hit.layerId !== current) {
+      current = hit.layerId;
+      blocks.push(`<p class="np-popup-title">${escapeHtml(hit.title)}</p>`);
+    }
+    const rows = Object.entries(hit.feature.properties ?? {}).filter(
+      ([, v]) => v !== null && v !== undefined && v !== ''
+    );
+    blocks.push(
+      rows.length === 0
+        ? '<p class="np-popup-empty">ไม่มีข้อมูลประกอบ</p>'
+        : `<table>${rows
+            .map(
+              ([k, v]) =>
+                `<tr><th>${escapeHtml(labelOf(k))}</th><td>${escapeHtml(String(v))}</td></tr>`
+            )
+            .join('')}</table>`
+    );
+  }
+  return `<div class="np-popup">${blocks.join('')}</div>`;
 }
 
 // ค่าที่มาจากไฟล์ที่เจ้าหน้าที่อัปเองไปโผล่ใน innerHTML ของป๊อปอัป — Leaflet ไม่

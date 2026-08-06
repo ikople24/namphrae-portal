@@ -31,19 +31,23 @@ export const LAYER_STYLES: Record<string, LayerStyle> = {
     defaultOn: true,
   },
   building: {
-    color: '#f87171',
+    // ย้ายจากแดงมาเป็นม่วงตอนแปลงที่ดินเปลี่ยนเป็นแดง — สองเลเยอร์ที่ซ้อนทับกัน
+    // ตลอดเวลาต้องแยกออกจากกันด้วยสายตาได้ ไม่งั้นเปิดพร้อมกันแล้วอ่านไม่ออก
+    color: '#c084fc',
     weight: 0.5,
-    fillColor: '#ef4444',
+    fillColor: '#a855f7',
     fillOpacity: 0.35,
     order: 20,
     // 5,460 รูปทรง — เปิดเองได้แต่ไม่เปิดให้ตั้งแต่แรก
     defaultOn: false,
   },
   parcel: {
-    color: '#38bdf8',
-    weight: 0.6,
-    fillColor: '#0ea5e9',
-    fillOpacity: 0.12,
+    color: '#ef4444',
+    weight: 0.7,
+    fillColor: '#ef4444',
+    // โปร่งกว่าอาคารมาก เพราะแปลงที่ดินปูเต็มพื้นที่ ถ้าทึบเท่ากันจะกลายเป็นแผ่น
+    // แดงบังภาพดาวเทียมที่คนกำลังเทียบอยู่
+    fillOpacity: 0.1,
     order: 10,
     // 7,970 รูปทรง ~4 MB — เปิดตอนต้องใช้เท่านั้น
     defaultOn: false,
