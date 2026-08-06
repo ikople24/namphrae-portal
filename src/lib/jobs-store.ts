@@ -165,6 +165,27 @@ export async function listJobs(filter: JobFilter = {}): Promise<CalendarJob[]> {
   return (await fileRead()).filter((j) => matches(j, filter)).sort(bySchedule);
 }
 
+/** นับงานตาม filter โดยไม่ดึงตัวงานออกมา — badge บน sidebar เรียกทุกนาทีจาก
+ * ทุกหน้าหลังบ้าน ข้อมูลผู้ป่วยจึงไม่ควรวิ่งออกจาก DB มาเพื่อถูกทิ้งทันที
+ *
+ * ฝั่ง Mongo นับด้วย index { status: 1, date: 1 } ที่ ensureIndexes สร้างไว้อยู่
+ * แล้ว ส่วนแบ็กเอนด์ไฟล์ใช้ matches() ตัวเดียวกับ listJobs — กฎกรองจึงไม่แตก
+ * เป็นสามชุด
+ */
+export async function countJobs(filter: JobFilter = {}): Promise<number> {
+  if (usingMongo()) {
+    await ensureIndexes();
+    const db = await getDb();
+    const query: Record<string, unknown> = {};
+    if (filter.status) query.status = filter.status;
+    if (filter.month) {
+      query.date = { $gte: `${filter.month}-01`, $lte: `${filter.month}-31` };
+    }
+    return db.collection<CalendarJob>(COLLECTION).countDocuments(query);
+  }
+  return (await fileRead()).filter((j) => matches(j, filter)).length;
+}
+
 export async function getJob(id: string): Promise<CalendarJob | null> {
   if (usingMongo()) {
     const db = await getDb();
