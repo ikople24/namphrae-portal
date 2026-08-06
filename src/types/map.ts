@@ -118,7 +118,11 @@ export type MapLayerVersion = {
   versionNo: number;
   status: VersionStatus;
   source: { format: SourceFormat; fileName: string; bytes: number; sha256: string };
-  fullAsset: MapAsset;
+  // null = ไฟล์เต็มถูกลบตามนโยบายเก็บย้อนหลัง LAYER_VERSIONS_KEPT เวอร์ชัน
+  // (เอกสารยังอยู่ตลอด ปุ่มดาวน์โหลดไฟล์เต็มถูกปิดเท่านั้น)
+  fullAsset: MapAsset | null;
+  // publicAsset ไม่เคยถูกลบตามนโยบายนั้น — มันคือสิ่งเดียวที่ทำให้ย้อนเวอร์ชัน
+  // ได้ทันทีโดยไม่ต้องประมวลผลไฟล์ใหม่ null แปลว่ายังไม่เคยถูกเผยแพร่
   publicAsset: MapPublicAsset | null;
   stats: MapStats;
   checks: MapCheck[];
