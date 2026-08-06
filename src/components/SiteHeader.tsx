@@ -5,7 +5,7 @@ import type { SiteSettings } from '@/types/portal';
 export default function SiteHeader({ site }: { site: SiteSettings }) {
   const nav = [
     { href: '/#services', label: 'บริการ' },
-    { href: '/#services', label: 'แผนที่' },
+    { href: '/map', label: 'แผนที่' },
     { href: '/#services', label: 'ข่าวสาร' },
     { href: '/#contact', label: 'ติดต่อ' },
   ];

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "seed": "tsx scripts/seed.ts",
-    "import:gcal": "tsx scripts/import-google-calendar.ts"
+    "import:gcal": "tsx scripts/import-google-calendar.ts",
+    "import:map": "tsx scripts/import-map-layers.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.1",
@@ -17,18 +18,22 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "cloudinary": "^2.10.0",
+    "leaflet": "^1.9.4",
     "mongodb": "^7.5.0",
     "next": "16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "shpjs": "^6.2.0",
     "swr": "^2.4.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/shpjs": "^3.4.7",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",

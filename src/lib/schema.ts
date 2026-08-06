@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CONFIG_ID, JOB_KINDS, JOB_STATUSES } from '@/types/portal';
+import { SOURCE_FORMATS } from '@/types/map';
 import { CATEGORY_COLOR_VALUES } from '@/lib/category-accent';
 
 // A single Zod source of truth, reused by API routes and admin forms.
@@ -123,3 +124,44 @@ export const jobInputSchema = z.object({
 });
 
 export type JobInput = z.infer<typeof jobInputSchema>;
+
+// ── คลังไฟล์แผนที่ ──────────────────────────────────────────────────────────
+
+// สิ่งที่เบราว์เซอร์ส่งมาหลังอัปไฟล์ตรงเข้า Cloudinary สำเร็จแล้ว — ตัวไฟล์ไม่ได้
+// วิ่งผ่าน API route (เพดาน body 1MB) มีแต่ตัวชี้ไปที่ไฟล์
+export const versionRegisterSchema = z.object({
+  publicId: z.string().min(1),
+  fileName: z.string().min(1).max(300),
+  bytes: z.number().int().nonnegative(),
+  // ชนิดไฟล์ที่ผู้ใช้เลือกมาแต่แรก — ใช้บันทึกที่มาเท่านั้น ไม่ได้ใช้ตัดสินใจอะไร
+  // เพราะ .zip ถูกแปลงเป็น GeoJSON ที่เบราว์เซอร์ไปแล้วก่อนอัป
+  sourceFormat: z.enum(SOURCE_FORMATS),
+  note: z.string().trim().max(500).optional().default(''),
+});
+
+export type VersionRegisterInput = z.infer<typeof versionRegisterSchema>;
+
+// ตั้งค่าเลเยอร์ — ทุกฟิลด์เป็น optional เพราะหน้าตั้งค่าส่งมาทีละส่วน
+export const layerPatchSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(1000),
+    keyFields: z.array(z.string().min(1)).max(5),
+    keyComposition: z.array(z.array(z.string().min(1)).min(1).max(6)).max(5),
+    visibility: z.enum(['public', 'staff']),
+    publicFields: z.array(z.string().min(1)).max(200),
+    order: z.number().int(),
+  })
+  .partial()
+  .refine(
+    (v) =>
+      // keyComposition คือ "สูตรประกอบ keyFields[0] กลับจากฟิลด์อื่น" จึงมี
+      // ความหมายเฉพาะตอนคีย์เป็นฟิลด์เดียว คีย์ประกอบ (เช่นถนนที่ใช้
+      // full_id + zone_id) ไม่มีค่าเดียวให้ประกอบกลับ
+      !v.keyComposition ||
+      v.keyComposition.length === 0 ||
+      (v.keyFields ?? []).length === 1,
+    { message: 'ตั้งสูตรประกอบคีย์ได้เฉพาะเลเยอร์ที่ใช้คีย์ฟิลด์เดียว', path: ['keyComposition'] }
+  );
+
+export type LayerPatchInput = z.infer<typeof layerPatchSchema>;

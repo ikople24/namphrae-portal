@@ -39,6 +39,10 @@ yarn-error.log*
 /data/portal-config.json
 # ปฏิทินปฏิบัติงานเริ่มจากศูนย์ ไม่มี seed — ไฟล์นี้คือ dev fallback ของ Mongo
 /data/calendar-jobs.json
+# ทะเบียนคลังไฟล์แผนที่ — dev fallback ของ Mongo เช่นกัน สร้างด้วย npm run import:map
+# (ตัวไฟล์ GeoJSON อยู่บน Cloudinary ไม่ใช่ในนี้)
+/data/map-layers.json
+/data/map-layer-versions.json
 
 # vercel
 .vercel
