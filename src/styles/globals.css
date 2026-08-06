@@ -155,3 +155,34 @@ button:focus-visible {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* ป๊อปอัปของแผนที่ (src/components/MapViewer.tsx) — Leaflet เขียน HTML เองผ่าน
+   innerHTML จึงจัดสไตล์จากที่นี่แทนการใช้คลาสของ Tailwind ในสตริง */
+.np-popup {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.np-popup-title {
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--color-ink);
+}
+.np-popup table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+.np-popup th,
+.np-popup td {
+  text-align: left;
+  vertical-align: top;
+  padding: 2px 8px 2px 0;
+}
+.np-popup th {
+  font-weight: 500;
+  color: var(--color-ink-mute);
+  white-space: nowrap;
+}
+.leaflet-container {
+  font: inherit;
+}

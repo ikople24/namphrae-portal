@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import useSWR from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
+import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import MapLayerCard from '@/components/admin/MapLayerCard';
 import { getMemberSsrProps } from '@/lib/auth-server';
@@ -15,7 +17,18 @@ function MapLayersPage() {
   );
 
   return (
-    <AdminLayout title="ไฟล์แผนที่">
+    <AdminLayout
+      title="ไฟล์แผนที่"
+      actions={
+        <Link
+          href="/admin/map/viewer"
+          className="flex items-center gap-1 rounded-lg border border-black/15 px-3 py-1.5 text-[12.5px] font-medium text-ink-soft transition hover:bg-black/[0.04]"
+        >
+          <Icon name="map" size={16} />
+          เปิดแผนที่
+        </Link>
+      }
+    >
       <p className="mb-4 max-w-2xl text-[12.5px] leading-relaxed text-ink-soft">
         ลากไฟล์มาวางบนการ์ดของเลเยอร์ที่ต้องการแทนที่ ระบบจะตรวจไฟล์ให้ก่อนแล้วสรุปว่า
         อะไรเปลี่ยนไปบ้าง ไฟล์ใหม่จะยังไม่ขึ้นใช้งานจนกว่าจะกดเผยแพร่
