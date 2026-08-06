@@ -179,17 +179,26 @@ export async function uploadMedia(
 
 export type JobListResponse = { month: string | null; jobs: CalendarJob[] };
 
-/** สร้าง query string ของหน้าปฏิทินหลังบ้าน — ไม่ใส่คีย์ที่ไม่มีค่า */
+/** สร้าง query string ของหน้าปฏิทินหลังบ้าน — ไม่ใส่คีย์ที่ไม่มีค่า
+ *
+ * @param params.countOnly ขอแค่ `{ count }` ไม่เอารายการงาน — สำหรับ badge บน
+ * sidebar ที่อยู่ทุกหน้าและ refresh ทุกนาที ไม่ควรลากชื่อ/เบอร์ผู้ป่วยไปไว้ใน
+ * เบราว์เซอร์ของหน้าที่ไม่ได้ใช้
+ */
 export function adminCalendarKey(params: {
   month?: string;
   status?: JobStatus;
+  countOnly?: boolean;
 }): string {
   const qs = new URLSearchParams();
   if (params.month) qs.set('month', params.month);
   if (params.status) qs.set('status', params.status);
+  if (params.countOnly) qs.set('countOnly', '1');
   const query = qs.toString();
   return `/api/admin/calendar${query ? `?${query}` : ''}`;
 }
+
+export type JobCountResponse = { count: number };
 
 // ตั้งชื่อยาวโดยตั้งใจ ไม่ใช้ createJob/updateJob/setJobStatus/deleteJob เฉย ๆ
 // เพราะ src/lib/jobs-store.ts (server-only ลาก fs/mongodb) มีชื่อชนกันเป๊ะ —

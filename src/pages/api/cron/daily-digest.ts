@@ -51,8 +51,12 @@ export default async function handler(
   const date = tomorrowInBangkok();
   // JobFilter กรองได้แค่ month — กรอง date/สถานะที่นี่ (งานต่อเดือนมีน้อย)
   // listJobs เรียง (date, time, createdAt, id) มาแล้ว formatter ใช้ลำดับนั้นตรง ๆ
+  //
+  // เฉพาะงานที่อนุมัติแล้ว: กลุ่ม LINE คือเจ้าหน้าที่หน้างานที่ต้องรู้ว่าพรุ่งนี้
+  // ต้องไปไหน ไม่ใช่ที่ทวงงานค้างของแอดมิน — งานรออนุมัติเตือนที่หน้าจอหลังบ้าน
+  // แทน (badge ข้าง "ปฏิทินปฏิบัติงาน") ไม่ปนเข้ามาในตารางที่คนหน้างานอ่าน
   const jobs = (await listJobs({ month: date.slice(0, 7) })).filter(
-    (j) => j.date === date && (j.status === 'approved' || j.status === 'pending')
+    (j) => j.date === date && j.status === 'approved'
   );
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');

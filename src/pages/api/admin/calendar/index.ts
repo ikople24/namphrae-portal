@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAdmin } from '@/lib/auth-server';
-import { createJob, listJobs } from '@/lib/jobs-store';
+import { countJobs, createJob, listJobs } from '@/lib/jobs-store';
 import { pushNewJobNotice } from '@/lib/line';
 import { jobInputSchema, jobStatusSchema } from '@/lib/schema';
 import { parseMonth } from '@/lib/calendar-grid';
@@ -34,6 +34,12 @@ export default async function handler(
     }
 
     try {
+      // countOnly: badge บน sidebar ขอแค่ตัวเลข (แนวเดียวกับ
+      // /api/admin/signups?countOnly=1) — ไม่ส่งชื่อ/เบอร์ผู้ป่วยไปนั่งอยู่ใน
+      // เบราว์เซอร์ของทุกหน้าหลังบ้านทุกนาทีเพื่อเอาไปนับอย่างเดียว
+      if (req.query.countOnly) {
+        return res.status(200).json({ count: await countJobs({ month, status }) });
+      }
       const jobs = await listJobs({ month, status });
       return res.status(200).json({ month: month ?? null, jobs });
     } catch (err) {

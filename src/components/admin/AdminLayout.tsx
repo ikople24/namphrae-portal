@@ -6,7 +6,11 @@ import useSWR from 'swr';
 import { UserButton } from '@clerk/nextjs';
 import Icon from '@/components/Icon';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
-import { adminFetcher } from '@/lib/admin-api';
+import {
+  adminCalendarKey,
+  adminFetcher,
+  type JobCountResponse,
+} from '@/lib/admin-api';
 
 const NAV = [
   { href: '/admin', label: 'ลิงก์บริการ', icon: 'link', exact: true },
@@ -39,7 +43,23 @@ export default function AdminLayout({
     adminFetcher,
     { refreshInterval: 60_000, shouldRetryOnError: false }
   );
-  const pendingCount = signupCount?.pendingCount ?? 0;
+
+  // Badge: จำนวนงานปฏิทินที่รออนุมัติ — สรุปรายวันทาง LINE ส่งเฉพาะงานที่อนุมัติ
+  // แล้ว (กลุ่มนั้นมีไว้ให้เจ้าหน้าที่หน้างานรู้ว่าพรุ่งนี้ต้องไปไหน ไม่ใช่ที่ทวง
+  // งานค้าง) การทวงจึงมาอยู่ตรงนี้แทน ต้องเห็นจากทุกหน้าหลังบ้าน ไม่ใช่เห็นต่อ
+  // เมื่อเปิดหน้าปฏิทินซึ่งเป็นหน้าที่ "รู้อยู่แล้ว" ว่ามีงานค้าง
+  const { data: jobCount } = useSWR<JobCountResponse>(
+    adminCalendarKey({ status: 'pending', countOnly: true }),
+    adminFetcher,
+    { refreshInterval: 60_000, shouldRetryOnError: false }
+  );
+
+  // ค่าเดียวกับตัวเลขบนหัวข้อ "รออนุมัติ" ในหน้าปฏิทิน (คิวรีเดียวกัน ไม่จำกัด
+  // เดือน) — สองที่นี้ต้องไม่ขัดกันเอง ไม่งั้นคนใช้ไม่รู้ว่าจะเชื่ออันไหน
+  const badgeCount: Record<string, number> = {
+    '/admin/users': signupCount?.pendingCount ?? 0,
+    '/admin/calendar': jobCount?.count ?? 0,
+  };
 
   // User chip: ชื่อ-ตำแหน่งของคนที่ล็อกอินอยู่ จากทะเบียนสมาชิก (ไม่ใช่ชื่อใน
   // บัญชี Clerk ซึ่งมักว่าง) — โหลดครั้งเดียวพอ ไม่ต้อง revalidate
@@ -87,9 +107,12 @@ export default function AdminLayout({
                 >
                   <Icon name={item.icon} size={20} />
                   {item.label}
-                  {item.href === '/admin/users' && pendingCount > 0 ? (
-                    <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-px text-[10px] font-semibold text-white">
-                      {pendingCount}
+                  {badgeCount[item.href] > 0 ? (
+                    <span
+                      title="รออนุมัติ"
+                      className="ml-auto rounded-full bg-amber-500 px-1.5 py-px text-[10px] font-semibold text-white"
+                    >
+                      {badgeCount[item.href]}
                     </span>
                   ) : null}
                 </Link>
