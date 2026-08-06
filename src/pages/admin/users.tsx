@@ -91,6 +91,7 @@ function SignupQueue() {
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <input
               type="text"
+              aria-label="role"
               placeholder="role (เช่น staff)"
               value={roles[s.id] ?? ''}
               onChange={(e) => setRoles({ ...roles, [s.id]: e.target.value })}
@@ -106,6 +107,7 @@ function SignupQueue() {
             </button>
             <input
               type="text"
+              aria-label="เหตุผลที่ปฏิเสธ"
               placeholder="เหตุผลที่ปฏิเสธ (ไม่บังคับ)"
               value={notes[s.id] ?? ''}
               onChange={(e) => setNotes({ ...notes, [s.id]: e.target.value })}
@@ -135,21 +137,25 @@ const EDIT_FIELDS = [
 ] as const;
 
 function MembersTable() {
-  const { data, error, mutate } = useSWR<{ members: RegistryMember[] }>(
-    '/api/admin/users',
-    adminFetcher
-  );
   const [editing, setEditing] = useState<RegistryMember | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+
+  const { data, error, mutate } = useSWR<{ members: RegistryMember[] }>(
+    '/api/admin/users',
+    adminFetcher,
+    // ระหว่างแก้ไขแถวอยู่ ห้าม revalidate ทับ — ไม่งั้นกดบันทึกแล้ว snapshot เก่า
+    // ใน editing จะเขียนทับค่าที่คนอื่นเพิ่งแก้บนเซิร์ฟเวอร์
+    { isPaused: () => editing !== null }
+  );
 
   async function run(id: string, fn: () => Promise<unknown>) {
     setBusyId(id);
     setActionError('');
     try {
       await fn();
-      await mutate();
       setEditing(null);
+      await mutate();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'บันทึกไม่สำเร็จ');
     } finally {
