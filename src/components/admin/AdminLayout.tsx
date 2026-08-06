@@ -41,6 +41,17 @@ export default function AdminLayout({
   );
   const pendingCount = signupCount?.pendingCount ?? 0;
 
+  // User chip: ชื่อ-ตำแหน่งของคนที่ล็อกอินอยู่ จากทะเบียนสมาชิก (ไม่ใช่ชื่อใน
+  // บัญชี Clerk ซึ่งมักว่าง) — โหลดครั้งเดียวพอ ไม่ต้อง revalidate
+  const { data: me } = useSWR<{
+    name: string | null;
+    position: string | null;
+    email: string | null;
+  }>(clerkOn ? '/api/admin/me' : null, adminFetcher, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+  });
+
   return (
     <>
       <Head>
@@ -96,8 +107,18 @@ export default function AdminLayout({
 
           <div className="md:mt-auto">
             {clerkOn ? (
-              <div className="mb-3 px-1">
+              <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-black/[0.07] bg-white px-3 py-2.5">
                 <ClerkUserButton />
+                <div className="min-w-0 leading-tight">
+                  <p className="truncate font-display text-[12.5px] font-semibold text-ink">
+                    {me?.name ?? me?.email ?? 'ผู้ใช้งาน'}
+                  </p>
+                  {me?.position ? (
+                    <p className="truncate text-[10.5px] text-ink-mute">
+                      {me.position}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             ) : (
               <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-[13px]">
