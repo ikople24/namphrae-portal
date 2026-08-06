@@ -2,15 +2,17 @@ import type { GetServerSideProps, GetServerSidePropsContext, NextApiRequest, Nex
 import { isClerkConfigured } from '@/lib/clerk-config';
 import { getUsersDb, isMongoConfigured } from '@/lib/mongodb';
 import { allowAdminWithoutRegistry } from '@/lib/admin-registry-gate';
+import { activeRegistryFilter } from '@/lib/registry-user';
 
 // SERVER ONLY. Import this only from API routes / getServerSideProps — it pulls
 // in @clerk/nextjs/server. For client-safe env checks use '@/lib/clerk-config'.
 //
 // Clerk is optional. When configured, /admin (pages and APIs) requires a
-// signed-in user who ALSO exists in the shared user registry
-// (db_namphrae.users, keyed by clerkId — the same registry namphrae-map uses).
-// When Clerk is unset the app runs in "dev-open" mode so it boots and is fully
-// testable with zero external services. NEVER deploy to production without Clerk.
+// signed-in user who ALSO exists as an ACTIVE, non-archived entry in the
+// shared user registry (db_namphrae.users, keyed by clerkId — the same
+// registry namphrae-map uses). When Clerk is unset the app runs in "dev-open"
+// mode so it boots and is fully testable with zero external services.
+// NEVER deploy to production without Clerk.
 
 export { isClerkConfigured } from '@/lib/clerk-config';
 
@@ -20,7 +22,7 @@ type AuthCheck =
   | { ok: true; identity: AdminIdentity }
   | { ok: false; status: 401 | 403 };
 
-async function checkAdmin(
+export async function checkAdmin(
   req: NextApiRequest | GetServerSidePropsContext['req']
 ): Promise<AuthCheck> {
   if (!isClerkConfigured()) {
@@ -51,7 +53,7 @@ async function checkAdmin(
     const db = await getUsersDb();
     const user = await db
       .collection('users')
-      .findOne({ clerkId: userId }, { projection: { email: 1, name: 1 } });
+      .findOne(activeRegistryFilter(userId), { projection: { email: 1, name: 1 } });
     if (!user) return { ok: false, status: 403 };
     const email = (user.email ?? user.name) as string | undefined;
     return { ok: true, identity: { userId, email } };
@@ -86,10 +88,18 @@ export async function requireAdmin(
  * SSR guard for /admin pages. Pages export this as getServerSideProps and wrap
  * their component in withMemberGuard (src/components/admin/MemberGuard.tsx),
  * which renders an access-denied screen when `member` is false.
+ *
+ * A signed-in visitor who is not (or no longer) an active member is redirected
+ * to /apply — the application flow — instead of a dead-end screen. 401 keeps
+ * the AccessDenied fallback (the proxy normally redirects signed-out visitors
+ * to /sign-in before they reach here).
  */
 export const getMemberSsrProps: GetServerSideProps<{ member: boolean }> = async (
   ctx
 ) => {
   const check = await checkAdmin(ctx.req);
+  if (!check.ok && check.status === 403 && isClerkConfigured()) {
+    return { redirect: { destination: '/apply', permanent: false } };
+  }
   return { props: { member: check.ok } };
 };
