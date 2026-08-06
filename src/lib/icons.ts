@@ -59,6 +59,7 @@ export const ICON_NAMES = [
   'health_and_safety',
   'help',
   'home',
+  'layers',
   'lightbulb',
   'link',
   'location_on',
