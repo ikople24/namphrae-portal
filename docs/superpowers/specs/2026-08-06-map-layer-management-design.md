@@ -255,11 +255,12 @@ mapLayerVersions  { layerId: 1, versionNo: -1 }   ← ประวัติเ�
 ```
 เจ้าหน้าที่ลากไฟล์วางบนการ์ด
     │
+    ├─ 0. ถ้าเป็น .zip → เบราว์เซอร์แปลงเป็น GeoJSON ด้วย shpjs ก่อน (ดู "ทำไมแปลง
+    │       shapefile ที่เบราว์เซอร์" ด้านล่าง) — .js/.geojson ส่งขึ้นตามเดิม
     ├─ 1. ขอลายเซ็นจากเซิร์ฟเวอร์ แล้วอัปตรงเข้า Cloudinary        ← ข้ามเพดาน 1 MB
     ├─ 2. เซิร์ฟเวอร์ดึงไฟล์มาแกะ:
     │       .js  → ตัดหัว `var json_X = ` แล้ว JSON.parse
-    │       .zip → shapefile → GeoJSON + แปลงพิกัดเป็น EPSG:4326
-    │       .geojson → ใช้เลย
+    │       .geojson → JSON.parse
     ├─ 3. ตรวจ (checks) + นับสถิติ (stats) + เทียบส่วนต่างกับเวอร์ชันที่เผยแพร่อยู่ (diff)
     └─ 4. บันทึกเป็น draft
     │
@@ -469,7 +470,9 @@ export จาก snapshot เดียวไม่ได้ (Context ข้อ 8
 | อัปขึ้น Cloudinary สำเร็จแต่ลงทะเบียนไม่สำเร็จ | ไฟล์กำพร้าบน Cloudinary — สคริปต์ทำความสะอาดเก็บทีหลังได้ ไม่กระทบข้อมูลที่ใช้งานอยู่ |
 | กดเผยแพร่ซ้ำสองครั้งพร้อมกัน | ตรวจ `status === 'draft'` ก่อนเสมอ ครั้งที่สองได้ 409 |
 | ย้อนไปเวอร์ชันที่ไฟล์ถูกลบตามนโยบาย 5 เวอร์ชัน | `publicAsset` ยังอยู่ (ลบเฉพาะ `fullAsset`) จึงย้อนได้ปกติ ปุ่มดาวน์โหลดไฟล์เต็มเท่านั้นที่ปิด |
-| shapefile zip ไม่มี `.prj` | error `parse-failed` พร้อมข้อความว่าต้อง export ให้มี `.prj` ด้วย — เดา CRS แทนผู้ใช้ไม่ได้ |
+| shapefile zip ไม่มี `.prj` | เบราว์เซอร์แปลงไม่สำเร็จ ขึ้นข้อความบนการ์ดว่าต้อง export ให้มี `.prj` ด้วย ไม่มีอะไรถูกอัปขึ้น — เดา CRS แทนผู้ใช้ไม่ได้ |
+| shapefile zip ที่แปลงแล้วพิกัดยังเป็นเมตร | ผ่านขึ้นไปตามปกติ แล้วโดนด่าน `outside-thailand` ฝั่งเซิร์ฟเวอร์จับ — เบราว์เซอร์เป็นแค่ตัวแปลง ไม่ใช่ด่านตรวจ |
+| ไฟล์ zip ใหญ่จนเบราว์เซอร์แปลงไม่ไหว | จำกัดที่ 100 MB ก่อนเริ่มแปลง พร้อมข้อความบอกให้แบ่งไฟล์หรือส่ง GeoJSON มาแทน |
 | GeoJSON มี `crs` ที่ไม่ใช่ CRS84/EPSG:4326 | error `parse-failed` — ไม่แปลงให้เงียบ ๆ |
 
 ## Testing
@@ -479,7 +482,7 @@ vitest ตามแพตเทิร์นเดิม (ไฟล์ `*.test.ts
 | ไฟล์ | ตรึงอะไรไว้ |
 |---|---|
 | `src/lib/map-public.test.ts` | ฟิลด์นอก whitelist หาย · `publicFields` ว่าง = `properties` ว่าง · geometry ไม่ถูกแตะ · **ฟิลด์ที่เพิ่งโผล่มาใหม่ต้องไม่หลุดเอง** |
-| `src/lib/map-parse.test.ts` | `.js` / `.geojson` / `.zip` สามทางเข้าได้ FeatureCollection หน้าตาเดียวกัน · zip ที่ไม่มี `.prj` ต้องพัง |
+| `src/lib/map-parse.test.ts` | `.js` (qgis2web) กับ `.geojson` สองทางเข้าได้ FeatureCollection หน้าตาเดียวกัน · หัว `var json_X = ` หลายรูปแบบ · JSON พังต้องได้ `parse-failed` ไม่ใช่ throw ดิบ |
 | `src/lib/map-checks.test.ts` | ด่านตรวจทีละข้อ · `outside-thailand` ต้องจับพิกัด UTM 47N ที่ลืมแปลง · `null-literal` ต้องจับ `'None'` แต่**ไม่แตะ `'-'`** · `new-value` ต้องเงียบเมื่อไม่มีเวอร์ชันก่อนหน้า |
 | `src/lib/map-diff.test.ts` | คีย์เดี่ยว / คีย์ประกอบ / ไม่มีคีย์ · คีย์ซ้ำต้องไม่ทำให้ diff พัง |
 | `src/lib/map-store.test.ts` | ฟังก์ชันบริสุทธิ์ที่แยกออกมาจาก store ตามแบบ `buildNewJob`/`buildStatusPatch` ใน `jobs-store.ts`: `buildNewVersion()` · `buildPublishPatch()` (สลับสถานะคู่เก่า/ใหม่) · `assetsToPrune()` (นโยบาย 5 เวอร์ชัน ต้องไม่คืนเวอร์ชันที่ published) — ไม่แตะ Mongo หรือไฟล์ |
@@ -507,7 +510,8 @@ vitest ตามแพตเทิร์นเดิม (ไฟล์ `*.test.ts
 ```
 src/types/map.ts                             โดเมนไทป์
 src/lib/map-store.ts                         Mongo/file backend + invariant สถานะ
-src/lib/map-parse.ts                         .js / .geojson / .zip → FeatureCollection
+src/lib/map-parse.ts                         .js / .geojson → FeatureCollection (เซิร์ฟเวอร์, ไม่มี dep)
+src/lib/map-shapefile-client.ts              .zip → GeoJSON ด้วย dynamic import('shpjs') (เบราว์เซอร์เท่านั้น)
 src/lib/map-checks.ts                        ด่านตรวจ
 src/lib/map-diff.ts                          เทียบสองเวอร์ชัน
 src/lib/map-public.ts                        กรอง properties ตาม whitelist
@@ -542,14 +546,47 @@ package.json                           dependency ใหม่ (ดูด้า�
 
 **Dependency ใหม่**
 
-| แพ็กเกจ | ใช้ทำอะไร |
-|---|---|
-| `shpjs` | shapefile `.zip` → GeoJSON พร้อมแปลงพิกัดตาม `.prj` (บันเดิล proj4 มาให้) |
+| แพ็กเกจ | ใช้ทำอะไร | ทำงานที่ไหน |
+|---|---|---|
+| `shpjs` | shapefile `.zip` → GeoJSON พร้อมแปลงพิกัดตาม `.prj` (บันเดิล proj4 มาให้) | **เบราว์เซอร์เท่านั้น** |
 
-เลือกตัวเดียวแทนการต่อ `shapefile` + `adm-zip` + `proj4` เองเพราะการอ่าน `.prj` แล้วแปลง
-เป็น EPSG:4326 คือส่วนที่พลาดง่ายที่สุดและเป็นต้นเหตุของ error `outside-thailand`
+### ทำไมแปลง shapefile ที่เบราว์เซอร์ ไม่ใช่ที่เซิร์ฟเวอร์
 
-**ต้องยืนยันก่อนลงมือ:** ให้แผนงานเริ่มด้วยการทดสอบ `shpjs` กับ shapefile UTM Zone 47N
-(EPSG:32647) จริงหนึ่งไฟล์ ว่าแปลงออกมาเป็น lon/lat ในช่วง `98.x, 18.x` ถูกต้อง — ถ้าไม่ผ่าน
-ให้ถอยไปใช้ `shapefile` + `proj4` แล้วกำหนด `proj4.defs` เอง ห้ามข้ามขั้นนี้ไปเขียนโค้ดที่
-เหลือก่อน เพราะสมมติฐานนี้ค้ำ path การนำเข้าทั้งสาย
+ทดสอบ `shpjs@6.2.0` จริงก่อนตัดสินใจ ผลคือมันแปลง UTM Zone 47N ได้ถูกต้อง
+(`485894, 2070600` → `98.86619, 18.72676`) **แต่พังบน Node เมื่อโหลดผ่าน `require()`**
+ด้วย `ReferenceError: self is not defined`
+
+ต้นเหตุอยู่ใน `package.json` ของมันเอง:
+
+```
+"exports": { "import": "./lib/index.js",   ← ESM สะอาด ใช้บน Node ได้
+             "require": "./dist/shp.js" }  ← บันเดิลสำหรับเบราว์เซอร์ อ้าง self
+```
+
+Pages Router ของ Next คอมไพล์ API route เป็น CJS และ **ไม่ bundle dependency โดยปริยาย**
+(`bundlePagesRouterDependencies` ต้องเปิดเอง — ยืนยันจาก
+`node_modules/next/dist/docs/02-pages/04-api-reference/04-config/01-next-config-js/bundlePagesRouterDependencies.md`)
+dependency ที่ไม่ถูก bundle จะถูกเรียกด้วย `require` ของ Node → ได้บันเดิลเบราว์เซอร์ → พัง
+
+ทางแก้ที่พิจารณาแล้วไม่เลือก:
+
+- **เปิด `bundlePagesRouterDependencies: true`** — แก้ได้จริงแต่เปลี่ยนพฤติกรรม bundling ของ
+  *ทุก* dependency ฝั่งเซิร์ฟเวอร์พร้อมกัน รวมถึง `mongodb`, `@clerk/nextjs`, `cloudinary`
+  ที่วันนี้ทำงานดีอยู่ — รัศมีความเสียหายกว้างเกินกว่าเหตุ และทดสอบยากถ้าไม่ build เต็ม
+- **ใช้ `shapefile` + `proj4` + unzip เองบนเซิร์ฟเวอร์** — สาม dependency แทนหนึ่ง และต้อง
+  เขียนโค้ดอ่าน `.prj` (WKT) เองซึ่งเป็นส่วนที่พลาดง่ายที่สุด
+
+**ทางที่เลือก:** เบราว์เซอร์แปลง `.zip` → GeoJSON ด้วย dynamic `import('shpjs')` (โหลดเฉพาะ
+ตอนมีคนวางไฟล์ zip จริง ~100 KB minified ไม่กระทบขนาดหน้าตอนเปิดปกติ) แล้วอัป GeoJSON
+ขึ้น Cloudinary ตามเส้นทางเดียวกับไฟล์ชนิดอื่น
+
+เหตุผลที่ทางนี้ไม่ใช่การลดความปลอดภัย: **เซิร์ฟเวอร์ไม่เคยเชื่อไฟล์ที่รับมาอยู่แล้ว** ด่านตรวจ
+ทั้งหมดรันฝั่งเซิร์ฟเวอร์กับ GeoJSON ที่ได้รับ ไม่ว่ามันจะถูกแปลงมาจากไหน — ผู้ใช้ที่ประสงค์ร้าย
+อัป GeoJSON อะไรก็ได้อยู่แล้วโดยไม่ต้องผ่าน shpjs (แค่เลือกอัปไฟล์ `.geojson` ตรง ๆ) การแปลง
+ที่เบราว์เซอร์จึงเป็นแค่ความสะดวก ไม่ใช่เส้นแบ่งความไว้ใจ
+
+และ **ไม่มีจุดไหนบนเซิร์ฟเวอร์ที่ต้องอ่าน shapefile เลย** — สคริปต์นำเข้าครั้งแรกอ่านไฟล์
+qgis2web `.js` จากเว็บเดิมเท่านั้น ส่วน `issues.csv` กับการย้อนเวอร์ชันอ่าน GeoJSON ที่เก็บไว้แล้ว
+
+`source.format` ยังบันทึกเป็น `'shapefile-zip'` และ `source.fileName` เก็บชื่อ `.zip` เดิมไว้
+เพื่อให้ประวัติบอกที่มาได้ถูกต้อง แม้สิ่งที่อัปขึ้นจริงจะเป็น GeoJSON ที่แปลงแล้ว
