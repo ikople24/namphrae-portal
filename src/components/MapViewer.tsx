@@ -23,6 +23,18 @@ export type ViewerLayer = {
   geojsonUrl: string;
 };
 
+/**
+ * ระดับซูมลึกสุดที่ยอมให้ — เลือกไว้ที่ระดับที่แถบมาตราส่วนอ่านได้ว่า "100 m"
+ *
+ * ที่ละติจูดของน้ำแพร่ (~18.7°N) ระดับ 17 ให้ความละเอียด 1.13 เมตร/พิกเซล แถบ
+ * มาตราส่วนกว้าง 100 พิกเซลจึงกินระยะ ~113 เมตร แล้ว Leaflet ปัดลงเป็น 100 เมตร
+ * ส่วนระดับ 18 จะได้ 0.57 เมตร/พิกเซล ซึ่งปัดเป็น 50 เมตร — ลึกกว่าที่ต้องการ
+ *
+ * ต้องตั้งทั้งที่ตัวแผนที่และที่ tile layer ทุกตัว ไม่งั้นค่าที่ tile layer จะไป
+ * ขยายเพดานของแผนที่กลับขึ้นมาเอง
+ */
+const MAX_ZOOM = 17;
+
 // ภาพดาวเทียมของ Esri เปิดให้ใช้ฟรีโดยใส่เครดิต — ต่างจาก tile ของ Google ที่
 // หน้า qgis2web เดิมดึงจาก mt1.google.com โดยตรงซึ่งผิดเงื่อนไขการใช้งาน
 const BASEMAPS = {
@@ -31,19 +43,20 @@ const BASEMAPS = {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution:
       'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-    maxZoom: 19,
+    maxZoom: MAX_ZOOM,
   },
   street: {
     label: 'แผนที่ถนน',
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
+    maxZoom: MAX_ZOOM,
   },
 } as const;
 
 type BasemapKey = keyof typeof BASEMAPS;
 
 const paneOf = (layerId: string) => `np-${layerId}`;
+
 
 type LoadState = 'off' | 'loading' | 'on' | 'error';
 
@@ -100,7 +113,7 @@ export default function MapViewer({
     const m = L.map(holder.current, {
       center,
       zoom,
-      maxZoom: 19,
+      maxZoom: MAX_ZOOM,
       // canvas ไม่ใช่ svg: 7,970 รูปทรงบน svg = 7,970 DOM node ซึ่งทำให้เบราว์เซอร์
       // อืดตั้งแต่ตอน pan ยังไม่ทันคลิกอะไร
       preferCanvas: true,
