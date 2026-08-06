@@ -98,8 +98,10 @@ export type DecisionResult =
   | { ok: true; signup: SignupApplication }
   | { ok: false; error: 'not_found' | 'invalid_state' };
 
-// Insert-first + planApproval (src/lib/signups.ts) make retries safe — see the
-// tests there for the full decision table.
+// Insert-first + planApproval (src/lib/signups.ts) make sequential retries
+// safe — see the tests there for the full decision table. The registry write
+// is an upsert on clerkId so a concurrent double-approve cannot create
+// duplicate docs in the shared users collection (which smart-namphrae owns).
 export async function approveSignup(
   id: string,
   role: string,
@@ -121,7 +123,11 @@ export async function approveSignup(
 
   const now = new Date();
   if (plan.action === 'insert_and_mark') {
-    await users.insertOne(buildRegistryUserDoc(app, role, now));
+    await users.updateOne(
+      { clerkId: app.clerkId },
+      { $setOnInsert: buildRegistryUserDoc(app, role, now) },
+      { upsert: true }
+    );
   }
   if (plan.action !== 'noop') {
     await col.updateOne(
