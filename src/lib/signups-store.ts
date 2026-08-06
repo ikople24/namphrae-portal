@@ -34,6 +34,51 @@ async function signupsCollection(): Promise<Collection<SignupDoc>> {
   return db.collection<SignupDoc>('pendingSignups');
 }
 
+// Thrown by createSignup when the unique partial index (below) rejects a
+// second concurrent pending application for the same clerkId — the
+// find-then-insert check in the /apply handler has a race window between two
+// rapid POSTs, so the index is the actual guarantee and this error is how a
+// rejected insert gets turned back into the same already_pending response the
+// upfront check would have produced. Pattern precedent: CategoryInUseError in
+// src/pages/api/admin/categories.ts.
+export class DuplicatePendingSignupError extends Error {
+  constructor(public clerkId: string) {
+    super('duplicate_pending_signup');
+    this.name = 'DuplicatePendingSignupError';
+  }
+}
+
+let indexesEnsured = false;
+let indexAttempts = 0;
+// See jobs-store.ts's ensureIndexes for why this caps retries instead of
+// retrying forever: transient failures deserve a retry, permanent ones
+// (missing Atlas createIndex privilege, a colliding index name) don't.
+const MAX_INDEX_ATTEMPTS = 3;
+
+// createIndex is a no-op once the index exists, so calling this once per
+// process (cold start on serverless) is enough — no separate migration step.
+async function ensureIndexes(): Promise<void> {
+  if (indexesEnsured || indexAttempts >= MAX_INDEX_ATTEMPTS) return;
+  indexAttempts += 1;
+  indexesEnsured = true;
+  try {
+    const col = await signupsCollection();
+    await col.createIndexes([
+      {
+        key: { clerkId: 1 },
+        unique: true,
+        partialFilterExpression: { status: 'pending' },
+      },
+    ]);
+  } catch (err) {
+    indexesEnsured = false; // let the next call retry (up to the cap)
+    console.warn(
+      `pendingSignups: createIndexes failed (attempt ${indexAttempts}/${MAX_INDEX_ATTEMPTS})`,
+      err
+    );
+  }
+}
+
 function serialize(doc: SignupDoc): SignupApplication {
   return {
     id: doc._id.toString(),
@@ -76,6 +121,7 @@ export async function createSignup(
   input: ApplyInput
 ): Promise<SignupApplication> {
   const col = await signupsCollection();
+  await ensureIndexes();
   const doc: SignupDoc = {
     _id: new ObjectId(),
     clerkId,
@@ -90,7 +136,16 @@ export async function createSignup(
     decidedAt: null,
     decidedBy: null,
   };
-  await col.insertOne(doc);
+  try {
+    await col.insertOne(doc);
+  } catch (err) {
+    // 11000 = duplicate key — the partial unique index caught two rapid
+    // POSTs racing past the pending check above.
+    if ((err as { code?: number }).code === 11000) {
+      throw new DuplicatePendingSignupError(clerkId);
+    }
+    throw err;
+  }
   return serialize(doc);
 }
 
