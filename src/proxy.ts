@@ -31,8 +31,14 @@ export default proxy;
 
 export const config = {
   matcher: [
-    // Run on admin routes only; skip static assets and the public site.
+    // /admin + /api/admin are protected by isProtected above (auth.protect()).
+    // /apply + /api/apply are NOT protected here — they do their own auth
+    // (SSR redirect to /sign-in / 401 JSON) — but they still need
+    // clerkMiddleware to have run so getAuth(req) has context to read.
+    // Everything else (static assets, the public site) is skipped.
     '/admin/:path*',
     '/api/admin/:path*',
+    '/apply',
+    '/api/apply',
   ],
 };
