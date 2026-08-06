@@ -7,6 +7,9 @@ import type {
   SiteSettings,
 } from '@/types/portal';
 import type { JobInput, LinkInput } from '@/lib/schema';
+import type { SignupApplication } from '@/lib/signups';
+import type { RegistryMember } from '@/lib/registry-user';
+import type { MemberPatchBody } from '@/lib/user-schema';
 
 // Thin client wrappers around the /api/admin endpoints. Each throws on failure
 // with a message suitable for a toast/inline error.
@@ -244,6 +247,50 @@ export async function updateLineGroupId(lineGroupId: string): Promise<void> {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ lineGroupId }),
+    })
+  );
+}
+
+export type SignupListResponse = {
+  signups: SignupApplication[];
+  pendingCount: number;
+};
+
+export async function approveSignupRequest(
+  id: string,
+  role: string
+): Promise<SignupApplication> {
+  return jsonOrThrow(
+    await fetch(`/api/admin/signups/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ role }),
+    })
+  );
+}
+
+export async function rejectSignupRequest(
+  id: string,
+  note: string
+): Promise<SignupApplication> {
+  return jsonOrThrow(
+    await fetch(`/api/admin/signups/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note }),
+    })
+  );
+}
+
+export async function updateMember(
+  id: string,
+  patch: MemberPatchBody
+): Promise<RegistryMember> {
+  return jsonOrThrow(
+    await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
     })
   );
 }

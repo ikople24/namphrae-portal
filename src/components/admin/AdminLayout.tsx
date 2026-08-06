@@ -2,15 +2,18 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { ReactNode } from 'react';
+import useSWR from 'swr';
 import { UserButton } from '@clerk/nextjs';
 import Icon from '@/components/Icon';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
+import { adminFetcher } from '@/lib/admin-api';
 
 const NAV = [
   { href: '/admin', label: 'ลิงก์บริการ', icon: 'link', exact: true },
   { href: '/admin/calendar', label: 'ปฏิทินปฏิบัติงาน', icon: 'calendar_month', exact: false },
   { href: '/admin/categories', label: 'หมวดหมู่', icon: 'category', exact: false },
   { href: '/admin/settings', label: 'ตั้งค่าเว็บไซต์', icon: 'tune', exact: false },
+  { href: '/admin/users', label: 'จัดการผู้ใช้', icon: 'group', exact: false },
   { href: '/admin/data', label: 'นำเข้า/ส่งออก', icon: 'swap_vert', exact: false },
 ];
 
@@ -28,6 +31,15 @@ export default function AdminLayout({
 }) {
   const router = useRouter();
   const clerkOn = isClerkPublicConfigured();
+
+  // Badge: จำนวนผู้สมัครที่รออนุมัติ. Refresh ทุกนาที; ถ้า endpoint พัง
+  // (เช่น Mongo ไม่พร้อม) ก็แค่ไม่แสดง badge — ไม่ retry รัว ๆ
+  const { data: signupCount } = useSWR<{ pendingCount: number }>(
+    '/api/admin/signups?countOnly=1',
+    adminFetcher,
+    { refreshInterval: 60_000, shouldRetryOnError: false }
+  );
+  const pendingCount = signupCount?.pendingCount ?? 0;
 
   return (
     <>
@@ -64,6 +76,11 @@ export default function AdminLayout({
                 >
                   <Icon name={item.icon} size={20} />
                   {item.label}
+                  {item.href === '/admin/users' && pendingCount > 0 ? (
+                    <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-px text-[10px] font-semibold text-white">
+                      {pendingCount}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

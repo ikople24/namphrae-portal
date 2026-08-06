@@ -55,6 +55,7 @@ export const ICON_NAMES = [
   'drag_indicator',
   'edit',
   'forest',
+  'group',
   'health_and_safety',
   'help',
   'home',
