@@ -192,9 +192,18 @@ describe('formatNewJobMessage', () => {
 describe('formatDailyDigestMessage', () => {
   const APPROVED: CalendarJob = { ...BASE, id: 'a1', status: 'approved' };
 
-  it('มีทั้งอนุมัติแล้วและรออนุมัติ — สองส่วน มีลิงก์ท้ายส่วนรออนุมัติ', () => {
+  // แต่ละงานเป็น "บล็อก" ข้อมูลเต็ม (ชื่อ/เวลา/หมู่บ้าน/เส้นทาง/โทร/หมายเหตุ)
+  // ไม่ใช่บรรทัดเดียวย่อ ๆ — เจ้าหน้าที่ในกลุ่มต้องโทรหาคนไข้และรู้เส้นทางได้
+  // จากข้อความเลย ไม่ต้องเปิดพอร์ทัลก่อน (เทียบรูปแบบเดิมของระบบ Google
+  // Calendar ที่ใช้อยู่ก่อนหน้า) — บล็อกคั่นด้วยบรรทัดว่างให้อ่านง่ายในกลุ่ม
+  it('งานที่อนุมัติแล้ว — บล็อกข้อมูลเต็มของแต่ละงาน ไม่มีส่วนรออนุมัติและไม่มีลิงก์', () => {
     const jobs: CalendarJob[] = [
-      { ...APPROVED, time: '06:00', title: 'ส่งผู้ป่วยฟอกไต' },
+      {
+        ...APPROVED,
+        time: '06:00',
+        title: 'ศรีพลอย ดวงแก้ว',
+        phone: '0817169397',
+      },
       {
         ...APPROVED,
         id: 'a2',
@@ -202,22 +211,54 @@ describe('formatDailyDigestMessage', () => {
         time: '14:00',
         title: 'ตัดต้นไม้ล้ม',
         village: 'ม.5 ต.น้ำแพร่',
+        origin: '',
+        destination: '',
+        phone: '',
       },
-      { ...BASE, id: 'p1', time: '09:00', title: 'รับผู้ป่วยกลับบ้าน' },
     ];
     expect(
       formatDailyDigestMessage(jobs, '2026-08-06', 'https://namphrae-portal.app')
     ).toBe(
       [
         '📋 ตารางงานพรุ่งนี้ — 6 ส.ค. 69',
-        '🚑 06:00 ส่งผู้ป่วยฟอกไต (ม.3 ต.น้ำแพร่)',
-        '🚨 14:00 ตัดต้นไม้ล้ม (ม.5 ต.น้ำแพร่)',
         '',
-        '⏳ รออนุมัติ 1 งาน — รีบอนุมัติก่อนถึงวันงาน',
-        '🚑 09:00 รับผู้ป่วยกลับบ้าน (ม.3 ต.น้ำแพร่)',
-        '👉 https://namphrae-portal.app/admin/calendar',
+        '🚑 ศรีพลอย ดวงแก้ว',
+        '🕐 เวลา: 06:00 น.',
+        '🏠 ม.3 ต.น้ำแพร่',
+        '➤ บ้านที่อาศัย → รพ.สวนดอก',
+        '☎ 0817169397',
+        '',
+        '🚨 ตัดต้นไม้ล้ม',
+        '🕐 เวลา: 14:00 น.',
+        '🏠 ม.5 ต.น้ำแพร่',
       ].join('\n')
     );
+  });
+
+  it('หมายเหตุขึ้นท้ายบล็อกเมื่อมี', () => {
+    expect(
+      formatDailyDigestMessage([{ ...APPROVED, note: 'ใช้รถเข็น' }], '2026-08-06')
+    ).toContain('\n📝 ใช้รถเข็น');
+  });
+
+  // ฟิลด์ที่เว้นว่างถูกข้ามทั้งบรรทัด — บล็อกยาวขึ้นแล้วยิ่งต้องไม่มีบรรทัด
+  // ขยะอย่าง "☎" ลอย ๆ หรือ "🕐 เวลา: undefined น." จากข้อมูลที่ไม่ผ่าน Zod
+  it('ฟิลด์ว่าง/เวลาหายจากข้อมูลเสีย — ข้ามทั้งบรรทัด ไม่มีบรรทัดเปล่าในบล็อกและไม่มี undefined', () => {
+    const msg = formatDailyDigestMessage(
+      [
+        {
+          ...APPROVED,
+          village: '',
+          origin: '',
+          destination: '',
+          phone: '',
+          time: undefined as unknown as string,
+        },
+      ],
+      '2026-08-06'
+    );
+    expect(msg).not.toContain('undefined');
+    expect(msg).toBe(['📋 ตารางงานพรุ่งนี้ — 6 ส.ค. 69', '', '🚑 สมชาย ใจดี'].join('\n'));
   });
 
   it('วันว่าง — ข้อความบรรทัดเดียว', () => {
@@ -226,28 +267,20 @@ describe('formatDailyDigestMessage', () => {
     );
   });
 
-  it('ไม่มีงานรออนุมัติ — ไม่มีส่วนรออนุมัติและไม่มีลิงก์', () => {
+  // งานรออนุมัติไม่ถูกเตือนทางกลุ่ม LINE อีกต่อไป (เตือนที่หน้าจอแอดมินแทน —
+  // ดู badge ข้าง "ปฏิทินปฏิบัติงาน" ใน AdminLayout) หน้าที่กรองสถานะจึงย้าย
+  // ไปอยู่ที่ผู้เรียกทั้งหมด formatter ไม่แบ่งส่วนตามสถานะแล้ว — งานที่ผู้เรียก
+  // ลืมกรองยังขึ้นเป็นบล็อกปกติ ไม่หายเงียบ (แนวเดียวกับ fallback 🔔 ของ kind
+  // เสีย: ข้อมูลนอกสัญญาต้อง "เห็นได้" ไม่ใช่ "หายเงียบ")
+  it('งานสถานะอื่นที่ผู้เรียกลืมกรอง — ขึ้นเป็นบล็อกปกติ ไม่มีหัวข้อแยกตามสถานะ', () => {
     const msg = formatDailyDigestMessage(
-      [APPROVED],
+      [{ ...BASE, id: 'p1', title: 'รับผู้ป่วยกลับบ้าน' }],
       '2026-08-06',
       'https://namphrae-portal.app'
     );
+    expect(msg).toContain('🚑 รับผู้ป่วยกลับบ้าน');
     expect(msg).not.toContain('รออนุมัติ');
     expect(msg).not.toContain('👉');
-  });
-
-  it('ไม่มี adminUrl — ส่วนรออนุมัติยังขึ้น แค่ไม่มีบรรทัดลิงก์', () => {
-    const msg = formatDailyDigestMessage([{ ...BASE, id: 'p1' }], '2026-08-06');
-    expect(msg).toContain('⏳ รออนุมัติ 1 งาน');
-    expect(msg).not.toContain('👉');
-  });
-
-  it('ไม่มีหมู่บ้าน — ไม่มีวงเล็บว่าง', () => {
-    const msg = formatDailyDigestMessage(
-      [{ ...APPROVED, village: '' }],
-      '2026-08-06'
-    );
-    expect(msg).not.toContain('()');
   });
 
   it('kind นอกตาราง (ข้อมูลเสียจาก storage) — fallback 🔔 ไม่ใช่ undefined', () => {
@@ -285,62 +318,31 @@ describe('formatDailyDigestMessage', () => {
     expect(msg).toMatch(/…และอีก \d+ งาน$/);
   });
 
-  // งาน 2 เทสต์ truncation ข้างบนใช้ approved ล้วน — ไม่เคยตรึง interaction
-  // ระหว่างการตัดท้ายกับ section รออนุมัติ เทสต์นี้ผสม approved 150 + pending
-  // 150 (pending อยู่ท้าย array ตามลำดับที่ listJobs ส่งมาจริง เพราะ pending
-  // ถูกสร้างทีหลังในวันเดียวกันมักมี time/createdAt ท้ายแถว) แล้ว "อ่านตัวเลข
-  // จากข้อความจริง" ด้วย regex/นับบรรทัด ไม่ hardcode ค่าที่คำนวณเอง — กัน
-  // คนอนาคต refactor `pending.length` (นับจาก `shown` หลังตัดแล้ว) กลับไปนับ
-  // จากรายการ pending เต็มก่อนตัด ซึ่งจะทำให้หัวข้อ "⏳ รออนุมัติ N งาน" ไม่
-  // ตรงกับจำนวนบรรทัดที่แสดงจริงอีกต่อไป
-  it('ตัดบางส่วนโดยมี pending ปนอยู่ — ตัวเลขหัว pending และ …และอีก ตรงกับจำนวนบรรทัดจริงในข้อความ', () => {
-    // approved สั้นและน้อย (30 งาน) เพื่อให้อยู่ครบไม่โดนตัด — ตัวแปรของเทสต์
-    // นี้ต้องเป็น pending ที่โดนตัดบางส่วน ไม่ใช่ approved ปนด้วย (สองเทสต์
-    // ข้างบนวัด approved ล้วนไปแล้ว)
-    const approvedJobs: CalendarJob[] = Array.from({ length: 30 }, (_, i) => ({
+  // สองเทสต์ข้างบนดูแค่ว่าข้อความไม่เกินเพดานและมีบรรทัดปิด — ไม่เคยตรวจว่า
+  // ตัวเลข N ใน "…และอีก N งาน" ตรงกับจำนวนงานที่หายไปจริง เทสต์นี้ "อ่าน
+  // ตัวเลขจากข้อความจริง" แล้วนับบรรทัดหัวบล็อกเทียบ ไม่ hardcode ค่าที่
+  // คำนวณเอง — บล็อกข้อมูลเต็มยาวหลายบรรทัดต่องาน การนับพลาดเป็นไปได้ง่ายกว่า
+  // ตอนที่งานหนึ่งงานเท่ากับหนึ่งบรรทัด
+  it('ตัดบางส่วน — ตัวเลขใน “…และอีก N งาน” ตรงกับจำนวนบล็อกที่หายไปจริง', () => {
+    const jobs: CalendarJob[] = Array.from({ length: 300 }, (_, i) => ({
       ...APPROVED,
       id: `a${i}`,
-      title: `งานอนุมัติ ${i}`,
+      title: `งานทดสอบข้อความยาวลำดับที่ ${i} ของวันพรุ่งนี้`,
     }));
-    const pendingJobs: CalendarJob[] = Array.from({ length: 270 }, (_, i) => ({
-      ...BASE,
-      id: `p${i}`,
-      title: `งานรออนุมัติลำดับที่ ${i} ของวันพรุ่งนี้ที่ยาวพอจะดันข้อความเกินเพดาน`,
-    }));
-    const jobs = [...approvedJobs, ...pendingJobs];
     const msg = formatDailyDigestMessage(
       jobs,
       '2026-08-06',
       'https://namphrae-portal.app'
     );
-    expect(msg.length).toBeLessThanOrEqual(5000);
 
     const restMatch = msg.match(/…และอีก (\d+) งาน/);
     expect(restMatch).not.toBeNull();
     const rest = Number(restMatch![1]);
 
-    // ทุกงานใน fixture นี้เป็น kind: 'ems' → ทุกบรรทัดงานที่แสดงจริง (ทั้ง
-    // approved และ pending) ขึ้นต้นด้วย 🚑 เสมอ นับได้ตรง ๆ จากข้อความ
-    const totalShownLines = msg
-      .split('\n')
-      .filter((l) => l.startsWith('🚑')).length;
-    expect(jobs.length - rest).toBe(totalShownLines);
-
-    const pendingSection = msg.split('\n\n').find((s) => s.startsWith('⏳'));
-    expect(pendingSection).toBeDefined();
-    const headerMatch = pendingSection!.match(/^⏳ รออนุมัติ (\d+) งาน/);
-    expect(headerMatch).not.toBeNull();
-    const headerCount = Number(headerMatch![1]);
-    const pendingLinesShown = pendingSection!
-      .split('\n')
-      .filter((l) => l.startsWith('🚑')).length;
-    expect(headerCount).toBe(pendingLinesShown);
-
-    // เทสต์พิสูจน์ตัวเองว่าจับ interaction ได้จริง: ต้องมี truncation เกิดขึ้น
-    // (rest > 0) และ pending ต้องโดนตัดบางส่วนจริง (ไม่ใช่ครบ 150 หรือ 0)
-    // ไม่งั้นเทสต์นี้ไม่ได้ทดสอบอะไรที่ต่างจากสองเทสต์ข้างบน
-    expect(rest).toBeGreaterThan(0);
-    expect(pendingLinesShown).toBeGreaterThan(0);
-    expect(pendingLinesShown).toBeLessThan(270);
+    // ทุกงานใน fixture นี้เป็น kind: 'ems' → บรรทัดแรกของทุกบล็อกขึ้นต้นด้วย
+    // 🚑 เสมอ (บรรทัดอื่นในบล็อกขึ้นด้วย 🕐/🏠/➤/☎) นับบล็อกได้ตรง ๆ
+    const shownBlocks = msg.split('\n').filter((l) => l.startsWith('🚑')).length;
+    expect(jobs.length - rest).toBe(shownBlocks);
+    expect(rest).toBeGreaterThan(0); // เทสต์พิสูจน์ตัวเองว่ามีการตัดเกิดขึ้นจริง
   });
 });

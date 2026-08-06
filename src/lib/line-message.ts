@@ -45,17 +45,38 @@ export function formatNewJobMessage(job: CalendarJob, adminUrl?: string): string
 // เพดานข้อความ text ของ LINE Messaging API — เกินแล้ว push ทั้งก้อนโดน 400
 const LINE_TEXT_LIMIT = 5000;
 
-function digestJobLine(job: CalendarJob): string {
-  const head = `${KIND_EMOJI[job.kind] ?? '🔔'} ${job.time} ${job.title}`;
-  return job.village ? `${head} (${job.village})` : head;
+/** งานหนึ่งงานในสรุปประจำวัน = บล็อกหลายบรรทัด ไม่ใช่บรรทัดเดียวย่อ ๆ
+ *
+ * เจ้าหน้าที่ในกลุ่มต้องโทรหาคนไข้และรู้เส้นทางได้จากข้อความเลย — ย่อเหลือ
+ * บรรทัดเดียวแล้วทุกคนต้องเปิดพอร์ทัลต่อ ซึ่งเสียเวลากว่าข้อความยาวขึ้นหน่อย
+ * ฟิลด์ที่เว้นว่าง (หรือหายไปเพราะข้อมูลไม่ผ่าน Zod) ข้ามทั้งบรรทัด แนวเดียว
+ * กับ formatNewJobMessage — ไม่ทิ้งบรรทัดเปล่าหรือ "undefined" ไว้ในบล็อก
+ */
+function digestJobBlock(job: CalendarJob): string {
+  const lines = [`${KIND_EMOJI[job.kind] ?? '🔔'} ${job.title}`];
+
+  if (job.time) lines.push(`🕐 เวลา: ${job.time} น.`);
+  if (job.village) lines.push(`🏠 ${job.village}`);
+  if (job.origin || job.destination) {
+    lines.push(`➤ ${job.origin || '-'} → ${job.destination || '-'}`);
+  }
+  if (job.phone) lines.push(`☎ ${job.phone}`);
+  if (job.note) lines.push(`📝 ${job.note}`);
+
+  return lines.join('\n');
 }
 
 /** สรุปตารางงานพรุ่งนี้ ส่งเข้ากลุ่มทุก 17:00 (ดู /api/cron/daily-digest)
  *
- * @param jobs งานของวันนั้นสถานะ approved + pending เรียงลำดับแล้ว (listJobs
- * เรียง (date, time, createdAt, id) มาให้อยู่แล้ว) — ฟังก์ชันนี้ไม่กรอง/ไม่ sort
- * @param adminUrl origin ของพอร์ทัล — ไม่ใส่ก็ไม่มีบรรทัดลิงก์ (แนวเดียวกับ
- * formatNewJobMessage)
+ * งานรออนุมัติจงใจไม่อยู่ในนี้ — กลุ่ม LINE เป็นของเจ้าหน้าที่หน้างานที่ต้องรู้
+ * ว่าพรุ่งนี้ต้องไปไหนบ้าง ไม่ใช่ที่ทวงงานค้างของแอดมิน การทวงย้ายไปอยู่ที่หน้า
+ * จอหลังบ้านแทน (badge ข้าง "ปฏิทินปฏิบัติงาน" ใน AdminLayout)
+ *
+ * @param jobs งานของวันนั้นที่ผู้เรียกกรองสถานะมาแล้ว (ดู /api/cron/daily-digest)
+ * เรียงลำดับแล้ว (listJobs เรียง (date, time, createdAt, id) มาให้อยู่แล้ว) —
+ * ฟังก์ชันนี้ไม่กรอง/ไม่ sort
+ * @param adminUrl origin ของพอร์ทัล — ใช้เฉพาะบรรทัดปิดตอนข้อความยาวเกินเพดาน
+ * จนต้องตัดงานท้าย ๆ ออก ไม่ใส่ก็ไม่มีลิงก์ (แนวเดียวกับ formatNewJobMessage)
  */
 export function formatDailyDigestMessage(
   jobs: CalendarJob[],
@@ -69,27 +90,16 @@ export function formatDailyDigestMessage(
   // ประกอบจากงาน count รายการแรก — ถ้ายาวเกินเพดาน ตัดงานท้าย ๆ ออกทีละงาน
   // แล้วปิดด้วยบรรทัด "…และอีก N งาน" แทนการปล่อยให้ LINE ปฏิเสธทั้งข้อความ
   const build = (count: number): string => {
-    const shown = jobs.slice(0, count);
-    // จงใจใช้ `!== 'pending'` ไม่ใช่ `=== 'approved'` — ถ้าผู้เรียกลืมกรอง
-    // แล้วมีงาน done/cancelled หลุดเข้ามา (นอกสัญญาของฟังก์ชันนี้) ให้มันโผล่
-    // ในส่วนงาน "อนุมัติแล้ว" แบบเพี้ยน ดีกว่าใช้ `=== 'approved'` ที่จะกรอง
-    // งานพวกนี้ทิ้งเงียบ ๆ จนหายไปจากข้อความทั้งที่ listJobs ส่งมาจริง —
-    // แนวเดียวกับ fallback 🔔 ของ kind เสีย: ข้อมูลนอกสัญญาต้อง "เห็นได้" ไม่ใช่
-    // "หายเงียบ"
-    const approved = shown.filter((j) => j.status !== 'pending');
-    const pending = shown.filter((j) => j.status === 'pending');
-
+    // ไม่แบ่งส่วนตามสถานะ — ผู้เรียกกรองมาแล้ว งานที่หลุดเข้ามานอกสัญญายังขึ้น
+    // เป็นบล็อกปกติ ไม่ถูกกรองทิ้งเงียบ ๆ (แนวเดียวกับ fallback 🔔 ของ kind
+    // เสีย: ข้อมูลนอกสัญญาต้อง "เห็นได้" ไม่ใช่ "หายเงียบ")
+    //
+    // ทุกบล็อกคั่นด้วยบรรทัดว่างเสมอ (join '\n\n' ทีเดียวตอนท้าย) — งานหนึ่ง
+    // งานกินหลายบรรทัดแล้ว ถ้าไม่คั่นจะอ่านไม่ออกว่าบรรทัดไหนของใคร
     const sections: string[] = [
-      [`📋 ตารางงานพรุ่งนี้ — ${dateLabel}`, ...approved.map(digestJobLine)].join('\n'),
+      `📋 ตารางงานพรุ่งนี้ — ${dateLabel}`,
+      ...jobs.slice(0, count).map(digestJobBlock),
     ];
-    if (pending.length > 0) {
-      const lines = [
-        `⏳ รออนุมัติ ${pending.length} งาน — รีบอนุมัติก่อนถึงวันงาน`,
-        ...pending.map(digestJobLine),
-      ];
-      if (adminUrl) lines.push(`👉 ${adminUrl}/admin/calendar`);
-      sections.push(lines.join('\n'));
-    }
     if (count < jobs.length) {
       const rest = jobs.length - count;
       sections.push(
@@ -101,11 +111,9 @@ export function formatDailyDigestMessage(
     return sections.join('\n\n');
   };
 
-  // trade-off ที่ยอมรับ: ในเคสสุดขั้ว (งานเยอะจนต้องตัดจน pending ทั้งหมดหลุด
-  // ออกจาก `shown`) section "รออนุมัติ" จะหายไปทั้ง section เหลือแค่บรรทัด
-  // "…และอีก N งาน" ปิดท้าย — ยอมรับเพราะต้องมีงานวันเดียวเกิน 5,000
-  // ตัวอักษรถึงจะเกิด ซึ่งไม่เกิดจริงในสเกลของเทศบาล และลิงก์ในบรรทัดปิดยัง
-  // พาไปดูงานที่ถูกตัดออก (รวมถึง pending) ได้ครบอยู่ดี
+  // บล็อกข้อมูลเต็มกินพื้นที่ราว 5 เท่าของรูปแบบบรรทัดเดียวเดิม เพดาน 5,000
+  // ตัวอักษรจึงเต็มที่งานราว 30–40 งานต่อวัน (เดิมหลายร้อย) — ยังห่างจากสเกล
+  // จริงของเทศบาลมาก และเกินเมื่อไรก็ตัดท้ายพร้อมลิงก์ไปดูส่วนที่เหลือ
   for (let count = jobs.length; count > 1; count--) {
     const msg = build(count);
     if (msg.length <= LINE_TEXT_LIMIT) return msg;
