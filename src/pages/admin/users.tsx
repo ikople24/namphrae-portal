@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getMemberSsrProps } from '@/lib/auth-server';
@@ -47,6 +47,15 @@ function SignupQueue() {
     '/api/admin/signups',
     adminFetcher
   );
+  // ดึงรายชื่อสมาชิกมาด้วย (SWR dedupe กับแท็บสมาชิก) เพื่อทำ role suggestions
+  const { data: membersData } = useSWR<{ members: RegistryMember[] }>(
+    '/api/admin/users',
+    adminFetcher
+  );
+  const roleOptions = [
+    ...new Set((membersData?.members ?? []).map((m) => m.role).filter(Boolean)),
+  ];
+  const { mutate: globalMutate } = useSWRConfig();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -58,6 +67,8 @@ function SignupQueue() {
     try {
       await fn();
       await mutate();
+      // แก้ badge ค้างที่แถบข้าง (AdminLayout ใช้คีย์นี้แยกจาก /api/admin/signups)
+      await globalMutate('/api/admin/signups?countOnly=1');
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'ดำเนินการไม่สำเร็จ');
     } finally {
@@ -76,6 +87,11 @@ function SignupQueue() {
   return (
     <div className="flex flex-col gap-4">
       {actionError ? <p className="text-sm text-red-600">{actionError}</p> : null}
+      <datalist id="role-suggestions">
+        {roleOptions.map((r) => (
+          <option key={r} value={r} />
+        ))}
+      </datalist>
       {data.signups.map((s) => (
         <div key={s.id} className="rounded-2xl border border-black/[0.07] bg-white p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -93,6 +109,7 @@ function SignupQueue() {
               type="text"
               aria-label="role"
               placeholder="role (เช่น staff)"
+              list="role-suggestions"
               value={roles[s.id] ?? ''}
               onChange={(e) => setRoles({ ...roles, [s.id]: e.target.value })}
               className="w-40 rounded-xl border border-black/[0.12] px-3 py-1.5 text-sm outline-none focus:border-emerald"

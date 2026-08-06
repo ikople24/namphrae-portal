@@ -106,7 +106,7 @@ export async function getLatestSignupByClerkId(
 
 export async function listPendingSignups(): Promise<SignupApplication[]> {
   const col = await signupsCollection();
-  const docs = await col.find({ status: 'pending' }).sort({ appliedAt: 1 }).toArray();
+  const docs = await col.find({ status: 'pending' }).sort({ appliedAt: -1 }).toArray();
   return docs.map(serialize);
 }
 

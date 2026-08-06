@@ -26,7 +26,7 @@ export const memberPatchSchema = z
     name: z.string().trim().min(1).max(200).optional(),
     position: z.string().trim().max(200).optional(),
     department: z.string().trim().max(200).optional(),
-    role: z.string().trim().max(100).optional(),
+    role: z.string().trim().min(1).max(100).optional(),
     phone: z.string().trim().max(50).optional(),
     isActive: z.boolean().optional(),
   })

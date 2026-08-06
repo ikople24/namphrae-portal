@@ -64,4 +64,9 @@ describe('memberPatchSchema', () => {
   it('rejects unknown-typed values', () => {
     expect(memberPatchSchema.safeParse({ isActive: 'no' }).success).toBe(false);
   });
+
+  it('rejects blanking role', () => {
+    expect(memberPatchSchema.safeParse({ role: '' }).success).toBe(false);
+    expect(memberPatchSchema.safeParse({ role: '  ' }).success).toBe(false);
+  });
 });
