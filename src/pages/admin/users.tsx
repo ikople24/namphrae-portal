@@ -8,9 +8,12 @@ import {
   approveSignupRequest,
   rejectSignupRequest,
   updateMember,
+  updateMemberAccess,
+  type MemberWithAccess,
   type SignupListResponse,
 } from '@/lib/admin-api';
 import type { RegistryMember } from '@/lib/registry-user';
+import { FEATURE_LABELS } from '@/lib/user-access';
 
 // จัดการผู้ใช้: แท็บคิวผู้สมัคร (อนุมัติ/ปฏิเสธ) + แท็บสมาชิก (แก้ไข/
 // เปิด-ปิดการใช้งาน). ทุก mutation จบด้วย mutate() ให้ SWR ดึงสถานะจริง
@@ -48,7 +51,7 @@ function SignupQueue() {
     adminFetcher
   );
   // ดึงรายชื่อสมาชิกมาด้วย (SWR dedupe กับแท็บสมาชิก) เพื่อทำ role suggestions
-  const { data: membersData } = useSWR<{ members: RegistryMember[] }>(
+  const { data: membersData } = useSWR<{ members: MemberWithAccess[] }>(
     '/api/admin/users',
     adminFetcher
   );
@@ -158,7 +161,7 @@ function MembersTable() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
 
-  const { data, error, mutate } = useSWR<{ members: RegistryMember[] }>(
+  const { data, error, mutate } = useSWR<{ members: MemberWithAccess[] }>(
     '/api/admin/users',
     adminFetcher,
     // ระหว่างแก้ไขแถวอยู่ ห้าม revalidate ทับ — ไม่งั้นกดบันทึกแล้ว snapshot เก่า
@@ -288,6 +291,69 @@ function MembersTable() {
               </div>
             </div>
           )}
+          {editing?.id !== m.id ? (
+            m.access ? (
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-black/[0.06] pt-3">
+                <span className="text-xs font-semibold text-ink-soft">สิทธิ์เข้าใช้:</span>
+                {FEATURE_LABELS.map(({ key, label }) => (
+                  <label
+                    key={key}
+                    className={`flex items-center gap-1.5 text-xs ${
+                      m.access!.isManager ? 'text-ink-mute' : 'text-ink-soft'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={m.access!.isManager || busyId === m.id}
+                      checked={m.access!.isManager || m.access!.features.includes(key)}
+                      onChange={(e) =>
+                        void run(m.id, () =>
+                          updateMemberAccess(m.id, {
+                            features: e.target.checked
+                              ? [...m.access!.features, key]
+                              : m.access!.features.filter((f) => f !== key),
+                          })
+                        )
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+                <label className="ml-auto flex items-center gap-1.5 text-xs font-medium text-ink">
+                  <input
+                    type="checkbox"
+                    disabled={m.isEnvManager || busyId === m.id}
+                    checked={m.access!.isManager}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      if (
+                        !next &&
+                        !window.confirm(`ถอดสถานะผู้จัดการของ "${m.name}" ?`)
+                      ) {
+                        return;
+                      }
+                      void run(m.id, () =>
+                        updateMemberAccess(m.id, { isManager: next })
+                      );
+                    }}
+                  />
+                  ผู้จัดการ
+                  {m.isEnvManager ? (
+                    <span
+                      title="ผู้จัดการหลัก กำหนดจากตัวแปรระบบ ถอดจากหน้านี้ไม่ได้"
+                      className="rounded-full bg-green-050 px-2 py-px text-[10px] font-medium text-green-deep"
+                    >
+                      หลัก
+                    </span>
+                  ) : null}
+                </label>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-ink-mute">
+                บัญชีนี้ไม่มี clerkId — กำหนดสิทธิ์จากพอร์ทัลไม่ได้
+              </p>
+            )
+          ) : null}
         </div>
       ))}
     </div>

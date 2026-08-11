@@ -9,7 +9,9 @@ import type {
 import type { JobInput, LinkInput } from '@/lib/schema';
 import type { SignupApplication } from '@/lib/signups';
 import type { RegistryMember } from '@/lib/registry-user';
+import type { AccessPatchBody } from '@/lib/user-schema';
 import type { MemberPatchBody } from '@/lib/user-schema';
+import type { ResolvedAccess } from '@/lib/user-access';
 
 // Thin client wrappers around the /api/admin endpoints. Each throws on failure
 // with a message suitable for a toast/inline error.
@@ -297,6 +299,26 @@ export async function updateMember(
 ): Promise<RegistryMember> {
   return jsonOrThrow(
     await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+  );
+}
+
+// GET /api/admin/users คืนสมาชิกพร้อมสิทธิ์ที่ resolve แล้ว (access = null เมื่อ
+// registry doc ไม่มี clerkId — กำหนดสิทธิ์จากพอร์ทัลไม่ได้)
+export type MemberWithAccess = RegistryMember & {
+  access: ResolvedAccess | null;
+  isEnvManager: boolean;
+};
+
+export async function updateMemberAccess(
+  id: string,
+  patch: AccessPatchBody
+): Promise<{ ok: boolean }> {
+  return jsonOrThrow(
+    await fetch(`/api/admin/users/${encodeURIComponent(id)}/access`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch),
