@@ -2,7 +2,7 @@ import Link from 'next/link';
 import AdminLayout from '@/components/admin/AdminLayout';
 import JobForm from '@/components/admin/JobForm';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 
 function NewJobPage() {
   return (
@@ -18,6 +18,6 @@ function NewJobPage() {
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('calendar');
 
 export default withMemberGuard(NewJobPage);

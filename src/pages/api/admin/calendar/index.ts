@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { countJobs, createJob, listJobs } from '@/lib/jobs-store';
 import { pushNewJobNotice } from '@/lib/line';
 import { jobInputSchema, jobStatusSchema } from '@/lib/schema';
@@ -12,7 +12,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'calendar');
   if (!admin) return;
 
   if (req.method === 'GET') {

@@ -6,7 +6,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import MonthGrid from '@/components/MonthGrid';
 import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
   adminCalendarKey,
   adminFetcher,
@@ -293,6 +293,6 @@ function JobTable({
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('calendar');
 
 export default withMemberGuard(AdminCalendarPage);

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import useSWR, { type KeyedMutator } from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import ImageUploadField from '@/components/admin/ImageUploadField';
 import Icon from '@/components/Icon';
 import {
@@ -401,6 +401,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('settings');
 
 export default withMemberGuard(SettingsPage);

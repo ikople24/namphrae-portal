@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import { adminFetcher, updateCategories } from '@/lib/admin-api';
 import { categorySchema } from '@/lib/schema';
 import { CATEGORY_COLORS, accentOf } from '@/lib/category-accent';
@@ -251,6 +251,6 @@ function CategoriesPage() {
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('categories');
 
 export default withMemberGuard(CategoriesPage);

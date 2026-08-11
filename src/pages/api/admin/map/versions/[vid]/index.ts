@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { destroyRawAsset } from '@/lib/cloudinary';
 import { getVersion, patchVersion } from '@/lib/map-store';
 
@@ -9,7 +9,7 @@ import { getVersion, patchVersion } from '@/lib/map-store';
 // ผลตรวจเป็นอย่างไรคือร่องรอยของงานราชการ ห้ามหายไปพร้อมไฟล์ ส่วนตัวไฟล์เต็ม
 // ถูกลบทิ้งจริงเพราะร่างที่ถูกทิ้งไม่มีทางถูกเผยแพร่ได้อีก
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   if (req.method !== 'DELETE') {

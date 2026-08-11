@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { getLayer, listVersions, patchLayer } from '@/lib/map-store';
 import { layerPatchSchema } from '@/lib/schema';
 
@@ -10,7 +10,7 @@ import { layerPatchSchema } from '@/lib/schema';
 // ด้วยว่ามีเวอร์ชันที่เผยแพร่อยู่ค้างด้วยนโยบายเก่าหรือไม่ ไม่งั้นเจ้าหน้าที่จะปิด
 // ฟิลด์ PII แล้วเข้าใจว่ามันหายจากอินเทอร์เน็ตทันที ซึ่งไม่จริง
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   const id = String(req.query.id);

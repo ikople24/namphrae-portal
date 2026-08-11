@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { isCloudinaryConfigured, signedRawUrl } from '@/lib/cloudinary';
 import { getVersion } from '@/lib/map-store';
 
@@ -11,7 +11,7 @@ const TTL_SECONDS = 300;
 // และไฟล์แปลงที่ดินหนัก ~7 MB การตัดสินใจเรื่องสิทธิ์เกิดที่นี่ ส่วนการส่งไบต์
 // เป็นงานของ Cloudinary
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   if (req.method !== 'GET') {

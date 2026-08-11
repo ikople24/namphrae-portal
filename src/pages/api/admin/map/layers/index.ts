@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { listLayers, listVersions } from '@/lib/map-store';
 import type { MapLayer, MapLayerVersion } from '@/types/map';
 
@@ -13,7 +13,7 @@ export type AdminLayerRow = {
 // ทุกเลเยอร์พร้อมเวอร์ชันที่เผยแพร่อยู่และร่างที่ค้าง — หน้า /admin/map ใช้ก้อนนี้
 // ก้อนเดียววาดการ์ดได้ครบ ไม่ต้องยิงต่อเลเยอร์
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   if (req.method !== 'GET') {

@@ -1,6 +1,6 @@
 // src/pages/api/admin/signups/[id]/reject.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireManager } from '@/lib/auth-server';
 import { isMongoConfigured } from '@/lib/mongodb';
 import { rejectBodySchema } from '@/lib/user-schema';
 import { rejectSignup } from '@/lib/signups-store';
@@ -11,7 +11,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireManager(req, res);
   if (!admin) return;
 
   if (req.method !== 'POST') {

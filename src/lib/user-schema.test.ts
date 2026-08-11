@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  accessPatchSchema,
   applyInputSchema,
   approveBodySchema,
   memberPatchSchema,
@@ -68,5 +69,19 @@ describe('memberPatchSchema', () => {
   it('rejects blanking role', () => {
     expect(memberPatchSchema.safeParse({ role: '' }).success).toBe(false);
     expect(memberPatchSchema.safeParse({ role: '  ' }).success).toBe(false);
+  });
+});
+
+describe('accessPatchSchema', () => {
+  it('รับ features อย่างเดียว หรือ isManager อย่างเดียว', () => {
+    expect(accessPatchSchema.safeParse({ features: ['calendar', 'map'] }).success).toBe(true);
+    expect(accessPatchSchema.safeParse({ isManager: true }).success).toBe(true);
+    expect(accessPatchSchema.safeParse({ features: [] }).success).toBe(true);
+  });
+
+  it('ปฏิเสธ object ว่าง และ feature key ที่ไม่รู้จัก', () => {
+    expect(accessPatchSchema.safeParse({}).success).toBe(false);
+    expect(accessPatchSchema.safeParse({ features: ['hack'] }).success).toBe(false);
+    expect(accessPatchSchema.safeParse({ isManager: 'yes' }).success).toBe(false);
   });
 });

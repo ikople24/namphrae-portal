@@ -4,7 +4,7 @@ import useSWR from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import JobForm from '@/components/admin/JobForm';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import { adminFetcher } from '@/lib/admin-api';
 import type { JobInput } from '@/lib/schema';
 import type { CalendarJob } from '@/types/portal';
@@ -65,6 +65,6 @@ function EditJobPage() {
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('calendar');
 
 export default withMemberGuard(EditJobPage);

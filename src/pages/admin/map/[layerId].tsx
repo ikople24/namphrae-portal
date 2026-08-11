@@ -6,7 +6,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import PublicFieldPicker from '@/components/admin/PublicFieldPicker';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
   downloadUrl,
   mapFetcher,
@@ -15,7 +15,7 @@ import {
 } from '@/lib/map-api';
 import type { MapLayer, MapLayerVersion, VersionStatus } from '@/types/map';
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('map');
 
 const STATUS_LABEL: Record<VersionStatus, string> = {
   draft: 'ร่าง',

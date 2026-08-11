@@ -1,7 +1,7 @@
 // src/pages/api/admin/users/[id].ts
 import { ObjectId } from 'mongodb';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireManager } from '@/lib/auth-server';
 import { getUsersDb, isMongoConfigured } from '@/lib/mongodb';
 import { buildMemberPatch, serializeMember } from '@/lib/registry-user';
 import { memberPatchSchema } from '@/lib/user-schema';
@@ -13,7 +13,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireManager(req, res);
   if (!admin) return;
 
   if (req.method !== 'PATCH') {

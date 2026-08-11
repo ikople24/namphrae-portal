@@ -3,6 +3,14 @@ import { isClerkConfigured } from '@/lib/clerk-config';
 import { getUsersDb, isMongoConfigured } from '@/lib/mongodb';
 import { allowAdminWithoutRegistry } from '@/lib/admin-registry-gate';
 import { activeRegistryFilter } from '@/lib/registry-user';
+import {
+  FEATURES,
+  firstAllowedPath,
+  hasFeature,
+  resolveAccess,
+  type FeatureKey,
+} from '@/lib/user-access';
+import { getAccessDoc } from '@/lib/user-access-store';
 
 // SERVER ONLY. Import this only from API routes / getServerSideProps — it pulls
 // in @clerk/nextjs/server. For client-safe env checks use '@/lib/clerk-config'.
@@ -16,7 +24,12 @@ import { activeRegistryFilter } from '@/lib/registry-user';
 
 export { isClerkConfigured } from '@/lib/clerk-config';
 
-export type AdminIdentity = { userId: string; email?: string };
+export type AdminIdentity = {
+  userId: string;
+  email?: string;
+  features: FeatureKey[];
+  isManager: boolean;
+};
 
 type AuthCheck =
   | { ok: true; identity: AdminIdentity }
@@ -26,7 +39,16 @@ export async function checkAdmin(
   req: NextApiRequest | GetServerSidePropsContext['req']
 ): Promise<AuthCheck> {
   if (!isClerkConfigured()) {
-    return { ok: true, identity: { userId: 'dev-open', email: 'dev@local' } }; // dev-open mode
+    // dev-open mode — เปิดครบทุกสิทธิ์ให้ทดสอบได้โดยไม่ตั้งค่าอะไรเลย
+    return {
+      ok: true,
+      identity: {
+        userId: 'dev-open',
+        email: 'dev@local',
+        features: [...FEATURES],
+        isManager: true,
+      },
+    };
   }
 
   const { getAuth } = await import('@clerk/nextjs/server');
@@ -46,7 +68,10 @@ export async function checkAdmin(
       return { ok: false, status: 403 };
     }
     console.warn('checkAdmin: Clerk configured but Mongo is not — registry gate skipped (dev)');
-    return { ok: true, identity: { userId } };
+    return {
+      ok: true,
+      identity: { userId, features: [...FEATURES], isManager: true },
+    };
   }
 
   try {
@@ -56,7 +81,14 @@ export async function checkAdmin(
       .findOne(activeRegistryFilter(userId), { projection: { email: 1, name: 1 } });
     if (!user) return { ok: false, status: 403 };
     const email = (user.email ?? user.name) as string | undefined;
-    return { ok: true, identity: { userId, email } };
+    // ชั้นสิทธิ์ของ Portal เอง (namphrae_portal.userAccess) — อยู่ใน try เดียว
+    // กับ registry: อ่านพลาดเมื่อไหร่ก็ fail closed แบบเดียวกัน
+    const access = resolveAccess({
+      doc: await getAccessDoc(userId),
+      clerkId: userId,
+      managerEnvId: process.env.PORTAL_MANAGER_CLERK_ID,
+    });
+    return { ok: true, identity: { userId, email, ...access } };
   } catch (err) {
     console.error('checkAdmin: registry lookup failed', err);
     return { ok: false, status: 403 }; // registry unreachable → fail closed
@@ -84,22 +116,71 @@ export async function requireAdmin(
   return check.identity;
 }
 
-/**
- * SSR guard for /admin pages. Pages export this as getServerSideProps and wrap
- * their component in withMemberGuard (src/components/admin/MemberGuard.tsx),
- * which renders an access-denied screen when `member` is false.
- *
- * A signed-in visitor who is not (or no longer) an active member is redirected
- * to /apply — the application flow — instead of a dead-end screen. 401 keeps
- * the AccessDenied fallback (the proxy normally redirects signed-out visitors
- * to /sign-in before they reach here).
- */
-export const getMemberSsrProps: GetServerSideProps<{ member: boolean }> = async (
-  ctx
-) => {
-  const check = await checkAdmin(ctx.req);
-  if (!check.ok && check.status === 403 && isClerkConfigured()) {
-    return { redirect: { destination: '/apply', permanent: false } };
+/** Guard API ตามฟีเจอร์: สมาชิกที่ไม่ได้รับฟีเจอร์นั้น → 403 feature_denied */
+export async function requireFeature(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  feature: FeatureKey
+): Promise<AdminIdentity | null> {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return null;
+  if (!hasFeature(admin, feature)) {
+    res.status(403).json({ error: 'feature_denied' });
+    return null;
   }
-  return { props: { member: check.ok } };
-};
+  return admin;
+}
+
+/** Guard API เฉพาะผู้จัดการ (จัดการสมาชิก/สิทธิ์) */
+export async function requireManager(
+  req: NextApiRequest,
+  res: NextApiResponse
+): Promise<AdminIdentity | null> {
+  const admin = await requireAdmin(req, res);
+  if (!admin) return null;
+  if (!admin.isManager) {
+    res.status(403).json({ error: 'manager_only' });
+    return null;
+  }
+  return admin;
+}
+
+export type AdminPageProps = { member: boolean; forbidden?: boolean };
+
+/**
+ * SSR guard ของหน้า /admin. Pages export ตัวนี้เป็น getServerSideProps และห่อ
+ * component ด้วย withMemberGuard (src/components/admin/MemberGuard.tsx)
+ *
+ * - ไม่ใช่สมาชิก (403 + Clerk on) → redirect /apply เหมือนเดิม; 401 คงการ์ด
+ *   AccessDenied (ปกติ proxy เด้งคนยังไม่ล็อกอินไป /sign-in ก่อนถึงตรงนี้)
+ * - เป็นสมาชิกแต่ไม่มีสิทธิ์หน้านี้ → เด้งไปหน้าแรกที่ตัวเองมีสิทธิ์ ปลายทาง
+ *   ผ่าน guard ของตัวเองเสมอเพราะ firstAllowedPath เลือกจาก features ของคน
+ *   นั้นเอง — ไม่มีลูป
+ * - ไม่มีสิทธิ์ฟีเจอร์ใดเลย → การ์ด forbidden (ห้าม redirect ไม่งั้นวนลูป)
+ */
+function buildSsrGuard(
+  allowed: (identity: AdminIdentity) => boolean
+): GetServerSideProps<AdminPageProps> {
+  return async (ctx) => {
+    const check = await checkAdmin(ctx.req);
+    if (!check.ok) {
+      if (check.status === 403 && isClerkConfigured()) {
+        return { redirect: { destination: '/apply', permanent: false } };
+      }
+      return { props: { member: false } };
+    }
+    if (allowed(check.identity)) return { props: { member: true } };
+    const destination = firstAllowedPath(check.identity);
+    if (destination) return { redirect: { destination, permanent: false } };
+    return { props: { member: true, forbidden: true } };
+  };
+}
+
+export function getFeatureSsrProps(
+  feature: FeatureKey
+): GetServerSideProps<AdminPageProps> {
+  return buildSsrGuard((identity) => hasFeature(identity, feature));
+}
+
+export const getManagerSsrProps: GetServerSideProps<AdminPageProps> =
+  buildSsrGuard((identity) => identity.isManager);

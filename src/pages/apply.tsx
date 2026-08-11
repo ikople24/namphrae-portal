@@ -6,7 +6,7 @@ import { resolveApplyState, type ApplyState } from '@/lib/signups';
 import { applyInputSchema } from '@/lib/user-schema';
 
 // สมัครเข้าใช้งานหลังบ้าน: ผู้ที่ล็อกอิน Clerk แล้วแต่ยังไม่เป็นสมาชิก
-// (getMemberSsrProps ส่งมาที่นี่แทน AccessDenied) กรอกข้อมูลเพื่อเข้าคิว
+// (SSR guard ของหน้า /admin ส่งมาที่นี่แทน AccessDenied) กรอกข้อมูลเพื่อเข้าคิว
 // รออนุมัติ — role ให้แอดมินกำหนดตอนอนุมัติ ผู้สมัครไม่ได้เลือกเอง
 type Props = { apply: ApplyState };
 

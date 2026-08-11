@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FEATURES } from '@/lib/user-access';
 
 // Zod source of truth for the signup/user-management endpoints, reused by the
 // admin forms (same pattern as src/lib/schema.ts).
@@ -34,3 +35,14 @@ export const memberPatchSchema = z
     message: 'ต้องมีอย่างน้อยหนึ่งฟิลด์',
   });
 export type MemberPatchBody = z.infer<typeof memberPatchSchema>;
+
+// PATCH /api/admin/users/[id]/access — ผู้จัดการแก้สิทธิ์รายคน
+export const accessPatchSchema = z
+  .object({
+    features: z.array(z.enum(FEATURES)).optional(),
+    isManager: z.boolean().optional(),
+  })
+  .refine((v) => v.features !== undefined || v.isManager !== undefined, {
+    message: 'ต้องมีอย่างน้อยหนึ่งฟิลด์',
+  });
+export type AccessPatchBody = z.infer<typeof accessPatchSchema>;

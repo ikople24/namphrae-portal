@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { fetchRawAsset, isCloudinaryConfigured } from '@/lib/cloudinary';
 import { collectIssueRows, toCsv } from '@/lib/map-issues';
 import { parseMapFile } from '@/lib/map-parse';
@@ -12,7 +12,7 @@ import { CHECK_CODES, type CheckCode } from '@/types/map';
 //
 // อ่านจากไฟล์เต็มซึ่งมีข้อมูลส่วนบุคคล จึงต้องผ่าน requireAdmin เสมอ
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   if (req.method !== 'GET') {

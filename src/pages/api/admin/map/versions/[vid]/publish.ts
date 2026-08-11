@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import {
   destroyRawAsset,
   fetchRawAsset,
@@ -28,7 +28,7 @@ import { LAYER_VERSIONS_KEPT, type MapPublicAsset } from '@/types/map';
 // อ้างถึง) แต่เลเยอร์ยังชี้ไปเวอร์ชันเดิมที่ใช้งานได้ ตรงข้ามกับการสลับสถานะก่อน
 // ซึ่งจะทำให้เลเยอร์ชี้ไปไฟล์ที่ยังไม่มีอยู่จริง
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   if (req.method !== 'POST') {

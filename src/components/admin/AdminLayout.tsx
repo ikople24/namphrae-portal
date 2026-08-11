@@ -13,14 +13,14 @@ import {
 } from '@/lib/admin-api';
 
 const NAV = [
-  { href: '/admin', label: 'ลิงก์บริการ', icon: 'link', exact: true },
-  { href: '/admin/calendar', label: 'ปฏิทินปฏิบัติงาน', icon: 'calendar_month', exact: false },
-  { href: '/admin/categories', label: 'หมวดหมู่', icon: 'category', exact: false },
-  { href: '/admin/map', label: 'ไฟล์แผนที่', icon: 'layers', exact: false },
-  { href: '/admin/settings', label: 'ตั้งค่าเว็บไซต์', icon: 'tune', exact: false },
-  { href: '/admin/users', label: 'จัดการผู้ใช้', icon: 'group', exact: false },
-  { href: '/admin/data', label: 'นำเข้า/ส่งออก', icon: 'swap_vert', exact: false },
-];
+  { href: '/admin', label: 'ลิงก์บริการ', icon: 'link', exact: true, feature: 'links' },
+  { href: '/admin/calendar', label: 'ปฏิทินปฏิบัติงาน', icon: 'calendar_month', exact: false, feature: 'calendar' },
+  { href: '/admin/categories', label: 'หมวดหมู่', icon: 'category', exact: false, feature: 'categories' },
+  { href: '/admin/map', label: 'ไฟล์แผนที่', icon: 'layers', exact: false, feature: 'map' },
+  { href: '/admin/settings', label: 'ตั้งค่าเว็บไซต์', icon: 'tune', exact: false, feature: 'settings' },
+  { href: '/admin/users', label: 'จัดการผู้ใช้', icon: 'group', exact: false, feature: 'manager' },
+  { href: '/admin/data', label: 'นำเข้า/ส่งออก', icon: 'swap_vert', exact: false, feature: 'data' },
+] as const;
 
 // 1d admin chrome: left sidebar (brand, icon nav, dev-open warning card) with
 // the content pane alongside. Same props API as before so every admin page
@@ -37,10 +37,35 @@ export default function AdminLayout({
   const router = useRouter();
   const clerkOn = isClerkPublicConfigured();
 
+  // User chip + สิทธิ์: ชื่อ-ตำแหน่ง + features/isManager ของคนที่ล็อกอินอยู่
+  // จากทะเบียนสมาชิก — โหลดครั้งเดียวพอ ไม่ต้อง revalidate
+  const { data: me } = useSWR<{
+    name: string | null;
+    position: string | null;
+    email: string | null;
+    features?: string[];
+    isManager?: boolean;
+  }>(clerkOn ? '/api/admin/me' : null, adminFetcher, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+  });
+
+  // dev-open เห็นครบ; Clerk on: รอ me ก่อนค่อยวาดเมนู (กันเมนูต้องห้ามแวบ)
+  const nav = !clerkOn
+    ? NAV
+    : !me
+      ? []
+      : NAV.filter((item) =>
+          item.feature === 'manager'
+            ? me.isManager === true
+            : me.isManager === true || (me.features ?? []).includes(item.feature)
+        );
+
   // Badge: จำนวนผู้สมัครที่รออนุมัติ. Refresh ทุกนาที; ถ้า endpoint พัง
   // (เช่น Mongo ไม่พร้อม) ก็แค่ไม่แสดง badge — ไม่ retry รัว ๆ
+  // เปิดเฉพาะผู้จัดการ — คนอื่นโดน 403 อยู่แล้ว ไม่ควรยิงซ้ำทุกนาที
   const { data: signupCount } = useSWR<{ pendingCount: number }>(
-    '/api/admin/signups?countOnly=1',
+    !clerkOn || me?.isManager ? '/api/admin/signups?countOnly=1' : null,
     adminFetcher,
     { refreshInterval: 60_000, shouldRetryOnError: false }
   );
@@ -50,7 +75,9 @@ export default function AdminLayout({
   // งานค้าง) การทวงจึงมาอยู่ตรงนี้แทน ต้องเห็นจากทุกหน้าหลังบ้าน ไม่ใช่เห็นต่อ
   // เมื่อเปิดหน้าปฏิทินซึ่งเป็นหน้าที่ "รู้อยู่แล้ว" ว่ามีงานค้าง
   const { data: jobCount } = useSWR<JobCountResponse>(
-    adminCalendarKey({ status: 'pending', countOnly: true }),
+    !clerkOn || me?.isManager || me?.features?.includes('calendar')
+      ? adminCalendarKey({ status: 'pending', countOnly: true })
+      : null,
     adminFetcher,
     { refreshInterval: 60_000, shouldRetryOnError: false }
   );
@@ -61,17 +88,6 @@ export default function AdminLayout({
     '/admin/users': signupCount?.pendingCount ?? 0,
     '/admin/calendar': jobCount?.count ?? 0,
   };
-
-  // User chip: ชื่อ-ตำแหน่งของคนที่ล็อกอินอยู่ จากทะเบียนสมาชิก (ไม่ใช่ชื่อใน
-  // บัญชี Clerk ซึ่งมักว่าง) — โหลดครั้งเดียวพอ ไม่ต้อง revalidate
-  const { data: me } = useSWR<{
-    name: string | null;
-    position: string | null;
-    email: string | null;
-  }>(clerkOn ? '/api/admin/me' : null, adminFetcher, {
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-  });
 
   return (
     <>
@@ -92,7 +108,7 @@ export default function AdminLayout({
           </div>
 
           <nav className="flex gap-0.5 overflow-x-auto md:flex-col">
-            {NAV.map((item) => {
+            {nav.map((item) => {
               const active = item.exact
                 ? router.pathname === item.href
                 : router.pathname.startsWith(item.href);
