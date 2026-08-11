@@ -2,7 +2,7 @@ import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getManagerSsrProps } from '@/lib/auth-server';
 import {
   adminFetcher,
   approveSignupRequest,
@@ -15,7 +15,7 @@ import type { RegistryMember } from '@/lib/registry-user';
 // จัดการผู้ใช้: แท็บคิวผู้สมัคร (อนุมัติ/ปฏิเสธ) + แท็บสมาชิก (แก้ไข/
 // เปิด-ปิดการใช้งาน). ทุก mutation จบด้วย mutate() ให้ SWR ดึงสถานะจริง
 // จากเซิร์ฟเวอร์ ไม่เดา state เอง
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getManagerSsrProps;
 
 function UsersAdminPage() {
   const [tab, setTab] = useState<'queue' | 'members'>('queue');

@@ -4,11 +4,11 @@ import useSWR from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import { mapFetcher, type AdminLayerRow } from '@/lib/map-api';
 import type { ViewerLayer } from '@/components/MapViewer';
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('map');
 
 // หมายเหตุการวางไฟล์: หน้านี้อยู่ที่ /admin/map/viewer ซึ่งเป็น segment แบบคงที่
 // จึงชนะ [layerId].tsx ตามกฎ routing ของ Next — แปลว่า "viewer" ใช้เป็น id ของ

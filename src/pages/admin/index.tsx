@@ -21,7 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import AdminLayout from '@/components/admin/AdminLayout';
 import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
   adminFetcher,
   deleteLink,
@@ -370,6 +370,6 @@ function LinkRow({
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('links');
 
 export default withMemberGuard(AdminDashboard);

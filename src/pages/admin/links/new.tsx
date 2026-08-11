@@ -2,7 +2,7 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import LinkForm from '@/components/admin/LinkForm';
 import { adminFetcher } from '@/lib/admin-api';
 import type { PortalConfig } from '@/types/portal';
@@ -27,6 +27,6 @@ function NewLinkPage() {
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('links');
 
 export default withMemberGuard(NewLinkPage);

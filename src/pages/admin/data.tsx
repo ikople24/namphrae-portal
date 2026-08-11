@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import { adminFetcher, importConfig } from '@/lib/admin-api';
 import { importConfigSchema } from '@/lib/schema';
 import type { PortalConfig } from '@/types/portal';
@@ -155,6 +155,6 @@ function DataPage() {
   );
 }
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('data');
 
 export default withMemberGuard(DataPage);

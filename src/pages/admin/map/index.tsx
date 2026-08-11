@@ -4,10 +4,10 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import MapLayerCard from '@/components/admin/MapLayerCard';
-import { getMemberSsrProps } from '@/lib/auth-server';
+import { getFeatureSsrProps } from '@/lib/auth-server';
 import { mapFetcher, type AdminLayerRow } from '@/lib/map-api';
 
-export const getServerSideProps = getMemberSsrProps;
+export const getServerSideProps = getFeatureSsrProps('map');
 
 function MapLayersPage() {
   const { data, error, isLoading, mutate } = useSWR<{ layers: AdminLayerRow[] }>(
