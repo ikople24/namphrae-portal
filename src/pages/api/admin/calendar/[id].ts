@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { canTransition } from '@/lib/job-status';
 import { deleteJob, getJob, setJobStatus, updateJob } from '@/lib/jobs-store';
 import { jobInputSchema, jobStatusSchema } from '@/lib/schema';
@@ -15,7 +15,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'calendar');
   if (!admin) return;
 
   const id = typeof req.query.id === 'string' ? req.query.id : '';

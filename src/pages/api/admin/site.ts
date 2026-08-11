@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { mutateConfig } from '@/lib/config-store';
 import { revalidateHome } from '@/lib/revalidate';
 import { siteSettingsSchema } from '@/lib/schema';
@@ -9,7 +9,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'settings');
   if (!admin) return;
 
   if (req.method !== 'PATCH') {

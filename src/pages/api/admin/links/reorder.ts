@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { mutateConfig } from '@/lib/config-store';
 import { revalidateHome } from '@/lib/revalidate';
 
@@ -12,7 +12,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'links');
   if (!admin) return;
 
   if (req.method !== 'PATCH') {

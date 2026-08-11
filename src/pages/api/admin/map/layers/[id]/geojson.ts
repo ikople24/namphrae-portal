@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import { isCloudinaryConfigured, signedRawUrl } from '@/lib/cloudinary';
 import { getLayer, getPublishedVersion } from '@/lib/map-store';
 
@@ -14,7 +14,7 @@ const TTL_SECONDS = 600;
 // Pages Router) แต่ URL มีอายุ 10 นาทีแทน 5 เพราะหน้าแผนที่อาจเปิดค้างไว้แล้วเพิ่ง
 // กดเปิดเลเยอร์ทีหลัง — สั้นกว่านี้จะเจอ 403 กลางคันโดยไม่มีอะไรอธิบาย
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   if (req.method !== 'GET') {

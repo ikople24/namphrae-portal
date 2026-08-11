@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAdmin } from '@/lib/auth-server';
+import { requireFeature } from '@/lib/auth-server';
 import {
   destroyRawAsset,
   fetchRawAsset,
@@ -25,7 +25,7 @@ import type { FeatureCollection, MapLayerVersion } from '@/types/map';
 // ไฟล์ที่ไม่ผ่านด่าน error จะถูกลบออกจาก Cloudinary ทันทีและไม่เกิดร่าง — ไม่งั้น
 // ไฟล์ที่ใช้ไม่ได้จะกองสะสมอยู่โดยไม่มีอะไรอ้างถึงและไม่มีใครรู้ว่ามันคืออะไร
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const admin = await requireAdmin(req, res);
+  const admin = await requireFeature(req, res, 'map');
   if (!admin) return;
 
   if (req.method !== 'POST') {

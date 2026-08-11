@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAdmin } from '@/lib/auth-server';
+import { hasFeature } from '@/lib/user-access';
 import { getConfig, saveConfig } from '@/lib/config-store';
 import { revalidateHome } from '@/lib/revalidate';
 import { importConfigSchema } from '@/lib/schema';
@@ -17,8 +18,13 @@ export default async function handler(
     return res.status(200).json(config);
   }
 
-  // PUT = full import (overwrite the whole document).
+  // PUT = full import (overwrite the whole document) — เป็นของฟีเจอร์ data
+  // (หน้า นำเข้า/ส่งออก) ส่วน GET เปิดให้สมาชิกทุกคนเพราะหน้า links/categories/
+  // data/settings อ่าน config ร่วมกัน
   if (req.method === 'PUT') {
+    if (!hasFeature(admin, 'data')) {
+      return res.status(403).json({ error: 'feature_denied' });
+    }
     const parsed = importConfigSchema.safeParse(req.body);
     if (!parsed.success) {
       return res

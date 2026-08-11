@@ -20,9 +20,13 @@ export default async function handler(
 
   try {
     if (!isMongoConfigured()) {
-      return res
-        .status(200)
-        .json({ name: null, position: null, email: admin.email ?? null });
+      return res.status(200).json({
+        name: null,
+        position: null,
+        email: admin.email ?? null,
+        features: admin.features,
+        isManager: admin.isManager,
+      });
     }
     const doc = await (await getUsersDb())
       .collection('users')
@@ -34,6 +38,8 @@ export default async function handler(
       position:
         typeof doc?.position === 'string' && doc.position ? doc.position : null,
       email: admin.email ?? null,
+      features: admin.features,
+      isManager: admin.isManager,
     });
   } catch (err) {
     console.error('GET /api/admin/me failed', err);
