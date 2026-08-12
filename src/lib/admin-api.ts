@@ -208,7 +208,7 @@ export type JobCountResponse = { count: number };
 // เป็นคำถามที่ชื่อฟังก์ชันควรตอบเอง ไม่ใช่ปล่อยให้ auto-import ของ editor เดา
 export async function createCalendarJob(
   input: JobInput
-): Promise<{ job: CalendarJob; lineNotified: boolean }> {
+): Promise<{ job: CalendarJob }> {
   return jsonOrThrow(
     await fetch('/api/admin/calendar', {
       method: 'POST',

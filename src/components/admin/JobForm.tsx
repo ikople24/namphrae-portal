@@ -33,7 +33,6 @@ export default function JobForm({
     ...initial,
   });
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   function set<K extends keyof JobInput>(key: K, value: JobInput[K]) {
@@ -43,7 +42,6 @@ export default function JobForm({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setWarning(null);
 
     const parsed = jobInputSchema.safeParse(form);
     if (!parsed.success) {
@@ -54,13 +52,7 @@ export default function JobForm({
     setSaving(true);
     try {
       if (mode === 'new') {
-        const { lineNotified } = await createCalendarJob(parsed.data);
-        if (!lineNotified) {
-          // งานถูกบันทึกแล้ว บอกตรง ๆ ว่าอะไรสำเร็จอะไรไม่สำเร็จ
-          setWarning('บันทึกงานแล้ว แต่ส่งแจ้งเตือน LINE ไม่สำเร็จ');
-          setSaving(false);
-          return;
-        }
+        await createCalendarJob(parsed.data);
       } else if (jobId) {
         await updateCalendarJob(jobId, parsed.data);
       }
@@ -78,19 +70,6 @@ export default function JobForm({
           {error}
         </p>
       ) : null}
-      {warning ? (
-        <p className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-800">
-          {warning}{' '}
-          <button
-            type="button"
-            onClick={() => router.push('/admin/calendar')}
-            className="font-semibold underline"
-          >
-            ไปหน้ารายการ
-          </button>
-        </p>
-      ) : null}
-
       <fieldset className="mb-4">
         <legend className="mb-1.5 block font-display text-[13px] font-medium text-ink-soft">
           ประเภทงาน

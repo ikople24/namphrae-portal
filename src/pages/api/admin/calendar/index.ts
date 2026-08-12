@@ -1,13 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireFeature } from '@/lib/auth-server';
 import { countJobs, createJob, listJobs } from '@/lib/jobs-store';
-import { pushNewJobNotice } from '@/lib/line';
 import { jobInputSchema, jobStatusSchema } from '@/lib/schema';
 import { parseMonth } from '@/lib/calendar-grid';
 import type { JobStatus } from '@/types/portal';
 
 // GET  /api/admin/calendar?month=YYYY-MM&status=pending — ข้อมูลเต็ม ทุกสถานะ
-// POST /api/admin/calendar                              — สร้างงานใหม่ + แจ้ง LINE
+// POST /api/admin/calendar                              — สร้างงานใหม่
+//
+// จงใจไม่แจ้ง LINE รายงาน — แจ้งทุกงานกินโควตาข้อความรายเดือนของ LINE OA เร็ว
+// เกินไป เหลือช่องแจ้งเตือนเดียวคือสรุปประจำวัน (/api/cron/daily-digest)
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -56,20 +58,15 @@ export default async function handler(
         .json({ error: 'invalid_job', issues: parsed.error.issues });
     }
 
-    let job;
     try {
-      job = await createJob(parsed.data, admin.email ?? admin.userId);
+      // 500 จากตรงนี้เท่ากับ "งานยังไม่ถูกบันทึก" เสมอ ต่างจาก 500 ของ
+      // GET/PATCH/DELETE ที่แค่อ่าน/แก้ของเดิมที่มีอยู่แล้วไม่สำเร็จ
+      const job = await createJob(parsed.data, admin.email ?? admin.userId);
+      return res.status(201).json({ job });
     } catch (err) {
-      // pushNewJobNotice ไม่โยน error ออกมาเลย (best-effort คืน boolean เสมอ —
-      // ดู src/lib/line.ts) catch นี้จึงเห็นได้แค่ error จาก createJob เท่านั้น
-      // นั่นแปลว่า 500 จากตรงนี้เท่ากับ "งานยังไม่ถูกบันทึก" เสมอ ต่างจาก 500
-      // ของ GET/PATCH/DELETE ที่แค่อ่าน/แก้ของเดิมที่มีอยู่แล้วไม่สำเร็จ
       console.error('POST /api/admin/calendar failed', err);
       return res.status(500).json({ error: 'server_error' });
     }
-    // บันทึกก่อน แจ้งทีหลัง และไม่ให้ผลของ LINE ย้อนกลับมาทำให้งานหาย
-    const lineNotified = await pushNewJobNotice(job);
-    return res.status(201).json({ job, lineNotified });
   }
 
   res.setHeader('Allow', 'GET, POST');

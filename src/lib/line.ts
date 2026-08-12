@@ -1,6 +1,4 @@
 import { getConfig, mutateConfig } from '@/lib/config-store';
-import { formatNewJobMessage } from '@/lib/line-message';
-import type { CalendarJob } from '@/types/portal';
 
 // ฝั่ง I/O ของ LINE — แยกจาก line-message.ts / line-signature.ts เพราะไฟล์นี้
 // import config-store ซึ่งลาก mongodb ตามมา ทำให้เทสต์ตรง ๆ ไม่ได้
@@ -45,8 +43,11 @@ export async function setLineGroupId(
 /**
  * ส่งข้อความ text เข้ากลุ่มเจ้าหน้าที่ — best effort ไม่โยน error ออกไป
  *
- * ทางส่งข้อความเดียวของระบบ ใช้ทั้งแจ้งงานใหม่ (pushNewJobNotice) และสรุป
- * ประจำวัน (/api/cron/daily-digest) — token/groupId/timeout อยู่ที่นี่ที่เดียว
+ * ทางส่งข้อความเดียวของระบบ ใช้กับสรุปประจำวัน (/api/cron/daily-digest) และ
+ * ข้อความทดสอบจาก /admin/settings — token/groupId/timeout อยู่ที่นี่ที่เดียว
+ *
+ * จงใจไม่มีแจ้งเตือนรายงานใหม่ (เคยมี — ถอดออกเพราะกินโควตาข้อความรายเดือน
+ * ของ LINE OA เร็วเกินไป เหลือสรุปประจำวันช่องทางเดียว)
  *
  * @returns true เมื่อข้อความออกไปจริง
  */
@@ -77,7 +78,7 @@ export async function pushGroupText(text: string): Promise<boolean> {
         authorization: `Bearer ${token}`,
       },
       // ไม่มีใครควรนั่งรอผลของ noti — ตั้ง timeout สั้น ๆ กัน LINE ค้างแล้วลาก
-      // request ของผู้เรียก (บันทึกงาน / cron) ให้ค้างตาม
+      // request ของผู้เรียก (cron / หน้า settings) ให้ค้างตาม
       signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         to,
@@ -93,19 +94,4 @@ export async function pushGroupText(text: string): Promise<boolean> {
     console.warn('LINE push ล้มเหลว', err);
     return false;
   }
-}
-
-/**
- * แจ้งกลุ่มเจ้าหน้าที่ว่ามีงานใหม่ — best effort เหมือน pushGroupText
- *
- * งานถูกบันทึกลงฐานข้อมูลไปแล้วก่อนถึงบรรทัดนี้ LINE ล่มจึงต้องไม่ทำให้คำขอ
- * ล้มเหลวและงานหาย ผู้เรียกเอาค่าที่คืนไปบอกผู้ใช้ว่าส่งแจ้งเตือนไม่สำเร็จ
- */
-export async function pushNewJobNotice(job: CalendarJob): Promise<boolean> {
-  // ตัด / ท้าย URL ทิ้ง — ค่าที่ก๊อปมาจากช่อง address bar มักติดมาด้วย แล้วจะได้
-  // ลิงก์ //admin/calendar ที่บาง host ยอม บาง host ตอบ 404 พังไม่เหมือนกันทุกที่
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
-  // ส่ง base URL เข้าไปให้ formatter เติมลิงก์ท้ายข้อความ — ไม่ตั้ง env ก็แค่
-  // ไม่มีบรรทัดลิงก์ ข้อความอื่นเหมือนเดิม ตัวแจ้งเตือนมีไว้ให้คนกดเข้าไปอนุมัติ
-  return pushGroupText(formatNewJobMessage(job, siteUrl));
 }
