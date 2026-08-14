@@ -32,6 +32,7 @@ import {
   nextVersionNo,
   upsertLayer,
 } from '../src/lib/map-store';
+import { closeDb } from '../src/lib/mongodb';
 import type { FeatureCollection, MapLayer } from '../src/types/map';
 
 // นำเข้าป่าชุมชนหมู่ 10 และ 11 จากซิป shapefile ครั้งแรก
@@ -186,9 +187,15 @@ async function main(): Promise<void> {
     '\nเสร็จแล้ว — ทุกเวอร์ชันอยู่ในสถานะ "ร่าง"\n' +
       'เปิด /admin/map เพื่อตรวจรายการฟิลด์ที่จะเปิดสาธารณะ แล้วกดเผยแพร่ทีละเลเยอร์\n'
   );
+
+  // ไม่ปิดด้วย process.exit() เฉย ๆ — MongoDB driver เปิด socket ค้างไว้ในพูล
+  // การเชื่อมต่อ ซึ่งกัน event loop ไม่ให้ออกเอง ต้องปิด client explicit ก่อน
+  // process ถึงจะจบเองได้ (ไม่ใช่แค่ตอนสำเร็จ — ดู catch ด้านล่างด้วย)
+  await closeDb();
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(err);
+  await closeDb();
   process.exit(1);
 });
