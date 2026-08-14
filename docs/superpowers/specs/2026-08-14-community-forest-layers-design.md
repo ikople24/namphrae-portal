@@ -161,7 +161,7 @@ sha ตรง" ของสคริปต์กับด่าน `identical` �
 
 ---
 
-## 3. `scripts/import-community-forest.ts`
+## 3. `scripts/import-community-forest.mts`
 
 ### `shpjs` รันบน Node ได้ — แต่เฉพาะทาง ESM
 
@@ -409,7 +409,7 @@ vitest เฉพาะ logic บริสุทธิ์ ไม่แตะ DB/n
 3. `src/lib/map-area.ts` + เทสต์
 4. เรียก `withArea()` ใน `map-ingest.ts` ก่อน `computeStats` (เมื่อ `layer.computeArea`)
 5. `src/lib/map-forest-prep.ts` + เทสต์
-6. `scripts/import-community-forest.ts` + `npm run import:forest`
+6. `scripts/import-community-forest.mts` + `npm run import:forest`
 7. `pointToLayer` ใน `MapViewer.tsx`
 8. `LAYER_STYLES` + `FIELD_LABELS` ใน `map-style.ts`
 9. รันสคริปต์ → ตรวจด้วยตา → เผยแพร่จาก `/admin/map`

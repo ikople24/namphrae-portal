@@ -53,7 +53,7 @@
 | `src/lib/map-ingest.test.ts` (สร้าง) | ตรึงว่า pipeline เติม area ตาม flag |
 | `src/lib/map-forest-prep.ts` (สร้าง) | แกะ/ซ่อม/แยกซิปชุดนี้ — งานเฉพาะกิจ ไม่มีใครเรียกหลังนำเข้าเสร็จ |
 | `src/lib/map-forest-prep.test.ts` (สร้าง) | เทสต์ของข้างบน |
-| `scripts/import-community-forest.ts` (สร้าง) | I/O ล้วน: อ่านซิป → อัป Cloudinary → เขียนทะเบียน |
+| `scripts/import-community-forest.mts` (สร้าง) | I/O ล้วน: อ่านซิป → อัป Cloudinary → เขียนทะเบียน |
 | `src/lib/map-style.ts` (แก้) | สี/ลำดับซ้อน/ชื่อฟิลด์ของสองเลเยอร์ใหม่ |
 | `src/components/MapViewer.tsx` (แก้) | `pointToLayer` ให้เลเยอร์ Point วาดได้ |
 | `package.json` (แก้) | `proj4`, `@types/proj4`, `npm run import:forest` |
@@ -909,12 +909,12 @@ git commit -m "feat(map): แกะและซ่อมซิปป่าชุ
 ## Task 5: สคริปต์นำเข้า
 
 **Files:**
-- Create: `scripts/import-community-forest.ts`
+- Create: `scripts/import-community-forest.mts` (**นามสกุล `.mts` ไม่ใช่ `.ts`** — ดูเหตุผลท้ายหัวข้อ)
 - Modify: `package.json` (scripts)
 
 - [ ] **Step 1: เขียนสคริปต์**
 
-สร้าง `scripts/import-community-forest.ts`:
+สร้าง `scripts/import-community-forest.mts`:
 
 ```ts
 // ต้องเป็น import แรกสุด — ดูเหตุผลใน scripts/load-env.ts
@@ -1106,7 +1106,7 @@ main().catch((err) => {
 ใน `"scripts"` เพิ่มบรรทัดต่อจาก `"import:map"`:
 
 ```json
-    "import:forest": "tsx scripts/import-community-forest.ts"
+    "import:forest": "tsx scripts/import-community-forest.mts"
 ```
 
 - [ ] **Step 3: ตรวจว่าคอมไพล์ผ่านและเทสต์ยังเขียว**
@@ -1120,7 +1120,7 @@ Expected: ไม่มี error
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/import-community-forest.ts package.json
+git add scripts/import-community-forest.mts package.json
 git commit -m "feat(map): สคริปต์นำเข้าป่าชุมชนจากซิป shapefile"
 ```
 
