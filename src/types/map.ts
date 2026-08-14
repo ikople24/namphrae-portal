@@ -106,6 +106,14 @@ export type MapLayer = {
   keyComposition: string[][]; // ตั้งได้เมื่อ keyFields.length === 1 เท่านั้น
   visibility: 'public' | 'staff';
   publicFields: string[]; // [] = เปิดแค่รูปทรง ไม่เปิด properties เลย
+  /**
+   * เติม area_rai/area_km2 ให้ทุก feature ตอน ingest — ตั้งได้เฉพาะเลเยอร์รูปปิด
+   *
+   * อยู่ที่ pipeline ไม่ใช่ที่สคริปต์นำเข้า เพราะไฟล์ที่เจ้าหน้าที่ export จาก QGIS
+   * มาลากวางเองจะไม่มีฟิลด์นี้ ถ้าให้สคริปต์เป็นคนเติม การอัปเดตครั้งถัดไปจะทำให้
+   * ตัวเลขไร่หายจากหน้าเว็บเงียบ ๆ (field-removed เป็นแค่ warning ไม่บล็อกการเผยแพร่)
+   */
+  computeArea?: boolean;
   currentVersionNo: number | null;
   order: number;
   updatedAt: string;
