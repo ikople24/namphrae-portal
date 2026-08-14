@@ -75,6 +75,7 @@
 | `keyComposition` | `[]` | `[]` |
 | `visibility` | `public` | `public` |
 | `publicFields` | `['moo', 'area_rai', 'area_km2']` | `['moo', 'point_n']` |
+| `computeArea` | `true` (ฟิลด์ใหม่) | — |
 | `MapLayer.order` | 5 | 6 |
 
 `geometryType` เป็น `Polygon` ไม่ใช่ `MultiPolygon` แบบเลเยอร์เดิม — ยืนยันจาก `shpjs` แล้วว่า
@@ -92,9 +93,15 @@
 
 ---
 
-## 2. พื้นที่ป่า — คำนวณตอนเตรียมไฟล์
+## 2. พื้นที่ป่า — คำนวณใน pipeline ไม่ใช่ในสคริปต์
 
-เพิ่มฟิลด์ `area_rai` และ `area_km2` ให้ทุก feature ของเลเยอร์ Polygon (เลเยอร์หมุดไม่มี)
+เพิ่มฟิลด์ `area_rai` และ `area_km2` ให้ทุก feature ของเลเยอร์ที่ตั้ง `computeArea: true`
+
+**ต้องอยู่ใน `ingestMapFile()` ไม่ใช่ในสคริปต์นำเข้า** เพราะถ้าสคริปต์เป็นคนเติม วันที่เจ้าหน้าที่
+export จาก QGIS มาใหม่แล้วลากวางที่ `/admin/map` ไฟล์นั้นจะไม่มี `area_rai` → ด่าน
+`field-removed` เตือนแค่ระดับ warning (ไม่บล็อก) → กดเผยแพร่ต่อได้ แล้ว**ตัวเลขไร่หายจาก
+หน้าเว็บสาธารณะเงียบ ๆ** การวางไว้ใน pipeline ทำให้ทั้งสองทางเข้า (สคริปต์กับลากวาง) ได้ผลเท่ากัน
+ซึ่งเป็นเหตุผลเดียวกับที่ `ingestMapFile` มีอยู่ตั้งแต่แรก
 
 **วิธีคำนวณ: shoelace บนพิกัด UTM zone 47N แล้วหารด้วย k0² (0.9996²)**
 
@@ -111,8 +118,6 @@
 excess ใช้รัศมีศูนย์สูตรซึ่งเกินจริงที่ละติจูด 18.7°N — 0.5% ของ 1,941 ไร่ คือ ~10 ไร่
 ซึ่งมากพอที่จะไม่ควรปัดทิ้งบนพอร์ทัลราชการ
 
-การแปลงกลับไป-กลับมาด้วย proj4 มี error ระดับต่ำกว่ามิลลิเมตร ไม่มีผลกับตัวเลขไร่
-
 **ตรวจความสมเหตุสมผลได้:** polygon หมู่ 10 มี 59 จุดยอด = จำนวนหมุด GPS 59 จุดพอดี →
 ขอบเขตลากจากหมุดที่รังวัดมาโดยตรง
 
@@ -122,6 +127,37 @@ excess ใช้รัศมีศูนย์สูตรซึ่งเกิ�
 **ผลข้างเคียงที่ตั้งใจ:** `computeStats` จะเห็น `area_rai` เป็นฟิลด์หมวดหมู่ (distinct = 2 ≤
 `CATEGORICAL_MAX`) แล้วเก็บ `values` ไว้ → เวอร์ชันหน้าที่พื้นที่เปลี่ยนจะติดด่าน `new-value`
 เป็น warning ซึ่งเป็นสัญญาณที่ถูกต้อง: พื้นที่เปลี่ยน = ขอบเขตถูกแก้
+
+### จุดที่แทรกใน pipeline และเรื่องความคงที่ของ sha256
+
+```
+parseMapFile → [เติม area ถ้า layer.computeArea] → computeStats → sha256 → runChecks → computeDiff
+```
+
+ต้องแทรก **ก่อน** `computeStats` และ `sha256OfFeatureCollection` เพื่อให้ฟิลด์ใหม่เข้าไปอยู่ใน
+สถิติ ในด่านตรวจ และในไฟล์ที่ `ingestMapFile` คืนออกไปให้ผู้เรียกอัปขึ้น Cloudinary
+
+**ต้องปัดเศษเป็นทศนิยมตายตัว** — `area_rai` 2 ตำแหน่ง `area_km2` 4 ตำแหน่ง ไม่งั้นค่า float
+ที่ต่างกันในหลักท้าย ๆ จะทำให้ sha256 ของไฟล์เดิมเปลี่ยนทุกครั้งที่อัปซ้ำ แล้วตรรกะ "ข้ามถ้า
+sha ตรง" ของสคริปต์กับด่าน `identical` จะใช้ไม่ได้อีกเลย
+
+ข้ามเมื่อ `geometry` เป็น `null` หรือไม่ใช่ `Polygon`/`MultiPolygon` — ไม่ throw เพราะด่าน
+`geometry-type-mismatch` เป็นคนรายงานเรื่องนั้นอยู่แล้ว
+
+ถ้าไฟล์ต้นทางมี `area_rai` ติดมาอยู่แล้ว (เช่นอัปไฟล์ที่เคยเผยแพร่กลับเข้าไป) ให้**เขียนทับ**
+ด้วยค่าที่คำนวณจาก geometry — ผลลัพธ์เท่าเดิมเพราะรูปทรงเดียวกัน และกันไม่ให้ตัวเลขที่แก้ด้วยมือ
+หลุดขึ้นเว็บโดยไม่ตรงกับรูปทรงที่วาดอยู่
+
+### `proj4` กลายเป็น runtime dependency
+
+`map-ingest.ts` ถูก import จาก `pages/api/admin/map/layers/[id]/versions.ts` → proj4 ต้องเป็น
+`dependencies` ไม่ใช่ `devDependencies`
+
+ตรวจแล้วว่าปลอดภัยทั้งสองด้าน: `require('proj4')` ทำงานได้บน Node (ต่างจาก shpjs) และ
+`map-ingest.ts` **ไม่เคยถูก import จากโค้ดฝั่ง client เลย** (ผู้เรียกมีแค่ API route กับสคริปต์)
+→ proj4 อยู่ฝั่งเซิร์ฟเวอร์อย่างเดียว ไม่บวมเข้าบันเดิลเบราว์เซอร์
+
+การแปลงกลับไป-กลับมาคลาดเคลื่อนราว 2 ซม. (`489711` → lon/lat → `489710.98`) ไม่มีผลกับตัวเลขไร่
 
 ---
 
@@ -146,11 +182,14 @@ excess ใช้รัศมีศูนย์สูตรซึ่งเกิ�
    → ไม่เจอชื่อใดชื่อหนึ่ง = throw ทันที ไม่ import ครึ่ง ๆ กลาง ๆ
 3. ซ่อมพิกัด: ถ้า |lon| > 180 → แปลง EPSG:32647 → EPSG:4326 ด้วย proj4
 4. เติม moo (10/11) ทุก feature, ตัดฟิลด์ขยะ
-5. คำนวณ area_rai / area_km2 (เฉพาะ polygon)
-6. รวมเป็น 2 FeatureCollection
-7. ingestMapFile()  ← ฟังก์ชันเดียวกับ API route
-8. upsertLayer + uploadRawText ขึ้น Cloudinary + insertVersion เป็น draft
+5. รวมเป็น 2 FeatureCollection
+6. ingestMapFile()  ← ฟังก์ชันเดียวกับ API route และเป็นคนเติม area_rai/area_km2 เอง
+7. upsertLayer + uploadRawText ขึ้น Cloudinary + insertVersion เป็น draft
 ```
+
+สคริปต์**ไม่คำนวณพื้นที่เอง** — ปล่อยให้ `ingestMapFile` ทำ เพื่อให้ทางเข้าทั้งสองทางได้ผลเท่ากัน
+(ดูหัวข้อ 2) สิ่งเดียวที่สคริปต์ทำแล้วทางลากวางไม่ทำคือแกะ zip หลายชั้นกับซ่อม `.prj` ที่โกหก
+ซึ่งเป็นงานเฉพาะกิจของไฟล์ชุดนี้ ไม่ใช่ความสามารถที่ระบบควรมีถาวร
 
 ### ตรวจก่อนแปลง ไม่ใช่แปลงทื่อ ๆ
 
@@ -173,25 +212,40 @@ excess ใช้รัศมีศูนย์สูตรซึ่งเกิ�
 
 ### dependency
 
-เพิ่ม `proj4` + `@types/proj4` เป็น **devDependency** — ตอนนี้ resolve ได้เพราะเป็น transitive
-ของ shpjs ซึ่งพึ่งพาตรง ๆ ไม่ได้ (shpjs เปลี่ยนเวอร์ชันแล้วหายได้) และเป็น devDependency
-เพราะใช้เฉพาะในสคริปต์ ไม่ได้เข้าบันเดิลของแอป
+- `proj4` → **`dependencies`** (ไม่ใช่ dev) เพราะ `map-ingest.ts` ใช้ตอนคำนวณพื้นที่ — ดูเหตุผล
+  และผลตรวจเรื่องบันเดิลในหัวข้อ 2
+- `@types/proj4` → `devDependencies`
+
+ตอนนี้ proj4 resolve ได้อยู่แล้วเพราะเป็น transitive ของ shpjs ซึ่งพึ่งพาตรง ๆ ไม่ได้
+(shpjs เปลี่ยนเวอร์ชันเมื่อไหร่ก็หายได้) จึงต้องประกาศเอง
 
 ---
 
-## 4. `src/lib/map-forest-prep.ts` — ตรรกะบริสุทธิ์ แยกออกมาให้เทสต์ได้
+## 4. โมดูลตรรกะบริสุทธิ์ แยกออกมาให้เทสต์ได้
 
-สคริปต์เหลือแค่ I/O (อ่าน zip, อัป Cloudinary, เขียน store) ส่วนตรรกะทั้งหมดอยู่ที่นี่
-เหตุผลเดียวกับที่ `map-ingest.ts` ไม่มี I/O และ `map-store.ts` แยกฟังก์ชันบริสุทธิ์ออกมา
+สคริปต์เหลือแค่ I/O (อ่าน zip, อัป Cloudinary, เขียน store) เหตุผลเดียวกับที่ `map-ingest.ts`
+ไม่มี I/O และ `map-store.ts` แยกฟังก์ชันบริสุทธิ์ออกมา
 
+**แยกเป็นสองไฟล์** เพราะคนละอายุการใช้งาน: `map-area.ts` อยู่ในเส้นทางหลักถาวรของทุกเลเยอร์ที่
+ตั้ง `computeArea` ส่วน `map-forest-prep.ts` เป็นงานเฉพาะกิจของซิปชุดนี้ที่จะไม่ถูกเรียกอีกเลย
+หลังนำเข้าครั้งแรก ถ้ารวมไฟล์เดียวกัน โค้ดที่ตายแล้วจะถ่วงโมดูลที่ API route ต้องโหลดทุกครั้ง
+
+**`src/lib/map-area.ts`** — ใช้โดย `map-ingest.ts`
+```ts
+export function ringAreaUtm(ringUtm: number[][]): number  // shoelace ÷ k0², คืน ตร.ม.
+export function polygonAreaRai(geometry): { rai: number; km2: number } | null
+                    // รับ lon/lat แปลงเป็น UTM 47N เองแล้วเรียก ringAreaUtm
+                    // คืน null ถ้า geometry เป็น null หรือไม่ใช่ Polygon/MultiPolygon
+                    // ปัดเศษ rai 2 ตำแหน่ง km2 4 ตำแหน่ง (ดูเหตุผลเรื่อง sha256 ในหัวข้อ 2)
+export function withArea(fc: FeatureCollection): FeatureCollection   // เขียนทับของเดิมเสมอ
+```
+
+**`src/lib/map-forest-prep.ts`** — ใช้โดยสคริปต์เท่านั้น
 ```ts
 export const FOREST_SOURCES: ForestSource[]     // allow-list ชื่อไฟล์ + moo + บทบาท
 export function pickSubLayer(parts, baseName): FeatureCollection   // ไม่เจอ → throw
 export function needsUtmFix(fc): boolean                  // |lon| > 180
 export function reprojectUtm47N(fc): FeatureCollection    // EPSG:32647 → 4326
-export function ringAreaUtm(ringUtm: number[][]): number  // shoelace ÷ k0², คืน ตร.ม.
-export function polygonAreaRai(geometry): { rai: number; km2: number }
-                                          // รับ lon/lat แปลงกลับเป็น UTM เองแล้วเรียก ringAreaUtm
 export function tagAndClean(fc, moo, keep: string[]): FeatureCollection
 export function buildForestLayers(parts): { boundary, points }
 ```
@@ -208,7 +262,34 @@ export function buildForestLayers(parts): { boundary, points }
 
 ---
 
-## 5. MapViewer รองรับ Point
+## 5. อัปเดตครั้งต่อไป — ลากไฟล์วางเหมือนแผนที่ภาษี
+
+หลัง PR 1 ป่าชุมชนจะมีการ์ดของตัวเองที่ `/admin/map` และใช้ `MapLayerCard` ตัวเดียวกับแผนที่ภาษี
+(`parcel`) — `onDragOver`/`onDrop` และ `accept = '.geojson,.json,.js,.zip'` ลากวาง → ตรวจไฟล์ →
+สรุปว่าอะไรเปลี่ยน → กดเผยแพร่ ไม่ต้องแก้ UI อะไรเพิ่ม
+
+**สิ่งที่ไฟล์ที่ลากวางต้องมี:**
+
+| ฟิลด์ | มาจากไหน |
+|---|---|
+| `moo` | **ต้องมีในไฟล์ต้นทาง** — เจ้าหน้าที่เพิ่มใน QGIS เอง (แค่ 2 แถว) |
+| `point_n` | มีอยู่แล้วในไฟล์หมุด |
+| `area_rai`, `area_km2` | ระบบเติมให้เอง ไม่ต้องทำอะไร |
+
+ซิปที่ลากวางต้องมี shapefile **ชั้นเดียว** ตามปกติของการ export จาก QGIS — ซิปป่าชุมชนก้อนแรก
+ที่มี 7 ชั้นปนกันเป็นข้อยกเว้นครั้งเดียวที่สคริปต์จัดการให้
+
+**ถ้าลืมใส่ `moo` ระบบเตือน ไม่เงียบ** — `featureKey()` คืน `null` แล้วด่าน `duplicate-key`
+รายงานว่า *"moo ซ้ำ 0 รายการ และว่าง 2 รายการ"* พร้อมกับ `field-removed` อีกตัว ขึ้นบนการ์ด
+ก่อนกดเผยแพร่ ทั้งคู่เป็น **warning ไม่ใช่ error** จึงยังกดเผยแพร่ทับได้ถ้าตั้งใจ — ตรงกับ
+ปรัชญาของระบบที่ให้คนตัดสินใจ ไม่ใช่ระบบบล็อก
+
+ต้องเขียนเรื่อง `moo` ไว้ใน README หัวข้อ "คลังไฟล์แผนที่" ให้ชัด เพราะเป็นข้อกำหนดเดียวที่
+เจ้าหน้าที่ต้องจำเองและไม่มีอะไรเตือนล่วงหน้าตอนอยู่ใน QGIS
+
+---
+
+## 6. MapViewer รองรับ Point
 
 เลเยอร์ทั้งสี่ที่มีอยู่เป็น Polygon/LineString ล้วน **ยังไม่เคยมีเลเยอร์ Point**
 `MapViewer.tsx` เรียก `L.geoJSON()` โดยไม่มี `pointToLayer` → Leaflet fallback ไป `L.marker`
@@ -227,7 +308,7 @@ tolerance) → คลิกดูรายละเอียดใช้ได�
 
 ---
 
-## 6. `map-style.ts`
+## 7. `map-style.ts`
 
 ```ts
 'community-forest':       { color: '#16a34a', weight: 2, fillColor: '#22c55e',
@@ -257,11 +338,11 @@ area_km2: 'พื้นที่โดยประมาณ (ตร.กม.)',
 
 ---
 
-## 7. Phase 2 — `POST /api/admin/map/layers`
+## 8. Phase 2 — `POST /api/admin/map/layers`
 
 ```
 POST /api/admin/map/layers
-body { id, title, description?, geometryType, keyFields[], visibility }
+body { id, title, description?, geometryType, keyFields[], visibility, computeArea? }
 → 201 { layer }
 → 409 ถ้า id ซ้ำ
 ```
@@ -276,6 +357,8 @@ body { id, title, description?, geometryType, keyFields[], visibility }
 - `order` = max ของที่มีอยู่ + 1 ไม่ให้ผู้ใช้กรอกเอง
 - zod schema ใน `schema.ts`: `id` บังคับ slug (`slugify()` มีอยู่แล้ว), `geometryType` ∈
   `GEOMETRY_KINDS`, `visibility` ∈ `public|staff`, `keyFields` เป็นอาเรย์ string ว่างได้
+- `computeArea` ตั้งได้เฉพาะเมื่อ `geometryType` เป็น `Polygon`/`MultiPolygon` — schema ปฏิเสธ
+  ถ้าตั้งคู่กับ Point/LineString เพราะมันจะไม่มีผลอะไรเลยแล้วคนตั้งจะเข้าใจผิดว่าตั้งสำเร็จ
 - UI: ปุ่ม "เพิ่มเลเยอร์" ใน `/admin/map` (ตอนนี้ยังไม่มีปุ่มใด ๆ) เปิด dialog กรอกฟอร์ม
 
 **ไม่ทำในรอบนี้:** ลบเลเยอร์ และแก้ `geometryType`/`keyFields` ของเลเยอร์ที่มีเวอร์ชันแล้ว —
@@ -283,7 +366,7 @@ body { id, title, description?, geometryType, keyFields[], visibility }
 
 ---
 
-## 8. เทสต์
+## 9. เทสต์
 
 vitest เฉพาะ logic บริสุทธิ์ ไม่แตะ DB/network ตามกติกาใน README
 
@@ -294,11 +377,18 @@ vitest เฉพาะ logic บริสุทธิ์ ไม่แตะ DB/n
 - `needsUtmFix` — true กับพิกัด `[489711, 2069101]`, false กับ `[98.90, 18.71]`
 - `reprojectUtm47N` — `[489711, 2069101]` → `[98.902408, 18.713236]` (ตรึงค่าที่ตรวจแล้ว)
 - **ไม่แปลงซ้ำ** — เรียกกับ FeatureCollection ที่เป็น lon/lat แล้วต้องได้ค่าเดิม
-- `ringAreaUtm` — สี่เหลี่ยม 40×40 เมตรในพิกัด UTM = 1,600 ตร.ม. ก่อนหาร k0² และ
-  1,600.64 ตร.ม. (1.0004 ไร่) หลังหาร — ตรึงว่าการถอด scale factor ทำจริงและทำถูกทาง
 - `tagAndClean` — เติม `moo`, ตัด `begin`/`end`/`id`/`E`/`N`, ไม่แตะ geometry
 - `buildForestLayers` — ได้ 2 เลเยอร์, boundary 2 features, points 176 features,
   `(moo, point_n)` ไม่ซ้ำกันสักคู่
+
+**`src/lib/map-area.test.ts`**
+- `ringAreaUtm` — สี่เหลี่ยม 40×40 เมตรในพิกัด UTM = 1,600 ตร.ม. ก่อนหาร k0² และ
+  1,600.64 ตร.ม. (1.0004 ไร่) หลังหาร — ตรึงว่าการถอด scale factor ทำจริงและทำถูกทาง
+- `polygonAreaRai` คืน `null` เมื่อ geometry เป็น `null` / Point / LineString
+- **เรียกซ้ำแล้วได้ค่าเดิมเป๊ะ** — `withArea(withArea(fc))` ต้องเท่ากับ `withArea(fc)` ทุกบิต
+  คือหลักฐานว่าการปัดเศษทำให้ sha256 คงที่จริง (ดูหัวข้อ 2)
+- `withArea` เขียนทับ `area_rai` ที่ติดมากับไฟล์ ไม่ใช่ปล่อยของเดิมไว้
+- MultiPolygon สองวง = ผลรวมของสองวง และวงในหักออกจากวงนอก
 
 **`src/lib/schema.test.ts`** (phase 2) — createLayer input: ปฏิเสธ id ที่ไม่ใช่ slug,
 ปฏิเสธ `geometryType` นอก `GEOMETRY_KINDS`
@@ -313,18 +403,22 @@ vitest เฉพาะ logic บริสุทธิ์ ไม่แตะ DB/n
 ## ลำดับงาน
 
 **PR 1 — ข้อมูลขึ้นแผนที่**
-1. `proj4` + `@types/proj4` เข้า devDependencies
-2. `src/lib/map-forest-prep.ts` + เทสต์
-3. `scripts/import-community-forest.ts` + `npm run import:forest`
-4. `pointToLayer` ใน `MapViewer.tsx`
-5. `LAYER_STYLES` + `FIELD_LABELS` ใน `map-style.ts`
-6. รันสคริปต์ → ตรวจด้วยตา → เผยแพร่จาก `/admin/map`
-7. README หัวข้อ "คลังไฟล์แผนที่" เพิ่มสองเลเยอร์ใหม่ + หมายเหตุว่าพื้นที่เป็นค่าประมาณ
+1. `proj4` เข้า `dependencies`, `@types/proj4` เข้า `devDependencies`
+2. `computeArea?: boolean` เข้า `MapLayer` ใน `types/map.ts`
+3. `src/lib/map-area.ts` + เทสต์
+4. เรียก `withArea()` ใน `map-ingest.ts` ก่อน `computeStats` (เมื่อ `layer.computeArea`)
+5. `src/lib/map-forest-prep.ts` + เทสต์
+6. `scripts/import-community-forest.ts` + `npm run import:forest`
+7. `pointToLayer` ใน `MapViewer.tsx`
+8. `LAYER_STYLES` + `FIELD_LABELS` ใน `map-style.ts`
+9. รันสคริปต์ → ตรวจด้วยตา → เผยแพร่จาก `/admin/map`
+10. README หัวข้อ "คลังไฟล์แผนที่": สองเลเยอร์ใหม่ + พื้นที่เป็นค่าประมาณ +
+    **ไฟล์ที่อัปครั้งหน้าต้องมีฟิลด์ `moo`**
 
 **PR 2 — สร้างเลเยอร์เองได้**
-8. zod schema + `POST /api/admin/map/layers`
-9. ปุ่ม/ฟอร์ม "เพิ่มเลเยอร์" ใน `/admin/map`
-10. README
+11. zod schema + `POST /api/admin/map/layers`
+12. ปุ่ม/ฟอร์ม "เพิ่มเลเยอร์" ใน `/admin/map`
+13. README
 
 ---
 
