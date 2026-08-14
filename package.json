@@ -10,7 +10,8 @@
     "test": "vitest run",
     "seed": "tsx scripts/seed.ts",
     "import:gcal": "tsx scripts/import-google-calendar.ts",
-    "import:map": "tsx scripts/import-map-layers.ts"
+    "import:map": "tsx scripts/import-map-layers.ts",
+    "import:forest": "tsx scripts/import-community-forest.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.1",
