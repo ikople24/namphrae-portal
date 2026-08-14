@@ -11,7 +11,7 @@
     "seed": "tsx scripts/seed.ts",
     "import:gcal": "tsx scripts/import-google-calendar.ts",
     "import:map": "tsx scripts/import-map-layers.ts",
-    "import:forest": "tsx scripts/import-community-forest.ts"
+    "import:forest": "tsx scripts/import-community-forest.mts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.1",

@@ -1,3 +1,15 @@
+// ไฟล์นี้ต้องเป็นนามสกุล .mts ไม่ใช่ .ts — อย่าเปลี่ยนกลับ
+//
+// tsx เลือกโหมด CJS หรือ ESM จาก "นามสกุลไฟล์" ไม่ใช่จาก syntax ข้างใน ไฟล์ .ts
+// ถูกแปลงแบบ CJS เสมอ ซึ่งทำให้ `import shp from 'shpjs'` resolve ผ่าน
+// exports.require ของแพ็กเกจ ไปเจอ dist/shp.js อันเป็นบันเดิลสำหรับเบราว์เซอร์ที่
+// อ้างตัวแปร `self` แล้วพังทันทีบน Node (ReferenceError: self is not defined)
+// ต้องเป็น .mts เพื่อให้ tsx เดินตาม exports.import → lib/index.js ซึ่งเป็นบันเดิล
+// ที่ปลอดภัยบน Node จริง ๆ — ดูปัญหาเดียวกันฝั่ง API route ที่
+// src/lib/map-shapefile-client.ts (ที่นั่นแก้ด้วยการย้ายไปแปลงฝั่งเบราว์เซอร์แทน
+// เพราะเปิด bundling ทั้งระบบกระทบ dependency อื่น แต่สคริปต์นี้รันบน Node
+// โดยตรงอยู่แล้ว การเปลี่ยนนามสกุลไฟล์จึงพอ)
+
 // ต้องเป็น import แรกสุด — ดูเหตุผลใน scripts/load-env.ts
 import './load-env';
 import crypto from 'node:crypto';
