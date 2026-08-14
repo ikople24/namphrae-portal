@@ -344,6 +344,15 @@ export default function MapViewer({
         // อยู่ใต้เคอร์เซอร์ทำเองที่ handleClick ด้านล่างแทน (src/lib/map-hit.ts)
         interactive: false,
         style: (f) => styleFor(layer.id, f as Feature | undefined),
+        // เลเยอร์รูปจุดต้องบอกวิธีวาดเอง ไม่งั้น Leaflet ตกไปใช้ L.marker ซึ่งเป็น
+        // DOM ที่มันบังคับลง markerPane เสมอ — เข้า pane แบบ canvas ที่ตั้งไว้ข้างบน
+        // ไม่ได้ แถมไอคอนปริยายยังชี้ไปไฟล์รูปที่ bundler ไม่ได้ copy มาให้ (404)
+        // circleMarker เป็น Path จึงวาดด้วย renderer เดียวกับเลเยอร์อื่นทั้งหมด
+        pointToLayer: (f, latlng) =>
+          L.circleMarker(latlng, {
+            radius: 4,
+            ...styleFor(layer.id, f as Feature | undefined),
+          }),
       });
       group.addTo(m);
       groups.current.set(layer.id, group);
