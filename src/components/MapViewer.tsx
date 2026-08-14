@@ -206,6 +206,11 @@ export default function MapViewer({
       pane: HOVER_PANE,
       interactive: false,
       style: () => HOVER_STYLE,
+      // เลเยอร์ไฮไลต์ก็ต้องบอกวิธีวาดรูปจุด ไม่งั้นตอนชี้โดนหมุด Leaflet จะสร้าง
+      // L.marker ที่ไอคอนปริยาย 404 ขึ้นมาแทน (เห็นเป็นรูปแตกคำว่า Marker) —
+      // เหตุผลเดียวกับ pointToLayer ของเลเยอร์หลักด้านล่าง
+      // รัศมีกว้างกว่าหมุดจริง (4) เพื่อให้ไฮไลต์เป็นวงล้อมรอบ ไม่ใช่ทับจนมิด
+      pointToLayer: (_f, latlng) => L.circleMarker(latlng, { ...HOVER_STYLE, radius: 6 }),
     }).addTo(m);
 
     m.on('click', handleClick);
