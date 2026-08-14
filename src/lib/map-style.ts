@@ -52,6 +52,28 @@ export const LAYER_STYLES: Record<string, LayerStyle> = {
     // 7,970 รูปทรง ~4 MB — เปิดตอนต้องใช้เท่านั้น
     defaultOn: false,
   },
+  'community-forest': {
+    color: '#16a34a',
+    weight: 2,
+    fillColor: '#22c55e',
+    // โปร่งพอให้เห็นเรือนยอดไม้ในภาพดาวเทียมข้างใต้ ซึ่งเป็นสิ่งที่คนเปิดเลเยอร์นี้
+    // มาเทียบว่าขอบเขตตรงกับป่าจริงไหม
+    fillOpacity: 0.25,
+    // ใต้ขอบเขตหมู่ (40) ที่ต้องเห็นกรอบเสมอ แต่เหนือถนน (30) — พื้นสีเขียวจะบัง
+    // เส้นถนนทั้งเส้นถ้าอยู่ผิดลำดับ
+    order: 35,
+    defaultOn: true,
+  },
+  'community-forest-point': {
+    color: '#15803d',
+    weight: 1,
+    fillColor: '#4ade80',
+    // จุดต้องทึบถึงจะเห็นบนพื้นป่าที่มันอยู่ข้างใน
+    fillOpacity: 0.9,
+    order: 50,
+    // 176 จุดรกถ้าเปิดมาพร้อมกันตั้งแต่แรก — คนที่ต้องใช้เปิดเองได้
+    defaultOn: false,
+  },
 };
 
 export const FALLBACK_STYLE: LayerStyle = {
@@ -163,6 +185,12 @@ export const FIELD_LABELS: Record<string, string> = {
   surface: 'ผิวทาง',
   lanes: 'ช่องจราจร',
   maxspeed: 'จำกัดความเร็ว',
+  moo: 'หมู่',
+  point_n: 'ลำดับหมุด',
+  // "โดยประมาณ" ไม่ใช่คำถ่อมตัว — ตัวเลขนี้คำนวณจากรูปทรงที่วาดไว้ ไม่ใช่เนื้อที่
+  // ตามทะเบียนของกรมป่าไม้ ถ้าเขียนลอย ๆ ว่า "พื้นที่ (ไร่)" คนจะเอาไปอ้างผิด
+  area_rai: 'พื้นที่โดยประมาณ (ไร่)',
+  area_km2: 'พื้นที่โดยประมาณ (ตร.กม.)',
 };
 
 export function labelOf(field: string): string {
