@@ -130,16 +130,16 @@ collection นี้เขียนโดย **ระบบแจ้งเรื
 เพิ่มใน `src/lib/mongodb.ts` คู่กับ `getUsersDb()` ที่มีอยู่:
 
 ```ts
-const reportsDbName = process.env.MONGODB_REPORTS_DB || 'db_namphrae';
-
+// submittedreports อยู่ db เดียวกับทะเบียนผู้ใช้ — ของระบบแจ้งเรื่อง LINE ไม่ใช่ของ portal
+// แยกฟังก์ชันไว้เพื่อให้จุดเรียกบอกเจตนาชัด และถ้าวันหนึ่งย้าย db ก็แก้ที่เดียว
 export async function getReportsDb(): Promise<Db> {
-  const client = await getClientPromise();
-  return client.db(reportsDbName);
+  return getUsersDb();
 }
 ```
 
-ใช้ `MongoClient` ตัวเดียวกับ `getDb()`/`getUsersDb()` ไม่เปิดการเชื่อมต่อเพิ่ม และเพิ่ม
-`MONGODB_REPORTS_DB` ลง `.env.example` พร้อมคำอธิบายว่าทำไมห้ายกมา
+**ไม่เพิ่ม env var ใหม่** — `db_namphrae` ที่ `MONGODB_USERS_DB` ชี้อยู่แล้วคือ db เดียวกัน
+การเพิ่มปุ่มที่ไม่มีใครหมุนมีแต่ต้นทุนคำอธิบายใน `.env.example` ที่ยาวอยู่แล้ว ใช้ `MongoClient`
+ตัวเดียวกับ `getDb()`/`getUsersDb()` ไม่เปิดการเชื่อมต่อเพิ่ม
 
 ### ดัชนีต้องสร้างเอง
 
