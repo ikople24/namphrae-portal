@@ -576,7 +576,7 @@ Expected: PASS ทั้ง 6 ไฟล์
 - [ ] **Step 8: รันเทสต์ทั้งโปรเจกต์ ยืนยันว่าไม่ไปทำของเดิมพัง**
 
 Run: `npm test`
-Expected: PASS ทั้งหมด — 25 ไฟล์เดิมของ portal บวกที่ยกมาใหม่
+Expected: PASS ทั้งหมด — baseline ของสาขานี้คือ 22 ไฟล์ 272 เทสต์ บวกที่ยกมาใหม่
 
 - [ ] **Step 9: Commit**
 
@@ -1055,7 +1055,7 @@ git commit -m "feat(map): ขอบเขตหมู่บ้านตำบล
 - [ ] **Step 1: เทสต์ทั้งหมด**
 
 Run: `npm test`
-Expected: PASS ทั้งหมด — 25 ไฟล์เดิมของ portal + 15 ไฟล์เทสต์ที่ยกมา + `db-indexes.test.ts` = 41 ไฟล์
+Expected: PASS ทั้งหมด — 22 ไฟล์เดิมของ portal (272 เทสต์) + 15 ไฟล์เทสต์ที่ยกมา + `db-indexes.test.ts` = **38 ไฟล์**
 
 - [ ] **Step 2: type check**
 
