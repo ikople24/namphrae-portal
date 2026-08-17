@@ -33,7 +33,7 @@ namphrae-map เป็น Next.js Pages Router แยกโปรเจกต์
 | Next | 15.1.6 | **16.2.11** |
 | Clerk | 6 | **7** |
 | MongoDB | mongoose 8 (models) | **driver 7 ดิบ** |
-| zod | 3 | **4** |
+| zod | 3 | **4** (ตรวจแล้ว API ที่ใช้จริงเข้ากันได้หมด) |
 | Tailwind | 3 (`tailwind.config.ts`) | **4** (CSS-first, `@theme`) |
 | Leaflet | react-leaflet 5 + heat + markercluster | **leaflet ดิบ** (`MapViewer.tsx`) |
 | กราฟ | recharts | **ไม่มีเลย** |
@@ -206,7 +206,7 @@ public/cmu_namphare.geojson                                   ← ขอบเ�
 | กลุ่ม | ไฟล์ | ต้องทำอะไร |
 |---|---|---|
 | ยกมาพร้อมเทสต์ | `stats`, `dengueStats`, `dengueRegistryStats`, `dengueRegistryDates`, `dengueRegistryParse`, `dengueExport`, `geo`, `thaiDate`, `thaiCalendar`, `isoDate`, `urlState`, `disasterTypes`, `incidentOptions`, `mapScales`, `adminView`, `imageResize` | เปลี่ยน path import |
-| แก้ zod 3→4 | `validation`, `dengueRegistryInput` | `.flatten()` เปลี่ยนวิธีเรียก |
+| ยกมาพร้อมเทสต์ (zod) | `validation`, `dengueRegistryInput` | ทดสอบกับ zod 4.4.3 ที่ติดตั้งจริงแล้ว — `z.enum(const array)`, `.default()`, `.nullable().default(null)` และ `.flatten()` ยังทำงานเหมือนเดิม ไม่ต้องแก้ |
 | ทิ้ง ใช้ของ portal | `mongodb`, `requireDbUser`, `cloudinaryServer`, `cloudinaryMigration` | portal มีของเทียบเท่าครบ |
 | ย้ายที่ | `types.ts` | → `src/types/` |
 
@@ -267,8 +267,9 @@ react-leaflet สำหรับภัยพิบัติ/สาธารณ�
 `AGENTS.md` เตือนไว้ว่า Next เวอร์ชันนี้ไม่เหมือนที่เคยรู้ ถ้าเข้ากันไม่ได้ต้องรู้ตั้งแต่วันแรก
 ก่อนลงแรงที่เหลือ ไม่ใช่ไปเจอตอนรอบ 3
 
-สคริปต์นำเข้าเปลี่ยนเป็น `.mts` ตามบทเรียนจาก commit `1488315` — ไลบรารีที่ Node โหลดผ่าน
-ESM ไม่ได้ทำงานกับ `.ts` ธรรมดาในโปรเจกต์นี้
+สคริปต์ที่ import ไลบรารีซึ่งมีแต่รูปแบบ ESM ต้องเป็น `.mts` ตามบทเรียนจาก commit `1488315`
+(กรณีนั้นคือ `shpjs`) สคริปต์ที่ใช้แค่ `mongodb`/`xlsx` ใช้ `.ts` ตามธรรมเนียมเดิมของ
+`scripts/import-map-layers.ts` ได้ — ตัดสินทีละสคริปต์ ไม่ใช่เหมารวม
 
 ---
 
