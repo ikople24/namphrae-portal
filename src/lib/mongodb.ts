@@ -61,3 +61,12 @@ export async function getUsersDb(): Promise<Db> {
   const client = await getClientPromise();
   return client.db(usersDbName);
 }
+
+// รายงานจากชาวบ้าน (collection submittedreports) อยู่ db เดียวกับทะเบียนผู้ใช้ แต่เป็นของ
+// ระบบแจ้งเรื่อง LINE ไม่ใช่ของ portal — portal อ่านอย่างเดียว ห้ามเขียนและห้ามคัดลอกมา
+// ไว้ที่ namphrae_portal เพราะข้อมูลจะแช่แข็งทันทีโดยไม่มีอะไรพังให้เห็น
+//
+// แยกฟังก์ชันไว้เพื่อให้จุดเรียกบอกเจตนาชัด และถ้าวันหนึ่งย้าย db ก็แก้ที่เดียว
+export async function getReportsDb(): Promise<Db> {
+  return getUsersDb();
+}
