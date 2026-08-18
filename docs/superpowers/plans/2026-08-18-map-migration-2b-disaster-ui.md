@@ -689,10 +689,20 @@ Expected: `/disaster`, `/disaster/insights`, `/admin/disaster` และ API 4 �
 - [ ] **Step 3: leaflet ไม่หลุดเข้า server bundle**
 
 ```bash
-grep -rn "from '@/components/disaster/\(MapView\|MapLayers\|mapBase\|ChoroplethMap\)'" src/pages --include='*.tsx'
+grep -rnE "^import (?!type)" -P src/pages --include='*.tsx' \
+  | grep -E "disaster/(MapView|MapLayers|mapBase|ChoroplethMap)"
 ```
-Expected: **ไม่มีผลลัพธ์** — ทั้งสี่ต้องถูกเรียกผ่าน `dynamic(() => import(...), { ssr: false })`
-เท่านั้น ถ้าเจอ static import แปลว่า build จะพังบน production ที่ prerender
+Expected: **ไม่มีผลลัพธ์**
+
+ต้องกรอง `import type` ออกด้วย — `src/pages/disaster/index.tsx` import ชนิด `DisplayMode`/`BaseLayer`
+มาจาก `MapView` ตรง ๆ ซึ่ง**ปลอดภัย** เพราะ TypeScript ลบ type-only import ทิ้งตอนคอมไพล์ ไม่มี
+โมดูล leaflet ตัวจริงถูกโหลด grep ที่ไม่กรองจะจับผลบวกปลอมแล้วชวนให้ไป "แก้" ของที่ถูกอยู่แล้ว
+
+component ที่ import กันเอง (`MapView` → `MapLayers`/`mapBase`) ก็ไม่ต้องกรอง — ทั้งก้อนอยู่หลัง
+ขอบเขต dynamic เดียวกันอยู่แล้ว
+
+**หลักฐานชี้ขาดคือ build ผ่าน** — ถ้า leaflet หลุดเข้า server bundle จริง `next build` จะพังตอน
+prerender `/disaster` ด้วย `document is not defined` ไม่ใช่เตือนเฉย ๆ
 
 - [ ] **Step 4: ไม่มีระบบไอคอนซ้อน**
 
