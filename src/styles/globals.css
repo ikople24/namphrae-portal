@@ -183,8 +183,61 @@ button:focus-visible {
   color: var(--color-ink-mute);
   white-space: nowrap;
 }
+/* ตอนย้ายคอมโพเนนต์แผนที่ภัยพิบัติมาจาก namphrae-map (round 2B) ไม่ได้ย้าย CSS
+   ของ Leaflet มาด้วย — คอนเทนเนอร์เลยไม่มีความสูง Leaflet เลยคำนวณ viewport ผิด
+   ตั้งแต่โหลด ทำให้ไทล์ขึ้นแค่บางส่วน/เพี้ยนตำแหน่ง เพิ่ม width/height ตรงนี้ก็พอ
+   ("100%" ซ้ำกับ h-full w-full ที่ /map และ /disaster ห่อไว้อยู่แล้ว จึงไม่ทำให้
+   /map เปลี่ยนพฤติกรรม) ส่วน background เป็นสีเขียวอมเทาอ่อนตอนรอไทล์โหลด เป็นสี
+   กลาง ๆ ไม่ใช่โทนแบรนด์ จึงคงเป็นค่า literal ไม่ทำ token — /map จะเห็นสีนี้แวบหนึ่ง
+   ตอนไทล์ยังโหลดไม่เสร็จเหมือนกัน แต่ไม่กระทบหน้าที่ทำงานได้ดีอยู่แล้วเป็นสาระ */
 .leaflet-container {
   font: inherit;
+  width: 100%;
+  height: 100%;
+  background: #dbe6e0;
+}
+
+/* ซ่อน focus outline ปริยายของเบราว์เซอร์บนหมุด/เส้นขอบที่คลิกได้ของ Leaflet —
+   ไม่งั้นเป็นกรอบสี่เหลี่ยมสีฟ้าโผล่ทับข้อมูลตอนคลิก (มีแถบ focus ของเว็บแยกให้
+   ปุ่ม/ลิงก์อยู่แล้วด้านบน) ใช้ได้ทั้ง /map และ /disaster เพราะเป็นแค่การซ่อน
+   ไม่ใช่การเปลี่ยนหน้าตา */
+.leaflet-container .leaflet-interactive:focus {
+  outline: none;
+}
+
+/* แถบเครดิตแผนที่ (OSM ฯลฯ) และปุ่มซูมของหน้าภัยพิบัติ ให้เข้ากับดีไซน์กระจก/มน
+   ของหน้านั้น — จำกัดด้วย .np-disaster-map (คลาสบน MapContainer ของ
+   src/components/disaster/MapView.tsx และ ChoroplethMap.tsx) เพราะ /map
+   (src/components/MapViewer.tsx) เพิ่มปุ่มซูม/แถบเครดิตปริยายของ Leaflet เองอยู่
+   แล้วโดยไม่ได้ตั้งสไตล์นี้ไว้ — ถ้าใส่แบบไม่จำกัดขอบเขต หน้า /map ที่ทำงานได้ดีอยู่แล้ว
+   จะเปลี่ยนหน้าตาไปด้วยโดยไม่ตั้งใจ สีอ้างอิงจาก token ของพอร์ทัล
+   (ink → var(--color-ink), surface-light → var(--color-paper-deep),
+   brand → var(--color-green-deep)) แทนสี hex ตายตัวของต้นทาง */
+.np-disaster-map .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+.np-disaster-map .leaflet-control-zoom {
+  border: none !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 8px 30px -12px rgba(15, 42, 43, 0.4);
+}
+.np-disaster-map .leaflet-control-zoom a {
+  background: rgba(255, 255, 255, 0.93);
+  color: var(--color-ink);
+  border: none;
+  width: 34px;
+  height: 34px;
+  line-height: 34px;
+  font-size: 18px;
+}
+.np-disaster-map .leaflet-control-zoom a:hover {
+  background: var(--color-paper-deep);
+  color: var(--color-green-deep);
+}
+.np-disaster-map .leaflet-control-zoom a.leaflet-disabled {
+  opacity: 0.5;
 }
 .np-popup-title:not(:first-child) {
   margin-top: 10px;

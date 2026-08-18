@@ -1,3 +1,7 @@
+// ต้อง import CSS ของ Leaflet เอง เพราะคอมโพเนนต์นี้ถูกยกมาจาก namphrae-map
+// โดยไม่ได้พ่วง _app.tsx เดิมที่เคย import ไว้ระดับแอป — ถ้าไม่มีไฟล์นี้ กฎจัดตำแหน่ง
+// ไทล์ของ Leaflet จะหายไป ทำให้แผนที่ขึ้นแค่บางไทล์และเพี้ยนตำแหน่ง
+import 'leaflet/dist/leaflet.css';
 import { MapContainer, ZoomControl, GeoJSON } from 'react-leaflet';
 import type { Layer, PathOptions } from 'leaflet';
 import type { Feature } from 'geojson';
@@ -22,7 +26,7 @@ export default function ChoroplethMap({
 }) {
   const max = Math.max(0, ...Object.values(counts));
   return (
-    <MapContainer center={CENTER} zoom={12} zoomControl={false} className="h-full w-full z-0">
+    <MapContainer center={CENTER} zoom={12} zoomControl={false} className="h-full w-full z-0 np-disaster-map">
       <ZoomControl position="bottomleft" />
       <FitBounds villages={villages} />
       <BaseTileLayer baseLayer={baseLayer} />

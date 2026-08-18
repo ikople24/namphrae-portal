@@ -1,3 +1,7 @@
+// ต้อง import CSS ของ Leaflet เอง เพราะคอมโพเนนต์นี้ถูกยกมาจาก namphrae-map
+// โดยไม่ได้พ่วง _app.tsx เดิมที่เคย import ไว้ระดับแอป — ถ้าไม่มีไฟล์นี้ กฎจัดตำแหน่ง
+// ไทล์ของ Leaflet จะหายไป ทำให้แผนที่ขึ้นแค่บางไทล์และเพี้ยนตำแหน่ง
+import 'leaflet/dist/leaflet.css';
 import { MapContainer, ZoomControl, CircleMarker, Popup, GeoJSON, useMapEvents } from 'react-leaflet';
 import type { Layer } from 'leaflet';
 import type { Feature } from 'geojson';
@@ -32,7 +36,7 @@ export default function MapView({
   picked?: { lat: number; lng: number } | null;
 }) {
   return (
-    <MapContainer center={CENTER} zoom={12} zoomControl={false} className="h-full w-full z-0">
+    <MapContainer center={CENTER} zoom={12} zoomControl={false} className="h-full w-full z-0 np-disaster-map">
       {/* ปุ่มซูมมุมล่างซ้าย (ไม่ทับการ์ดหัวมุมซ้ายบน / แผงขวา) */}
       <ZoomControl position="bottomleft" />
       <FitBounds villages={villages} />
