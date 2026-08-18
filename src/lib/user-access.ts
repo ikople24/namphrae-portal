@@ -2,7 +2,7 @@
 // ห้าม import mongo/clerk. กฎทั้งหมดตรึงด้วย user-access.test.ts
 // (แพทเทิร์นเดียวกับ admin-registry-gate.ts)
 
-export const FEATURES = ['links', 'categories', 'calendar', 'map', 'data', 'settings'] as const;
+export const FEATURES = ['links', 'categories', 'calendar', 'map', 'disaster', 'health', 'data', 'settings'] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 // สมาชิกที่ผู้จัดการยังไม่เคยตั้งค่า (รวมสมาชิกเก่าทุกคน ณ วันเปิดใช้ระบบสิทธิ์)
@@ -15,6 +15,8 @@ export const FEATURE_HOME: Record<FeatureKey, string> = {
   categories: '/admin/categories',
   calendar: '/admin/calendar',
   map: '/admin/map',
+  disaster: '/admin/disaster',
+  health: '/admin/health',
   data: '/admin/data',
   settings: '/admin/settings',
 };
@@ -24,6 +26,8 @@ export const FEATURE_LABELS: { key: FeatureKey; label: string }[] = [
   { key: 'categories', label: 'หมวดหมู่' },
   { key: 'calendar', label: 'ปฏิทิน' },
   { key: 'map', label: 'แผนที่' },
+  { key: 'disaster', label: 'ภัยพิบัติ' },
+  { key: 'health', label: 'สาธารณสุข' },
   { key: 'data', label: 'นำเข้า/ส่งออก' },
   { key: 'settings', label: 'ตั้งค่าเว็บ' },
 ];

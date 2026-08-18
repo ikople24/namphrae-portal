@@ -44,6 +44,11 @@ yarn-error.log*
 /data/map-layers.json
 /data/map-layer-versions.json
 
+# git worktree ที่เครื่องมือของ Claude Code สร้างไว้ — เป็น checkout อีกชุดของ repo นี้เอง
+# ห้าม track เด็ดขาด ไม่งั้นเนื้อไฟล์ทั้งโปรเจกต์จะถูก commit ซ้อนเข้าไปในตัวมันเอง
+# (.claude/launch.json ยัง track ตามเดิม จึง ignore เฉพาะโฟลเดอร์นี้)
+/.claude/worktrees/
+
 # vercel
 .vercel
 

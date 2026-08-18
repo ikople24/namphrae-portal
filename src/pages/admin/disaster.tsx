@@ -1,0 +1,191 @@
+// pages/admin/disaster.tsx — พอร์ตจาก namphrae-map/pages/admin/index.tsx (135 บรรทัด)
+// ยกตรรกะ state/filter/pagination มาเกือบทั้งหมด แต่เปลี่ยน chrome: TopNav/SubTabs/
+// AccessDenied ของ map ทิ้งไป ใช้ AdminLayout + withMemberGuard ของพอร์ทัลแทน (เหมือน
+// src/pages/admin/map/index.tsx) และเปลี่ยน endpoint เป็น /api/admin/disaster/* ตามที่
+// plan 2A ทำไว้ (envelope เป็น { incidents } ไม่ใช่ { success, data } แบบต้นทาง)
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DISASTER_TYPES, DISASTER_LABELS, DISASTER_COLORS } from '@/lib/disaster-types';
+import type { IncidentItem } from '@/types/disaster';
+import { filterIncidents, paginate, summaryByType, type TypeFilter } from '@/lib/disaster-admin-view';
+import IncidentTable from '@/components/disaster/IncidentTable';
+import IncidentForm, { toFormValues, type FormValues } from '@/components/disaster/IncidentForm';
+import Icon from '@/components/Icon';
+import { useVillages } from '@/hooks/use-villages';
+import AdminLayout from '@/components/admin/AdminLayout';
+import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { getFeatureSsrProps } from '@/lib/auth-server';
+
+type Mode = { kind: 'list' } | { kind: 'create' } | { kind: 'edit'; item: IncidentItem };
+const PER_PAGE = 10;
+
+export const getServerSideProps = getFeatureSsrProps('disaster');
+
+function DisasterAdminPage() {
+  const [incidents, setIncidents] = useState<IncidentItem[]>([]);
+  const villages = useVillages();
+  const [mode, setMode] = useState<Mode>({ kind: 'list' });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
+  const [page, setPage] = useState(1);
+
+  const load = useCallback(() => {
+    fetch('/api/admin/disaster/incidents')
+      .then((r) => r.json())
+      .then((j: { incidents: IncidentItem[] }) => setIncidents(j.incidents ?? []));
+  }, []);
+  useEffect(load, [load]);
+
+  // รีเซ็ตหน้าเป็น 1 เมื่อเปลี่ยนตัวกรอง — ต้นทางทำผ่าน useEffect(fn, [query,
+  // typeFilter]) แต่ react-hooks/set-state-in-effect ของ Next 16 ห้าม setState
+  // ตรง ๆ ใน effect body (คาสเคดเรนเดอร์) จึงย้ายมาปรับ state ระหว่าง render
+  // ตามแนวทางที่ React แนะนำ (react.dev/learn/you-might-not-need-an-effect
+  // หัวข้อ "Adjusting state when a prop changes")
+  const filterKey = `${query} ${typeFilter}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
+
+  async function save(v: FormValues) {
+    setSubmitting(true);
+    setError('');
+    const isEdit = mode.kind === 'edit';
+    const url = isEdit && mode.kind === 'edit' ? `/api/admin/disaster/incidents/${mode.item._id}` : '/api/admin/disaster/incidents';
+    const res = await fetch(url, {
+      method: isEdit ? 'PUT' : 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(v),
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      setError('บันทึกไม่สำเร็จ — ตรวจสอบข้อมูลอีกครั้ง');
+      return;
+    }
+    setMode({ kind: 'list' });
+    load();
+  }
+  async function remove(it: IncidentItem) {
+    if (!confirm(`ลบรายการ ${it.dateText} (${it.areaType})?`)) return;
+    await fetch(`/api/admin/disaster/incidents/${it._id}`, { method: 'DELETE' });
+    load();
+  }
+
+  const summary = useMemo(() => summaryByType(incidents), [incidents]);
+  const filtered = useMemo(() => filterIncidents(incidents, query, typeFilter), [incidents, query, typeFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  // ต้นทางไล่ clamp หน้าให้ไม่เกิน pageCount ผ่าน useEffect + setState — ย้ายมา
+  // คำนวณตรง ๆ ระหว่าง render แทน (paginate() เองก็ clamp อยู่แล้ว) กันชน
+  // react-hooks/set-state-in-effect เหมือนด้านบน และไม่ต้องมี effect ก็พอ
+  const clampedPage = Math.min(Math.max(1, page), pageCount);
+  const pageItems = useMemo(() => paginate(filtered, clampedPage, PER_PAGE), [filtered, clampedPage]);
+  const rangeStart = filtered.length === 0 ? 0 : (clampedPage - 1) * PER_PAGE + 1;
+  const rangeEnd = Math.min(clampedPage * PER_PAGE, filtered.length);
+
+  const chip = (label: string, active: boolean, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      className={`rounded-full px-3 py-1.5 text-xs ${active ? 'bg-green-deep font-semibold text-white' : 'border border-line bg-white text-ink-soft'}`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <AdminLayout
+      title="ภัยพิบัติ"
+      actions={
+        <button
+          onClick={() => setMode({ kind: 'create' })}
+          className="flex items-center gap-2 rounded-xl bg-green-deep px-4 py-2.5 text-[13px] font-semibold text-white"
+        >
+          <Icon name="add" size={15} /> เพิ่มรายการ
+        </button>
+      }
+    >
+      <div className="space-y-3.5">
+        <div className="text-[11.5px] text-ink-faint">รวม {incidents.length} รายการ</div>
+
+        {/* summary strip */}
+        <div className="grid grid-cols-4 gap-3">
+          {DISASTER_TYPES.map((t) => (
+            <div key={t} className="flex items-center gap-3 rounded-card border border-line bg-white px-4 py-3">
+              <span
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-xl"
+                style={{ background: `${DISASTER_COLORS[t]}1f` }}
+              >
+                <span className="h-3 w-3 rounded-sm" style={{ background: DISASTER_COLORS[t] }} />
+              </span>
+              <div>
+                <div className="font-mono text-[19px] font-semibold leading-none text-ink">{summary[t]}</div>
+                <div className="mt-1 text-[11px] text-ink-faint">{DISASTER_LABELS[t]}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* table card */}
+        <div className="flex flex-col overflow-hidden rounded-card border border-line bg-white">
+          <div className="flex items-center gap-2.5 border-b border-[#eef3f1] p-4">
+            <div className="flex w-[250px] items-center gap-2 rounded-xl bg-surface-sunken px-3 py-2.5">
+              <Icon name="search" size={15} className="text-ink-mute" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="ค้นหา พื้นที่/รูป/วันที่"
+                className="w-full bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-mute"
+              />
+            </div>
+            <div className="flex flex-1 flex-wrap gap-1.5">
+              {chip('ทั้งหมด', typeFilter === 'ALL', () => setTypeFilter('ALL'))}
+              {DISASTER_TYPES.map((t) => chip(DISASTER_LABELS[t], typeFilter === t, () => setTypeFilter(t)))}
+            </div>
+          </div>
+
+          <IncidentTable incidents={pageItems} onEdit={(it) => setMode({ kind: 'edit', item: it })} onDelete={remove} />
+
+          <div className="flex items-center gap-2.5 border-t border-[#eef3f1] p-4">
+            <div className="flex-1 text-xs text-ink-faint">
+              แสดง <b>{rangeStart}–{rangeEnd}</b> จาก <b>{filtered.length}</b> รายการ
+            </div>
+            <button
+              disabled={clampedPage <= 1}
+              onClick={() => setPage(clampedPage - 1)}
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-xl border border-line text-ink-faint disabled:opacity-40"
+            >
+              <Icon name="chevron_left" size={13} />
+            </button>
+            <span className="font-mono text-xs text-ink">
+              {clampedPage}/{pageCount}
+            </span>
+            <button
+              disabled={clampedPage >= pageCount}
+              onClick={() => setPage(clampedPage + 1)}
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-xl border border-line text-ink-faint disabled:opacity-40"
+            >
+              <Icon name="chevron_right" size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {mode.kind !== 'list' && (
+        <IncidentForm
+          initial={mode.kind === 'edit' ? toFormValues(mode.item) : undefined}
+          onSubmit={save}
+          onCancel={() => {
+            setMode({ kind: 'list' });
+            setError('');
+          }}
+          submitting={submitting}
+          error={error}
+          villages={villages}
+        />
+      )}
+    </AdminLayout>
+  );
+}
+
+export default withMemberGuard(DisasterAdminPage);
