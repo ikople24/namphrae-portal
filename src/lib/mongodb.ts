@@ -70,3 +70,32 @@ export async function getUsersDb(): Promise<Db> {
 export async function getReportsDb(): Promise<Db> {
   return getUsersDb();
 }
+
+// ใช้เฉพาะในสคริปต์ (scripts/*.mts) ตอนจบงานเท่านั้น — ห้ามเรียกจากโค้ดฝั่งเว็บ
+// เซิร์ฟเวอร์ตั้งใจแคช client ไว้ตลอดอายุโปรเซสเพื่อลดการเปิดการเชื่อมต่อซ้ำ
+// (ดูคอมเมนต์บนสุดของไฟล์) เรียก closeDb() จากฝั่งเว็บจะทำให้คำขอถัดไปเจอ client
+// ที่ปิดไปแล้ว
+//
+// เหตุผลที่ต้องมีฟังก์ชันนี้: MongoDB driver เปิด socket ค้างไว้ในพูลการเชื่อมต่อ
+// ซึ่งกัน event loop ของ Node ไม่ให้ออกเอง สคริปต์ที่จบงานแล้วจึงค้างอยู่จนกว่าจะ
+// ถูก kill — ต้องปิด client explicit ถึงจะออกได้เอง
+export async function closeDb(): Promise<void> {
+  const pending = process.env.NODE_ENV === 'development' ? global._mongoClientPromise : clientPromise;
+
+  // ไม่เคยเรียก getDb()/getClientPromise() มาก่อน (เช่นสคริปต์รันฝั่งไฟล์เพราะไม่ได้
+  // ตั้ง MONGODB_URI) — ไม่มีอะไรให้ปิด
+  if (!pending) return;
+
+  // เคลียร์ทั้งสองแคชก่อน await เพื่อให้ getDb() รอบถัดไปในโปรเซสเดียวกัน (ถ้ามี)
+  // เชื่อมต่อใหม่แทนที่จะได้ client ที่กำลังจะถูกปิด
+  clientPromise = undefined;
+  global._mongoClientPromise = undefined;
+
+  try {
+    const client = await pending;
+    await client.close();
+  } catch {
+    // promise เดิม reject ไปแล้ว (เชื่อมต่อไม่สำเร็จตั้งแต่แรก) — ไม่มี client จริง
+    // ให้ปิด ไม่ต้องโยน error ซ้ำตอนจบโปรแกรม
+  }
+}
