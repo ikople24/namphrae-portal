@@ -795,9 +795,29 @@ Expected: ผลรวมทั้งสี่ = 374
 - [ ] **Step 5: API หลังบ้านต้องกันคนไม่มีสิทธิ์**
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' 'http://localhost:3000/api/admin/disaster/incidents'
+curl -s -D - -o /dev/null 'http://localhost:3000/api/admin/disaster/incidents' | grep -i "^HTTP/\|x-clerk-auth"
 ```
-Expected: **401** (ไม่ได้ล็อกอิน) — ถ้าได้ 200 แปลว่า guard ไม่ทำงาน หยุดทันที
+Expected:
+```
+HTTP/1.1 404 Not Found
+x-clerk-auth-reason: protect-rewrite, dev-browser-missing
+x-clerk-auth-status: signed-out
+```
+
+**404 ไม่ใช่ 401 — และนั่นถูกแล้ว** `src/proxy.ts` (Next 16 เปลี่ยนชื่อจาก `middleware.ts`)
+จับคู่ `/api/admin(.*)` ไว้ แล้ว Clerk **rewrite** คำขอที่ไม่ได้ล็อกอินไปหน้า 404 แทนที่จะปล่อย
+ให้ถึง handler เพื่อไม่บอกใบ้ว่ามี endpoint นี้อยู่ ยืนยันได้ว่าเป็นพฤติกรรมทั้งระบบไม่ใช่ของ
+route ใหม่ ด้วยการยิง route หลังบ้านเดิมเทียบ:
+
+```bash
+for p in admin/me admin/map/layers admin/disaster/incidents; do
+  echo -n "  /api/$p → "; curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:3000/api/$p"
+done
+```
+Expected: **404 ทั้งสามเส้น** — ถ้าเส้นใหม่ได้ 200 ขณะที่เส้นเดิมได้ 404 แปลว่า guard ไม่ทำงาน หยุดทันที
+
+หลักฐานที่ guard ทำงานคือหัว `x-clerk-auth-status: signed-out` กับ `protect-rewrite` ซึ่งแปลว่า
+คำขอถูกสกัดก่อนถึง handler ไม่ใช่ว่า route หายไป
 
 จากนั้นเปิด `http://localhost:3000/api/admin/disaster/incidents` ในเบราว์เซอร์ที่ล็อกอินอยู่
 Expected: ได้ JSON รายการเหตุ (บัญชีที่ใช้ต้องมีสิทธิ์ `disaster` — ผู้จัดการได้ครบทุกสิทธิ์อยู่แล้ว)
