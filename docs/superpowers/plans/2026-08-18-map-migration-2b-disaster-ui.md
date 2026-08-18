@@ -318,10 +318,35 @@ Expected: มีครบทั้ง 11
 มาต่อกันในไฟล์เดียว (ทั้งสี่รวมกัน ~85 บรรทัด) แล้ว:
 
 - `Badge` — เปลี่ยน `'../../lib/disasterTypes'` → `'@/lib/disaster-types'`
-- แก้สี: ทุกที่ที่เป็น `#0e7c66` (brand ของ map) เปลี่ยนเป็น token เขียวของ portal
-  ตรวจว่า portal ใช้ชื่ออะไรด้วย `grep -n "green-deep\|0f7a37" src/app/globals.css src/styles/*.css 2>/dev/null`
-  แล้วใช้ชื่อนั้น **ห้ามเพิ่ม token ชุดใหม่เป็น alias** — `globals.css` เขียนไว้เองว่ากำลังถอด
-  alias เดิมทิ้งอยู่
+
+**ตารางแมป Tailwind class — ใช้ทุกไฟล์ในรอบนี้**
+
+map ใช้ Tailwind 3 ที่ประกาศสีใน `tailwind.config.ts` ส่วน portal ใช้ Tailwind 4 ที่ประกาศเป็น
+CSS variable ใน `src/styles/globals.css` ชื่อ token จึงคนละชุดกันหมด
+
+| class ของ map | ค่า | class ของ portal | ค่า |
+|---|---|---|---|
+| `bg-brand` `text-brand` `border-brand` | `#0e7c66` | `bg-green-deep` `text-green-deep` `border-green-deep` | `#0f7a37` |
+| `text-brand-dark` | `#0b5f4e` | `text-green-forest` | `#32523d` |
+| `text-brand-blue` | `#1e5fa8` | `text-aqua` | `#24809e` |
+| `text-ink` | `#12332b` | `text-ink` | `#141414` |
+| `text-ink-soft` | `#33443e` | `text-ink-soft` | `#4b5563` |
+| `text-muted` | `#5a6b64` | `text-ink-faint` | `#6b7280` |
+| `text-faint` | `#8aa39a` | `text-ink-mute` | `#9ca3af` |
+| `border-hairline` `border-hairline-strong` | `#e4ebe8` | `border-line` | `rgba(17,24,39,.12)` |
+| `bg-surface-input` | `#f1f5f3` | `bg-surface-sunken` | `#fafbf9` |
+| `rounded-card` | 15px | `rounded-card` | 18px (portal มี `--radius-card`) |
+| `rounded-panel` | 12px | `rounded-xl` | 12px |
+| `rounded-pill` | 20px | `rounded-full` | — |
+| `shadow-card` `shadow-modal` | — | `shadow-lg` | portal ไม่มี shadow token ของตัวเอง |
+
+**⚠️ กับดักชื่อ token:** ของ portal `ink-mute` (`#9ca3af`) **อ่อนกว่า** `ink-faint` (`#6b7280`)
+ซึ่งกลับกับที่ชื่อชวนให้คิด ส่วนของ map `muted` เข้มกว่า `faint` ตามปกติ ถ้าแมปตรงตามชื่อ
+(`muted`→`ink-mute`, `faint`→`ink-faint`) ลำดับความเข้มจะกลับด้าน ข้อความรองจะเด่นกว่าข้อความหลัก
+ตารางข้างบนแมปตาม**ค่าสี** ไม่ใช่ตามชื่อ — ทำตามตาราง
+
+**ห้ามเพิ่ม token ชุดใหม่เป็น legacy alias** — สเปกระบุไว้ และ `globals.css` ของ portal เขียน
+กำกับไว้เองว่ากำลังถอด alias เดิมทิ้งอยู่ การเพิ่มชุดใหม่คือเดินสวนทาง
 
 - [ ] **Step 3: คัดลอกอีกสองตัว**
 
