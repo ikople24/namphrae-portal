@@ -246,10 +246,13 @@ describe('toIncidentItem', () => {
   // เหตุผลอยู่ในหัวข้อ "สองการเปลี่ยนพฤติกรรมที่ตั้งใจ" ของแผน — endpoint สาธารณะ
   // ของต้นทางคืน createdBy ซึ่งเป็น Clerk user ID ของเจ้าหน้าที่ออกไปด้วย
   it('ไม่คืน createdBy / createdAt / updatedAt ออกไปเด็ดขาด', () => {
-    const item = toIncidentItem(doc()) as Record<string, unknown>;
-    expect(item.createdBy).toBeUndefined();
-    expect(item.createdAt).toBeUndefined();
-    expect(item.updatedAt).toBeUndefined();
+    // เช็คที่ "คีย์ไม่มีอยู่" ไม่ใช่ "ค่าเป็น undefined" — คีย์ที่มีอยู่แต่ค่าว่าง
+    // ก็ผ่านแบบหลังได้ ทั้งที่มันหลุดออกไปกับ response จริง
+    const item = toIncidentItem(doc());
+    const keys = Object.keys(item);
+    expect(keys).not.toContain('createdBy');
+    expect(keys).not.toContain('createdAt');
+    expect(keys).not.toContain('updatedAt');
     expect(JSON.stringify(item)).not.toContain('user_secret123');
   });
 
@@ -437,16 +440,19 @@ export async function insertIncident(
   actor: string,
   now: Date
 ): Promise<IncidentItem> {
-  // ไม่ต้อง cast: driver ทำให้ _id เป็น optional ให้เองตอน insert
-  // (OptionalUnlessRequiredId) เพราะมันเป็นคนสร้าง ObjectId ให้
-  const doc = {
+  // สร้าง ObjectId เองแทนการอ่าน insertedId กลับมา — OptionalUnlessRequiredId ของ
+  // driver คือ TSchema extends { _id: any } ? TSchema : OptionalId<TSchema> แปลว่า
+  // เมื่อ IncidentDoc ประกาศ _id ไว้ มันคืนชนิดเดิมโดย _id ยัง required ไม่ได้ทำให้
+  // เป็น optional ให้ ประกาศ doc เป็น IncidentDoc ตรง ๆ จึงคอมไพล์ผ่านโดยไม่ต้อง cast
+  const doc: IncidentDoc = {
+    _id: new ObjectId(),
     ...buildIncidentFields(input),
     createdBy: actor,
     createdAt: now,
     updatedAt: now,
   };
-  const res = await (await col()).insertOne(doc);
-  return toIncidentItem({ ...doc, _id: res.insertedId });
+  await (await col()).insertOne(doc);
+  return toIncidentItem(doc);
 }
 
 /**
