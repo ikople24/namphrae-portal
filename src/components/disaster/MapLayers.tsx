@@ -2,6 +2,12 @@ import { useEffect } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.markercluster';
+// CSS ของ markercluster ต้อง import คู่กับตัวปลั๊กอินเสมอ — ปลั๊กอินจัดกลุ่มได้โดยไม่มีมัน
+// แต่จะไม่มีอะไรวาดวงกลมกับสีตามจำนวน เหลือแค่ตัวเลขลอยอยู่บนแผนที่ ต้นทางเคย import
+// ไว้ที่ _app.tsx ระดับแอป ที่นี่ผูกไว้กับคอมโพเนนต์ที่ใช้จริงเพื่อไม่ให้หน้าอื่นแบก
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+// leaflet.heat ไม่มี CSS ของตัวเอง — มันวาดลง canvas ตรง ๆ
 import 'leaflet.heat';
 import type { IncidentItem } from '@/types/disaster';
 import { imageUrl } from '@/lib/disaster-image';
