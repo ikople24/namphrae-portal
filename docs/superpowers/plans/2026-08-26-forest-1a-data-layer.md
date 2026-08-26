@@ -858,6 +858,13 @@ git commit -m "feat(forest): โดเมน forestLayers แยก collection �
 
 ## Task 5: `forest-prep.ts` — ป่าชุมชนและตัวช่วยร่วม
 
+> **หมายเหตุจากรีวิว:** โค้ดจริงที่ลงไปมีมากกว่าบล็อกด้านล่างสามอย่าง ดู commit ที่สอง
+> ของ Task นี้ — ตัวช่วย `num()` ที่คืน `NaN` แทน `0` ให้ `null`/สตริงว่าง, ตัวช่วย
+> `waKeyOf()` ที่แยกคอลัมน์ `ตารางวา` ออกจาก `ตารางเมตร` (อักษรไทยตัวละ 3 ไบต์ สองชื่อนี้
+> จึงถูกตัดเหลือชื่อ DBF เดียวกันเป๊ะ), และ `mooFromName` แปลงเลขไทยก่อนด้วย
+> `arabicDigits` — บรรทัด import จึงเป็น `import { arabicDigits } from '@/lib/iso-date';`
+> ไม่ใช่ `toIsoDate`
+
 **Files:**
 - Create: `src/lib/forest-prep.ts`
 - Test: `src/lib/forest-prep.test.ts`
@@ -1131,7 +1138,9 @@ Expected: FAIL — `splitWeir is not a function`
 
 - [ ] **Step 3: เขียนโค้ด**
 
-ต่อท้าย `src/lib/forest-prep.ts`:
+`splitWeir` เรียก `toIsoDate` ซึ่ง Task 5 ไม่ได้ import ไว้ — แก้บรรทัด import บนสุดของ
+ไฟล์จาก `import { arabicDigits } from '@/lib/iso-date';` เป็น
+`import { arabicDigits, toIsoDate } from '@/lib/iso-date';` ก่อน แล้วต่อท้ายไฟล์:
 
 ```ts
 // ── ฝาย ──────────────────────────────────────────────────────────────────────
