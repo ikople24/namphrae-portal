@@ -678,6 +678,14 @@ export function createLayerStore<L extends MapLayer>(
 }
 ```
 
+> **`Filter<L>` ต้อง cast** — บล็อกด้านบนคอมไพล์ไม่ผ่านตามที่เขียนไว้ `Filter<L>` กางเป็น
+> mapped type บน `keyof WithId<L>` ซึ่ง TypeScript ยังกางไม่ออกตอน `L` เป็นตัวแปรชนิด
+> `{ id }` จึงไม่ผ่าน ทั้งที่ `L extends MapLayer` การันตี `id: string` อยู่แล้ว
+>
+> เพิ่ม `import type { Filter } from 'mongodb';` แล้วใส่ `as Filter<L>` ที่ตัวกรองของ
+> `getLayer`, `upsertLayer`, `patchLayer` สามจุด — แก้ระดับชนิดล้วน ไม่กระทบ runtime
+> ส่วน `deleteLayer`/`deleteVersions` ไม่ต้องแก้ เพราะเรียกผ่าน `db.collection(...)` ที่ไม่ระบุชนิด
+
 - [ ] **Step 2: เขียน `map-store.ts` ใหม่ให้เหลือแค่การผูก**
 
 แทนที่เนื้อไฟล์ `src/lib/map-store.ts` ทั้งหมดด้วย:
@@ -732,9 +740,15 @@ export const {
 
 ```bash
 git show HEAD:src/lib/map-store.ts | sed -n '41,152p' > /tmp/pure-before.ts
-sed -n "/^\/\*\*$/,/^}$/p" src/lib/layer-store.ts | sed -n '1,112p' > /tmp/pure-after.ts
+START=$(grep -n '^/\*\*$' src/lib/layer-store.ts | head -1 | cut -d: -f1)
+sed -n "${START},$((START + 111))p" src/lib/layer-store.ts > /tmp/pure-after.ts
 diff /tmp/pure-before.ts /tmp/pure-after.ts && echo "เหมือนกันทุกตัวอักษร"
 ```
+
+> ตัดจากบรรทัดแรกที่เป็น `/**` แล้วนับไป 112 บรรทัด — **ห้ามใช้ช่วง sed แบบ
+> `/^\/\*\*$/,/^}$/`** เพราะมันเริ่มช่วงใหม่ทุกครั้งที่เจอ `}` ปิดคอลัมน์แรก จึงเก็บเฉพาะบล็อก
+> ที่มี JSDoc นำหน้าแล้ว**ทิ้ง `buildNewVersion` ทั้งฟังก์ชัน** (มันไม่มี JSDoc) — คำสั่งที่ควร
+> จับการคัดลอกตกหล่น จะกลายเป็นตัวที่ปล่อยการตกหล่นนั้นผ่านไปเสียเอง
 
 Expected: `เหมือนกันทุกตัวอักษร` — ถ้า diff มีบรรทัดออกมา แปลว่าตกหล่นระหว่างย้าย
 ให้คัดลอกใหม่จาก `/tmp/pure-before.ts` แทนการพิมพ์เอง
