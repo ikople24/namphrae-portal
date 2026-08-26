@@ -1,5 +1,5 @@
 // src/lib/forest-prep.ts
-import { toIsoDate } from '@/lib/iso-date';
+import { arabicDigits } from '@/lib/iso-date';
 import type { Feature, FeatureCollection } from '@/types/map';
 
 // ล้างฟิลด์ของชั้นข้อมูลป่าไม้แต่ละชั้นก่อนเข้า ingestMapFile
@@ -43,26 +43,61 @@ const MOO = /หมู่\s*(?:ที่\s*)?(\d+)/;
 
 /** เลขหมู่จากชื่อแปลง — คือตัวตนที่ระบบใช้เทียบส่วนต่างระหว่างเวอร์ชัน */
 export function mooFromName(name: unknown): number {
-  const m = MOO.exec(String(name ?? ''));
+  const m = MOO.exec(arabicDigits(String(name ?? '')));
   if (!m) throw new Error(`หาเลขหมู่จากชื่อไม่เจอ: ${JSON.stringify(name)}`);
   return Number(m[1]);
+}
+
+/**
+ * ตัวเลขจากค่าที่มาในถุง properties — `null`, `undefined` และสตริงว่าง คืน NaN ไม่ใช่ 0
+ *
+ * `Number(null)` เป็น 0 ซึ่งที่นี่อันตราย: ช่องทะเบียนที่ว่างจะกลายเป็นเนื้อที่ 0 ไร่
+ * แล้วด่านตรวจของสคริปต์นำเข้าจะรายงานว่าการแปลงพิกัดเพี้ยน ทั้งที่สาเหตุจริงคือ
+ * ช่องเดียวในไฟล์ที่ไม่ได้กรอก — คนอ่านจะไล่ผิดทางทั้งวัน
+ */
+function num(v: unknown): number {
+  if (v === null || v === undefined) return NaN;
+  if (typeof v === 'string' && v.trim() === '') return NaN;
+  return Number(v);
+}
+
+const WA_EXACT = 'ตารางวา';
+
+/**
+ * หาคอลัมน์ตารางวา — คืน null ถ้าไม่มี
+ *
+ * ชื่อคอลัมน์ถูกตัดตอน export เป็น shapefile เพราะชื่อฟิลด์ DBF ยาวได้ 10 ไบต์ แล้ว
+ * ไบต์สุดท้ายขาดกลางตัวอักษรจนกลายเป็น U+FFFD จึงต้องรับทั้งชื่อเต็มและชื่อที่ถูกตัด
+ *
+ * แต่จะดูแค่ว่าขึ้นต้นด้วย "ตาร" ไม่ได้ — อักษรไทยตัวละ 3 ไบต์ใน UTF-8 "ตารางวา" กับ
+ * "ตารางเมตร" จึงถูกตัดเหลือชื่อ DBF เดียวกันเป๊ะ และไฟล์ GeoJSON ที่ export ตรงจาก
+ * QGIS มีทั้งสองคอลัมน์อยู่ด้วยกันได้ ("ตารางเมตร" คือชื่อที่คนตั้งให้คอลัมน์ $area)
+ * หยิบผิดคอลัมน์แล้วได้เนื้อที่ผิดไปคนละเรื่อง
+ *
+ * เกณฑ์ความยาวคือสิ่งที่แยกสองชื่อนี้ออกจากกัน: ชื่อที่ถูกตัดเหลือ 10 ไบต์ คือ "ตาร"
+ * (9 ไบต์) บวกเศษอีกตัว จึงยาวไม่เกิน 4 อักขระ ส่วน "ตารางเมตร" ยาว 9
+ */
+function waKeyOf(p: Record<string, unknown>): string | null {
+  if (WA_EXACT in p) return WA_EXACT;
+  const hits = Object.keys(p).filter((k) => k.startsWith('ตาร') && k.length <= 4);
+  // สองคอลัมน์ที่ถูกตัดชื่อจนเหมือนกัน = ไฟล์กำกวม คนต้องมาดู ไม่ใช่ให้เครื่องเดา
+  if (hits.length > 1) {
+    throw new Error(`มีคอลัมน์ตารางวาที่ถูกตัดชื่อมากกว่าหนึ่ง: ${hits.join(', ')}`);
+  }
+  return hits[0] ?? null;
 }
 
 /**
  * เนื้อที่ตามทะเบียนที่ติดมาในไฟล์ (ไร่) — null ถ้าฟิลด์ไม่ครบ
  *
  * ใช้ตรวจยันค่าที่ computeArea คำนวณเท่านั้น ไม่ได้เก็บลงชั้นข้อมูล
- *
- * ชื่อคอลัมน์ "ตารางวา" ถูกตัดตอน export เป็น shapefile (ชื่อฟิลด์ DBF ยาวได้ 10 ไบต์)
- * แล้วไบต์สุดท้ายขาดกลางตัวอักษรจนกลายเป็น U+FFFD — จึงไล่หาคีย์ที่ขึ้นต้นด้วย "ตาร"
- * แทนการเทียบชื่อเป๊ะ ๆ ซึ่งจะพังทันทีที่ export ครั้งหน้าตัดคำที่ตำแหน่งอื่น
  */
 export function registryRai(f: Feature): number | null {
   const p = f.properties ?? {};
-  const rai = Number(p['ไร่']);
-  const ngan = Number(p['งาน']);
-  const waKey = Object.keys(p).find((k) => k.startsWith('ตาร'));
-  const wa = waKey ? Number(p[waKey]) : NaN;
+  const rai = num(p['ไร่']);
+  const ngan = num(p['งาน']);
+  const waKey = waKeyOf(p);
+  const wa = waKey ? num(p[waKey]) : NaN;
   if (!Number.isFinite(rai) || !Number.isFinite(ngan) || !Number.isFinite(wa)) return null;
   return rai + ngan / 4 + wa / 400;
 }

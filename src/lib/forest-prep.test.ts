@@ -52,6 +52,25 @@ describe('registryRai', () => {
   it('ฟิลด์ไม่ครบ → null ไม่ใช่ NaN', () => {
     expect(registryRai(feat({ 'ไร่': 50 }))).toBeNull();
   });
+
+  it('ช่องว่างในทะเบียน → null ไม่ใช่ 0 — 0 จะทำให้ด่านตรวจรายงานผิดสาเหตุ', () => {
+    expect(registryRai(feat({ 'ไร่': null, 'งาน': 0, 'ตาร\uFFFD': 0 }))).toBeNull();
+    expect(registryRai(feat({ 'ไร่': '', 'งาน': 0, 'ตาร\uFFFD': 0 }))).toBeNull();
+  });
+
+  it('เลขที่มาเป็นสตริงก็อ่านได้ — ถุง properties ไม่รับประกันชนิด', () => {
+    expect(registryRai(feat({ 'ไร่': '463', 'งาน': '0', 'ตาร\uFFFD': '36.76' }))).toBeCloseTo(
+      463.0919,
+      4
+    );
+  });
+
+  it('ไม่หยิบคอลัมน์ ตารางเมตร มาใช้แทน — สองชื่อนี้ถูกตัดเหลือชื่อ DBF เดียวกัน', () => {
+    expect(
+      registryRai(feat({ 'ไร่': 50, 'งาน': 0, 'ตารางเมตร': 20000, 'ตาร\uFFFD': 8.41 }))
+    ).toBeCloseTo(50.021, 3);
+    expect(registryRai(feat({ 'ไร่': 50, 'งาน': 0, 'ตารางเมตร': 20000 }))).toBeNull();
+  });
 });
 
 describe('prepCommunityForest', () => {
@@ -69,7 +88,7 @@ describe('prepCommunityForest', () => {
         }),
       ])
     );
-    expect(out.features[0].properties).toEqual({ moo: 7 });
+    expect(out.features[0].properties).toStrictEqual({ moo: 7 });
   });
 
   it('ไม่แตะ geometry', () => {
@@ -78,5 +97,22 @@ describe('prepCommunityForest', () => {
       coll([{ type: 'Feature', geometry: g, properties: { name: 'หมู่ 10' } }])
     );
     expect(out.features[0].geometry).toEqual(g);
+  });
+
+  it('ทิ้ง crs ระดับบน — ป้าย UTM ที่ค้างมาจะทำให้ parseMapFile ปฏิเสธไฟล์ที่ประกอบใหม่', () => {
+    const out = prepCommunityForest({
+      type: 'FeatureCollection',
+      crs: { properties: { name: 'urn:ogc:def:crs:EPSG::32647' } },
+      features: [feat({ name: 'หมู่ 7' })],
+    });
+    expect(Object.keys(out)).toEqual(['type', 'features']);
+  });
+
+  it('ชื่อแปลงเดียวที่อ่านไม่ออกทำให้ทั้งก้อนล้ม ไม่ใช่นำเข้าครึ่ง ๆ กลาง ๆ', () => {
+    expect(() =>
+      prepCommunityForest(
+        coll([feat({ name: 'เขตป่าชุมชน หมู่ 7' }), feat({ name: 'ป่าชุมชน' })])
+      )
+    ).toThrow(/หาเลขหมู่/);
   });
 });
