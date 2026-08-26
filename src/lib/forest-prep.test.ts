@@ -176,4 +176,32 @@ describe('splitWeir', () => {
   it('แถวที่ไม่มี fid → โยน error ไม่เดาว่าอยู่ฝั่งไหน', () => {
     expect(() => splitWeir(coll([pt({ Name: 'x', Date: '2025-06-18' })]))).toThrow(/fid/);
   });
+
+  it('fid เป็น null → โยน error ไม่ไหลไปอยู่ฝั่งจุดสำรวจ', () => {
+    // null คือรูปแบบที่ไฟล์ชุดนี้ใช้เขียนช่องว่างจริง ๆ ไม่ใช่การละคีย์ทิ้ง
+    expect(() =>
+      splitWeir(
+        coll([pt({ fid: null, Date: '18-มิ.ย.-68', cause: 'ภัยแล้ง ไม่มีน้ำ', loss: 'ฝายสภาเด็ก' })])
+      )
+    ).toThrow(/fid/);
+    expect(() => splitWeir(coll([pt({ fid: 0, Date: '2025-06-18' })]))).toThrow(/fid/);
+    expect(() => splitWeir(coll([pt({ fid: 54.7, Date: '2025-06-18' })]))).toThrow(/fid/);
+  });
+
+  it('fid ที่เป็นสตริงตัวเลขยังใช้ได้', () => {
+    const { weir } = splitWeir(coll([pt({ fid: '42', Date: '2025-06-18', loss: 'ฝายทดสอบ' })]));
+    expect(weir.features).toHaveLength(1);
+  });
+
+  it('แถวฝายที่ไม่มีชื่อ → โยน error เพราะชื่อคือคีย์ประจำรายการ', () => {
+    expect(() =>
+      splitWeir(coll([pt({ fid: 42, Date: '2025-06-18', cause: 'ภัยแล้ง ไม่มีน้ำ' })]))
+    ).toThrow(/ไม่มีชื่อ/);
+  });
+
+  it('วันที่อ่านไม่ออกต้องบอกด้วยว่าแถวไหน', () => {
+    expect(() =>
+      splitWeir(coll([pt({ fid: 42, Date: '12/06/2566', loss: 'ฝายทดสอบ' })]))
+    ).toThrow(/ฝายทดสอบ/);
+  });
 });

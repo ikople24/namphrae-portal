@@ -126,15 +126,36 @@ export function splitWeir(fc: FeatureCollection): {
 
   for (const f of fc.features) {
     const fid = Number(f.properties?.fid);
-    if (!Number.isFinite(fid)) {
-      throw new Error(`แถวฝายไม่มี fid: ${JSON.stringify(f.properties)}`);
+    // ไม่ใช้ Number.isFinite เพราะ Number(null) เป็น 0 ซึ่งผ่านด่านนั้นได้ แล้ว 0 <= 41
+    // ทำให้แถวทะเบียนฝายที่ fid ว่างไหลไปอยู่ฝั่งจุดสำรวจ แล้วชื่อฝายถูกตัดทิ้งเงียบ ๆ
+    // — และ null คือรูปแบบที่ไฟล์ชุดนี้ใช้เขียนช่องว่างจริง ๆ (Name/cause/loss เป็น null
+    // กันทั้งไฟล์) ส่วนสตริงตัวเลขอย่าง "42" ยังผ่านได้ตามเดิม
+    if (!Number.isInteger(fid) || fid < 1) {
+      throw new Error(`แถวฝาย fid ใช้ไม่ได้: ${JSON.stringify(f.properties)}`);
     }
     (fid <= SURVEY_MAX_FID ? surveyRows : weirRows).push(f);
   }
 
-  const surveyedAt = (f: Feature) => ({
-    surveyed_at: toIsoDate(f.properties?.Date),
-  });
+  // ชื่อฝายคือคีย์ประจำรายการของชั้นนี้ ไม่มีชื่อ = ไม่มีตัวตนให้เทียบระหว่างเวอร์ชัน
+  // ด่าน duplicate-key เตือนแค่ระดับ warning จึงต้องหยุดตั้งแต่ที่นี่ หลักเดียวกับที่
+  // mooFromName โยน error แทนที่จะเดาเลขหมู่
+  for (const f of weirRows) {
+    if (!f.properties?.loss) {
+      throw new Error(`แถวฝายไม่มีชื่อ (คอลัมน์ loss): ${JSON.stringify(f.properties)}`);
+    }
+  }
+
+  const surveyedAt = (f: Feature) => {
+    try {
+      return { surveyed_at: toIsoDate(f.properties?.Date) };
+    } catch (err) {
+      // toIsoDate รู้แค่ค่าที่อ่านไม่ออก ไม่รู้ว่ามาจากแถวไหน — บนไฟล์ 54 แถวข้อความ
+      // เปล่า ๆ ไม่ช่วยใครหาต้นตอ
+      throw new Error(
+        `${(err as Error).message} (แถว ${JSON.stringify(f.properties)})`
+      );
+    }
+  };
 
   return {
     // LAT/LON ทิ้งเพราะซ้ำกับ geometry อยู่แล้ว เก็บไว้ก็มีแต่จะขัดกันเองเมื่อหมุด
