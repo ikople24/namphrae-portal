@@ -1,5 +1,5 @@
 // src/lib/forest-prep.ts
-import { arabicDigits } from '@/lib/iso-date';
+import { arabicDigits, toIsoDate } from '@/lib/iso-date';
 import type { Feature, FeatureCollection } from '@/types/map';
 
 // ล้างฟิลด์ของชั้นข้อมูลป่าไม้แต่ละชั้นก่อนเข้า ingestMapFile
@@ -105,4 +105,41 @@ export function registryRai(f: Feature): number | null {
 /** ป่าชุมชน 4 แปลง — เหลือแค่ moo ส่วน area_rai/area_km2 ให้ computeArea เติม */
 export function prepCommunityForest(fc: FeatureCollection): FeatureCollection {
   return pick(fc.features, {}, (f) => ({ moo: mooFromName(f.properties?.name) }));
+}
+
+// ── ฝาย ──────────────────────────────────────────────────────────────────────
+
+// fid แบ่งตัวเองอยู่แล้ว: 1–41 คือการเดินสำรวจถ่ายรูปสองวันในมิถุนายน 2568
+// (มีรูปกับระดับความสูง ไม่มีชื่อ) ส่วน 42–54 คือทะเบียนฝายที่สร้างจริงย้อนหลัง 5 ปี
+// (มีชื่อกับสาเหตุความเสียหาย ไม่มีรูป) ทั้งสองชุดไม่มีแถวไหนคาบเกี่ยวกันเลย
+//
+// สคริปต์นำเข้าตรวจยันช่วง fid นี้อีกชั้นก่อนเขียนลงฐาน — ถ้าวันไหนต้นทางแก้ไฟล์
+// จนช่วงเปลี่ยน การแยกสองชั้นอาจไม่ตรงอีกต่อไปและต้องมีคนมาดูด้วยตา
+const SURVEY_MAX_FID = 41;
+
+export function splitWeir(fc: FeatureCollection): {
+  weir: FeatureCollection;
+  survey: FeatureCollection;
+} {
+  const surveyRows: Feature[] = [];
+  const weirRows: Feature[] = [];
+
+  for (const f of fc.features) {
+    const fid = Number(f.properties?.fid);
+    if (!Number.isFinite(fid)) {
+      throw new Error(`แถวฝายไม่มี fid: ${JSON.stringify(f.properties)}`);
+    }
+    (fid <= SURVEY_MAX_FID ? surveyRows : weirRows).push(f);
+  }
+
+  const surveyedAt = (f: Feature) => ({
+    surveyed_at: toIsoDate(f.properties?.Date),
+  });
+
+  return {
+    // LAT/LON ทิ้งเพราะซ้ำกับ geometry อยู่แล้ว เก็บไว้ก็มีแต่จะขัดกันเองเมื่อหมุด
+    // ถูกย้าย — เหตุผลเดียวกับที่เคยทิ้ง E/N ของหมุดรังวัดป่าชุมชน
+    survey: pick(surveyRows, { Name: 'photo', Altitude: 'elevation_m' }, surveyedAt),
+    weir: pick(weirRows, { loss: 'name', cause: 'note' }, surveyedAt),
+  };
 }

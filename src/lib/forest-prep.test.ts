@@ -1,6 +1,6 @@
 // src/lib/forest-prep.test.ts
 import { describe, expect, it } from 'vitest';
-import { mooFromName, prepCommunityForest, registryRai } from '@/lib/forest-prep';
+import { mooFromName, prepCommunityForest, registryRai, splitWeir } from '@/lib/forest-prep';
 import type { Feature, FeatureCollection } from '@/types/map';
 
 const feat = (properties: Record<string, unknown>): Feature => ({
@@ -114,5 +114,66 @@ describe('prepCommunityForest', () => {
         coll([feat({ name: 'เขตป่าชุมชน หมู่ 7' }), feat({ name: 'ป่าชุมชน' })])
       )
     ).toThrow(/หาเลขหมู่/);
+  });
+});
+
+const pt = (properties: Record<string, unknown>): Feature => ({
+  type: 'Feature',
+  geometry: { type: 'Point', coordinates: [98.89, 18.71] },
+  properties,
+});
+
+const RAW_WEIR = [
+  pt({
+    fid: 1,
+    Name: 'Photo(1).jpg',
+    Date: '2025-06-18',
+    Altitude: 335,
+    Path: 'D:/Qgis/ป่าไม้/ฝาย\\Photo(1).jpg',
+    RelPath: 'ฝาย\\Photo(1).jpg',
+    Images: '<img src = "ฝาย\\Photo(1).jpg" width="300" height="225"/>',
+    Link: 'file:///D:/Qgis/ป่าไม้/ฝาย\\Photo(1).jpg',
+    cause: null,
+    loss: null,
+    LAT: 18.71541,
+    LON: 98.89409,
+  }),
+  pt({ fid: 41, Name: 'Photo(41).jpg', Date: '2025-06-20', Altitude: 356 }),
+  pt({ fid: 42, Name: null, Date: '18-มิ.ย.-68', cause: 'ภัยแล้ง ไม่มีน้ำ', loss: 'ฝายม่อนหินขาว ม.7' }),
+  pt({ fid: 54, Name: null, Date: '๒๐-ก.ย.-๖๔', cause: 'ภัยแล้ง ไม่มีน้ำ', loss: 'ฝายป็อกกลาง' }),
+];
+
+describe('splitWeir', () => {
+  it('แบ่งที่ fid 41/42 — ไม่มีจุดไหนคาบเกี่ยว', () => {
+    const { weir, survey } = splitWeir(coll(RAW_WEIR));
+    expect(survey.features).toHaveLength(2);
+    expect(weir.features).toHaveLength(2);
+  });
+
+  it('จุดสำรวจเหลือ photo/surveyed_at/elevation_m — path บนไดรฟ์ D: หายหมด', () => {
+    const { survey } = splitWeir(coll(RAW_WEIR));
+    expect(survey.features[0].properties).toEqual({
+      photo: 'Photo(1).jpg',
+      elevation_m: 335,
+      surveyed_at: '2025-06-18',
+    });
+  });
+
+  it('ฝายเหลือ name/note/surveyed_at โดย loss กลายเป็นชื่อฝาย', () => {
+    const { weir } = splitWeir(coll(RAW_WEIR));
+    expect(weir.features[0].properties).toEqual({
+      name: 'ฝายม่อนหินขาว ม.7',
+      note: 'ภัยแล้ง ไม่มีน้ำ',
+      surveyed_at: '2025-06-18',
+    });
+  });
+
+  it('แปลงวันที่เลขไทยของฝายเก่าให้เป็น ISO', () => {
+    const { weir } = splitWeir(coll(RAW_WEIR));
+    expect(weir.features[1].properties?.surveyed_at).toBe('2021-09-20');
+  });
+
+  it('แถวที่ไม่มี fid → โยน error ไม่เดาว่าอยู่ฝั่งไหน', () => {
+    expect(() => splitWeir(coll([pt({ Name: 'x', Date: '2025-06-18' })]))).toThrow(/fid/);
   });
 });
