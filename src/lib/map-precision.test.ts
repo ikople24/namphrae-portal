@@ -22,6 +22,20 @@ describe('withPrecision', () => {
     });
   });
 
+  it('ปัด MultiLineString ที่ซ้อนสามชั้น — รูปทรงของชั้นแหล่งน้ำ 327 เส้น', () => {
+    const out = withPrecision(
+      fc({
+        type: 'MultiLineString',
+        coordinates: [[[98.8604999999, 18.6804999999], [98.8715000001, 18.6915000001]]],
+      }),
+      6
+    );
+    expect(out.features[0].geometry).toEqual({
+      type: 'MultiLineString',
+      coordinates: [[[98.8605, 18.6805], [98.8715, 18.6915]]],
+    });
+  });
+
   it('ปัดพิกัดที่ซ้อนลึกของ MultiPolygon', () => {
     const out = withPrecision(
       fc({
