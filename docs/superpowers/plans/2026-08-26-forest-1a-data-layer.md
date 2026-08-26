@@ -1635,12 +1635,14 @@ import {
   splitWeir,
 } from '../src/lib/forest-prep';
 import { FOREST_SEEDS } from '../src/lib/forest-registry';
+// ฟังก์ชันบริสุทธิ์อยู่ที่ layer-store ไม่ใช่ที่ binding ของโดเมน — forest-store
+// export เฉพาะสิบเอ็ดเมธอดที่คุยกับฐาน ส่วน map-store re-export ให้ด้วยเพราะรองรับ
+// ผู้เรียกเดิม ซึ่งเป็นข้อยกเว้น ไม่ใช่แบบอย่าง
+import { buildNewVersion, nextVersionNo } from '../src/lib/layer-store';
 import {
-  buildNewVersion,
   getLayer,
   insertVersion,
   listVersions,
-  nextVersionNo,
   upsertLayer,
 } from '../src/lib/forest-store';
 import { ingestMapFile } from '../src/lib/map-ingest';
@@ -2056,6 +2058,21 @@ Expected: ไม่เจออะไร
 git add README.md
 git commit -m "docs: อัปเดต README ให้ตรงกับคลังข้อมูลป่าไม้ 7 ชั้น"
 ```
+
+---
+
+## เลื่อนไปรอบ 1B โดยตั้งใจ
+
+**ยุบสามบรรทัดซ้ำ 11 ที่ใน `layer-store.ts`** — ทุกเมธอดเปิดด้วย
+`if (usingMongo()) { await ensureIndexes(); const db = await getDb(); }` เหมือนกันหมด
+ยุบเป็นตัวช่วย `mongo(): Promise<Db | null>` ตัวเดียวจะทำให้ "เมธอดใหม่ลืมเรียก
+`ensureIndexes()`" เป็นไปไม่ได้เชิงโครงสร้าง แทนที่จะอาศัยวินัยการคัดลอกอย่างทุกวันนี้
+
+ไม่ทำในรอบ 1A เพราะ **สิบเอ็ดเมธอดนั้นไม่มีเทสต์แตะเลย** — `map-store.test.ts` ครอบแค่
+ฟังก์ชันบริสุทธิ์ การรื้อโค้ดที่ไม่มีตาข่ายรองรับคือการแลกที่ผิดจังหวะ รอบ 1B ดึง route
+ออกมาใช้ร่วมอยู่แล้ว ซึ่งเป็นตอนที่ไฟล์นี้ได้ผู้ใช้รายที่สองจริง ๆ และเป็นจังหวะที่ควร
+ตัดสินใจด้วยว่าจะรับเทสต์แบ็กเอนด์ไฟล์บนไดเรกทอรีชั่วคราวเข้ามาไหม (ตอนนี้
+`vitest.config.ts` ประกาศว่าเทสต์ครอบเฉพาะ logic บริสุทธิ์)
 
 ---
 
