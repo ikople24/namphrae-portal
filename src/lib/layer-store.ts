@@ -175,8 +175,12 @@ export type LayerStore<L extends MapLayer> = {
   listVersions: (layerId: string) => Promise<MapLayerVersion[]>;
   getVersion: (id: string) => Promise<MapLayerVersion | null>;
   /**
-   * เวอร์ชันที่เผยแพร่อยู่ — สมมติว่ามีได้ไม่เกินหนึ่งต่อเลเยอร์ ซึ่ง buildPublishPatch
-   * เป็นคนรักษาไว้ด้วยการตั้งตัวเก่าเป็น superseded ในการเขียนรอบเดียวกัน
+   * เวอร์ชันที่เผยแพร่อยู่ — สมมติว่ามีได้ไม่เกินหนึ่งต่อเลเยอร์
+   *
+   * ข้อสมมตินี้ไม่มีอะไรบังคับที่ชั้นฐานข้อมูล buildPublishPatch เป็นฟังก์ชันบริสุทธิ์
+   * ที่คำนวณอย่างเดียว ส่วนผู้เรียก (publish.ts) เขียนสามครั้งเรียงกันโดยไม่มี transaction
+   * ถ้าโปรเซสตายหลังตั้งเวอร์ชันใหม่เป็น published แต่ก่อนตั้งตัวเก่าเป็น superseded
+   * จะเหลือ published สองตัว แล้ว findOne ที่นี่จะคืนตัวไหนก็ได้เพราะไม่ได้เรียงลำดับ
    */
   getPublishedVersion: (layerId: string) => Promise<MapLayerVersion | null>;
   insertVersion: (version: MapLayerVersion) => Promise<MapLayerVersion>;
