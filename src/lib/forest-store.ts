@@ -11,7 +11,7 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const store = createLayerStore<ForestLayer>({
   label: 'ทะเบียนไฟล์ป่าไม้',
   layersCollection: 'forestLayers',
-  versionsCollection: 'forestVersions',
+  versionsCollection: 'forestLayerVersions',
   layersFile: path.join(DATA_DIR, 'forest-layers.json'),
   versionsFile: path.join(DATA_DIR, 'forest-layer-versions.json'),
 });
