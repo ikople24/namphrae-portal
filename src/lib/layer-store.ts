@@ -18,13 +18,21 @@ import type {
 // สองสำเนาต่อเวอร์ชัน (เต็มแบบ authenticated กับสาธารณะที่กรองฟิลด์แล้วบน CDN)
 // ที่นี่เก็บแต่ metadata จึงไม่มีวันชนเพดาน 16MB ต่อ document
 //
+// แบ็กเอนด์เหมือน jobs-store: Mongo เมื่อมี MONGODB_URI ไม่งั้นใช้ไฟล์ในเครื่อง
+// และปฏิเสธแบ็กเอนด์ไฟล์เองตอน production ด้วยเหตุผลเดียวกัน แต่ที่นี่ร้ายแรงกว่า
+// งานปฏิทินหนึ่งขั้น: ทะเบียนที่หายไปตอน deploy ไม่ได้ทำให้แค่ข้อมูลหาย แต่ทำให้
+// ไฟล์ทุกเวอร์ชันบน Cloudinary กลายเป็นขยะกำพร้าที่ไม่มีอะไรอ้างถึงและไม่มีใคร
+// รู้ว่าอันไหนคือของจริง — เก็บเงียบ ๆ ไม่ได้ ต้องไล่เดาจากชื่อ public id เอง
+//
 // ไฟล์นี้ไม่รู้จักคำว่า "แผนที่" หรือ "ป่าไม้" — ผู้เรียกส่งชื่อ collection เข้ามาเอง
 // เพื่อให้สองโดเมนแยกที่เก็บกันได้โดยไม่ต้องคัดลอกตรรกะ ถ้าคัดลอก วันที่แก้บั๊กที่นี่
 // อีกโดเมนจะไม่ได้รับการแก้นั้นและไม่มีใครรู้จนกว่าจะมีคนบ่น
 
 // ── ฟังก์ชันบริสุทธิ์ ────────────────────────────────────────────────────────
-// (ย้ายมาจาก map-store.ts ทั้งบล็อกโดยไม่แก้เนื้อ — map-store.ts re-export ต่อ
-// เพื่อให้ผู้เรียกเดิมทั้งหมดและ map-store.test.ts ทำงานเหมือนเดิม)
+// แยกออกมาให้เทสต์เรียกตรง ๆ ได้โดยไม่ต้องแตะ Mongo หรือไฟล์ ด้วยเหตุผลเดียว
+// กับ buildNewJob/buildStatusPatch ใน jobs-store.ts — และรับ `now`/`id` เป็น
+// พารามิเตอร์แทนที่จะเรียก Date.now()/randomUUID เองข้างใน เพื่อให้เทสต์ตรึงค่า
+// ที่เขียนลงเอกสารได้จริง ไม่ใช่ได้แค่ตรวจว่า "มีฟิลด์นั้นอยู่"
 
 /**
  * นับต่อจากเลขสูงสุดที่เคยมี ไม่ใช่จากจำนวนเอกสาร — เวอร์ชันที่ถูกทิ้ง
@@ -153,13 +161,26 @@ export type LayerStoreConfig = {
 export type LayerStore<L extends MapLayer> = {
   listLayers: () => Promise<L[]>;
   getLayer: (id: string) => Promise<L | null>;
+  /** คืน layer ที่รับเข้ามา ไม่ใช่เอกสารที่อ่านกลับจากฐาน */
   upsertLayer: (layer: L) => Promise<L>;
+  /** คืน null เมื่อไม่มี id นั้น ไม่ throw */
   patchLayer: (id: string, patch: Partial<L>) => Promise<L | null>;
   deleteLayer: (id: string) => Promise<void>;
+  /**
+   * ประวัติของเลเยอร์ เรียงใหม่สุดขึ้นก่อน
+   *
+   * ผู้เรียกพึ่งลำดับนี้จริง — /api/admin/map/layers/index.ts หยิบร่างล่าสุดด้วย
+   * versions.find(v => v.status === 'draft') โดยไม่เรียงเอง
+   */
   listVersions: (layerId: string) => Promise<MapLayerVersion[]>;
   getVersion: (id: string) => Promise<MapLayerVersion | null>;
+  /**
+   * เวอร์ชันที่เผยแพร่อยู่ — สมมติว่ามีได้ไม่เกินหนึ่งต่อเลเยอร์ ซึ่ง buildPublishPatch
+   * เป็นคนรักษาไว้ด้วยการตั้งตัวเก่าเป็น superseded ในการเขียนรอบเดียวกัน
+   */
   getPublishedVersion: (layerId: string) => Promise<MapLayerVersion | null>;
   insertVersion: (version: MapLayerVersion) => Promise<MapLayerVersion>;
+  /** คืน null เมื่อไม่มี id นั้น ไม่ throw */
   patchVersion: (
     id: string,
     patch: Partial<MapLayerVersion>
@@ -171,6 +192,8 @@ export function createLayerStore<L extends MapLayer>(
   cfg: LayerStoreConfig
 ): LayerStore<L> {
   const usingMongo = (): boolean => isMongoConfigured();
+
+  // ── แบ็กเอนด์ไฟล์ ──────────────────────────────────────────────────────────
 
   // แบ็กเอนด์ไฟล์มีไว้ให้รันในเครื่องโดยไม่ต้องมี Mongo — แต่ปฏิเสธตอน production
   // เพราะ filesystem ของ hosting ส่วนใหญ่ (เช่น Railway) เขียนได้จริงแต่ไม่คงอยู่ข้าม
@@ -206,6 +229,8 @@ export function createLayerStore<L extends MapLayer>(
     await fs.writeFile(file, JSON.stringify(rows, null, 2) + '\n', 'utf8');
   }
 
+  // ── แบ็กเอนด์ Mongo ────────────────────────────────────────────────────────
+
   // สถานะของ index อยู่ในคลอเชอร์ ไม่ใช่ระดับโมดูล — สอง store ต้องนับความพยายาม
   // ของตัวเองแยกกัน ไม่งั้นโดเมนที่สร้าง index สำเร็จจะทำให้อีกโดเมนไม่เคยลองเลย
   let indexesEnsured = false;
@@ -235,6 +260,8 @@ export function createLayerStore<L extends MapLayer>(
       );
     }
   }
+
+  // ── API ของ store ──────────────────────────────────────────────────────────
 
   return {
     async listLayers() {
@@ -302,8 +329,7 @@ export function createLayerStore<L extends MapLayer>(
       return rows[i];
     },
 
-    // ลบเฉพาะทะเบียน — ไฟล์บน Cloudinary เป็นหน้าที่ของผู้เรียก เพราะ store ไม่รู้จัก
-    // Cloudinary และไม่ควรรู้ ผู้เรียกต้องอ่าน listVersions() เก็บ asset ไว้ก่อนลบ
+    // ลบเฉพาะทะเบียน — store ไม่รู้จัก Cloudinary และไม่ควรรู้
     async deleteLayer(id) {
       if (usingMongo()) {
         await ensureIndexes();
@@ -314,6 +340,8 @@ export function createLayerStore<L extends MapLayer>(
       const rows = await fileRead<L>(cfg.layersFile);
       await fileWrite(cfg.layersFile, rows.filter((l) => l.id !== id));
     },
+
+    // ── เมธอดของเวอร์ชัน (ด้านบนเป็นของเลเยอร์) ──────────────────────────────
 
     async listVersions(layerId) {
       if (usingMongo()) {
@@ -392,6 +420,9 @@ export function createLayerStore<L extends MapLayer>(
       return rows[i];
     },
 
+    // ลบเฉพาะทะเบียน — ต้องเก็บรายการ asset จาก listVersions() ให้ครบก่อนเรียก
+    // เพราะหลังจากนี้ไม่เหลืออะไรชี้ไปที่ไฟล์บน Cloudinary อีก ลำดับที่ถูกคือ
+    // อ่านเวอร์ชัน → ลบไฟล์ → deleteVersions → deleteLayer
     async deleteVersions(layerId) {
       if (usingMongo()) {
         await ensureIndexes();
