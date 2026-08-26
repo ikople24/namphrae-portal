@@ -26,7 +26,7 @@
 | `src/lib/layer-store.ts` | ฟังก์ชันบริสุทธิ์ของทะเบียน + โรงงาน store ที่รับชื่อ collection |
 | `src/lib/map-store.ts` | **แก้** — เหลือแค่ผูก `createLayerStore` กับ `mapLayers` แล้ว re-export |
 | `src/types/forest.ts` | `ForestLayer` |
-| `src/lib/forest-store.ts` | ผูก `createLayerStore` กับ `forestLayers` |
+| `src/lib/forest-store.ts` | ผูก `createLayerStore` กับ `forestLayers`/`forestLayerVersions` |
 | `src/lib/forest-prep.ts` | ล้างฟิลด์รายชั้นทั้ง 7 ชั้น · บริสุทธิ์ |
 | `src/lib/forest-registry.ts` | เมล็ดพันธุ์ 7 ชั้นสำหรับสคริปต์นำเข้า |
 | `scripts/import-forest-map.mts` | ดึงจากแผนที่ป่าไม้ → ตรวจยัน → ingest → Cloudinary → ร่าง |
@@ -822,7 +822,7 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const store = createLayerStore<ForestLayer>({
   label: 'ทะเบียนไฟล์ป่าไม้',
   layersCollection: 'forestLayers',
-  versionsCollection: 'forestVersions',
+  versionsCollection: 'forestLayerVersions',
   layersFile: path.join(DATA_DIR, 'forest-layers.json'),
   versionsFile: path.join(DATA_DIR, 'forest-layer-versions.json'),
 });
@@ -2015,7 +2015,7 @@ git commit -m "chore(forest): ย้ายป่าชุมชนออกจ�
 ```markdown
 ### ข้อมูลป่าไม้
 
-ข้อมูลป่าไม้อยู่คนละคลังกับแผนที่ — คนละ collection (`forestLayers` / `forestVersions`)
+ข้อมูลป่าไม้อยู่คนละคลังกับแผนที่ — คนละ collection (`forestLayers` / `forestLayerVersions`)
 คนละหน้า และคนละสิทธิ์ แต่เดินผ่านด่านตรวจและระบบเวอร์ชันชุดเดียวกันทั้งหมด
 
 | ชั้น | ชนิด | จำนวน | คีย์ประจำรายการ |

@@ -115,7 +115,7 @@
 ```
 src/types/forest.ts          ForestLayer = MapLayer & { defaultOn?, publishPhotos? }
 src/lib/layer-store.ts       ← ดึงส่วน Mongo ออกจาก map-store (รับชื่อ collection)
-src/lib/forest-store.ts      ผูก layer-store เข้ากับ forestLayers / forestVersions
+src/lib/forest-store.ts      ผูก layer-store เข้ากับ forestLayers / forestLayerVersions
 src/lib/layer-routes.ts      ← ดึงตัวจัดการคำขอออกจาก route ของแผนที่ (รับ store)
 src/lib/forest-registry.ts   เมล็ดพันธุ์ของสคริปต์นำเข้าครั้งแรก (ไม่ใช่แหล่งความจริง)
 src/lib/forest-prep.ts       ล้างฟิลด์รายชั้นทั้ง 7 ชั้น
