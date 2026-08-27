@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireFeature } from '@/lib/auth-server';
-import { isCloudinaryConfigured, signRawUpload } from '@/lib/cloudinary';
+import { isCloudinaryConfigured, MAP_FOLDER_FULL, signRawUpload } from '@/lib/cloudinary';
 
 // ลายเซ็นให้เบราว์เซอร์อัปไฟล์ GeoJSON ตรงเข้า Cloudinary
 //
@@ -23,5 +23,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  return res.status(200).json(signRawUpload());
+  return res.status(200).json(signRawUpload(MAP_FOLDER_FULL));
 }
