@@ -26,6 +26,7 @@ import {
   uploadRawText,
 } from '../src/lib/cloudinary';
 import {
+  mooFromName,
   prepCommunityForest,
   prepKortorchor,
   prepPermanent,
@@ -57,9 +58,19 @@ const ACTOR = 'import-forest-map';
 /** คลาดเคลื่อนสูงสุดที่ยอมให้ระหว่างพื้นที่ที่คำนวณกับทะเบียนในไฟล์ */
 const AREA_TOLERANCE = 0.001; // 0.1%
 
+/** เวลาสูงสุดต่อไฟล์ — ไฟล์ใหญ่สุด (ป่าสงวน) หนักราว 6 MB บนเน็ตทั่วไปเสร็จในไม่กี่วินาที */
+const FETCH_TIMEOUT_MS = 30_000;
+
 async function fetchCollection(source: string): Promise<FeatureCollection> {
   const url = `${BASE}/data/${source}`;
-  const res = await fetch(url);
+  let res: Response;
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  } catch (err) {
+    // fetch ที่ถูก DNS/TLS/timeout ปฏิเสธจะได้ TypeError เปล่า ๆ ไม่มี URL ติดมาด้วย
+    // แล้วเพราะทุกไฟล์ดึงพร้อมกันด้วย Promise.all คนอ่าน error จะไม่รู้เลยว่าไฟล์ไหนพัง
+    throw new Error(`ดึง ${url} ไม่สำเร็จ: ${(err as Error).message}`, { cause: err });
+  }
   if (!res.ok) throw new Error(`ดึง ${url} ไม่สำเร็จ: HTTP ${res.status}`);
   const text = await res.text();
   // ไฟล์เป็น qgis2web (var json_x = {...}) ซึ่ง parseMapFile รองรับอยู่แล้ว
@@ -71,8 +82,9 @@ async function fetchCollection(source: string): Promise<FeatureCollection> {
 type Built = {
   /** ทุกชั้นที่ล้างฟิลด์แล้ว คีย์ด้วย layerId */
   collections: Record<string, FeatureCollection>;
-  /** เนื้อที่ตามทะเบียนของป่าชุมชนแต่ละแปลง เรียงตรงกับลำดับ feature */
-  communityRegistry: (number | null)[];
+  /** เนื้อที่ตามทะเบียนของป่าชุมชนแต่ละแปลง คีย์ด้วย moo ไม่ใช่ตำแหน่ง — กัน
+   * ไม่ให้การเรียงลำดับของ prep function ในอนาคตทำให้เทียบผิดแถวแบบเงียบ ๆ */
+  communityRegistry: Map<number, number | null>;
 };
 
 async function buildAll(): Promise<Built> {
@@ -85,53 +97,69 @@ async function buildAll(): Promise<Built> {
     fetchCollection('_3.js'),
   ]);
 
-  // ด่านที่ 2: ช่วง fid ต้องแบ่งที่ 41/42 พอดี ไม่งั้นแปลว่าต้นทางแก้ไฟล์แล้ว
-  const fids = weirRaw.features.map((f) => Number(f.properties?.fid));
-  const survey = fids.filter((n) => n <= 41);
-  const weirs = fids.filter((n) => n > 41);
-  if (survey.length !== 41 || weirs.length !== 13) {
+  // splitWeir เองเป็นคนตรวจ fid ทุกแถว (โยน error ถ้า fid ไม่ใช่จำนวนเต็มบวก หรือ
+  // แถวทะเบียนฝายไม่มีชื่อ) จึงไม่ต้องนับ fid ซ้ำเองที่นี่อีกชั้น — การนับซ้ำแบบเดิม
+  // ใช้ Number(fid) ตรง ๆ ซึ่ง Number(null) เป็น 0 แล้วผ่านเงื่อนไข <= 41 ได้ เป็น
+  // บั๊กตระกูลเดียวกับที่เจอใน registryRai และแก้ไปแล้วที่นั่น splitWeir เข้มงวดกว่า
+  const { weir, survey: surveyFc } = splitWeir(weirRaw);
+
+  const collections: Record<string, FeatureCollection> = {
+    'community-forest': prepCommunityForest(community),
+    'forest-weir': weir,
+    'forest-weir-survey': surveyFc,
+    'forest-kortorchor': prepKortorchor(kortorchor),
+    'forest-stream': prepStream(stream),
+    'forest-reserve': prepReserve(reserve),
+    'forest-permanent': prepPermanent(permanent),
+  };
+
+  // ด่านที่ 1 ต้องอยู่ก่อนเขียนอะไรลงฐานทั้งหมด ไม่ใช่ทีละชั้นในลูปเขียน — ไม่งั้น
+  // ชั้นแรก ๆ เขียนสำเร็จไปแล้วก่อนชั้นหลังจะพัง กลายเป็นนำเข้าครึ่ง ๆ กลาง ๆ ซึ่งขัดกับ
+  // ข้อ 4 ที่ไฟล์นี้ประกาศไว้เองตอนต้นไฟล์
+  const mismatches = FOREST_SEEDS.filter(
+    (seed) => collections[seed.layer.id].features.length !== seed.expect
+  ).map(
+    (seed) =>
+      `${seed.layer.id}: ได้ ${collections[seed.layer.id].features.length} รายการ แต่คาด ${seed.expect}`
+  );
+  if (mismatches.length > 0) {
     throw new Error(
-      `ช่วง fid ของชั้นฝายเปลี่ยนไป: ได้จุดสำรวจ ${survey.length} (คาด 41) ` +
-        `และฝาย ${weirs.length} (คาด 13) — ต้องมีคนดูไฟล์ต้นทางด้วยตาก่อนนำเข้าต่อ`
+      `ไฟล์ต้นทางเปลี่ยนไปแล้ว ต้องมีคนดูด้วยตาก่อนนำเข้าต่อ:\n  ${mismatches.join('\n  ')}`
     );
   }
 
-  const { weir, survey: surveyFc } = splitWeir(weirRaw);
+  // ด่านที่ 3 เก็บค่าไว้ตรงนี้เพราะ prepCommunityForest ตัดฟิลด์ทะเบียนทิ้งไปแล้ว
+  // แล้วค่อยเทียบหลัง ingest ใน importSeed() — mooFromName โยน error เองถ้าอ่านชื่อ
+  // แปลงไม่ออก จึงมั่นใจได้ว่าทุกคีย์ที่ใส่ใน Map นี้ไม่ซ้ำกัน (4 แปลง = 4 หมู่ต่างกัน)
+  const communityRegistry = new Map<number, number | null>(
+    community.features.map((f) => [mooFromName(f.properties?.name), registryRai(f)])
+  );
 
-  return {
-    collections: {
-      'community-forest': prepCommunityForest(community),
-      'forest-weir': weir,
-      'forest-weir-survey': surveyFc,
-      'forest-kortorchor': prepKortorchor(kortorchor),
-      'forest-stream': prepStream(stream),
-      'forest-reserve': prepReserve(reserve),
-      'forest-permanent': prepPermanent(permanent),
-    },
-    // ด่านที่ 3 เก็บค่าไว้ตรงนี้เพราะ prepCommunityForest ตัดฟิลด์ทะเบียนทิ้งไปแล้ว
-    // แล้วค่อยเทียบหลัง ingest ใน importSeed()
-    communityRegistry: community.features.map((f) => registryRai(f)),
-  };
+  return { collections, communityRegistry };
 }
 
 /** เทียบพื้นที่ที่ computeArea คำนวณกับทะเบียนในไฟล์ — คลาดเกิน 0.1% = หยุด */
-function assertCommunityArea(fc: FeatureCollection, registry: (number | null)[]): void {
-  fc.features.forEach((f, i) => {
-    const expected = registry[i];
+function assertCommunityArea(fc: FeatureCollection, registry: Map<number, number | null>): void {
+  fc.features.forEach((f) => {
+    const moo = Number(f.properties?.moo);
+    const expected = registry.get(moo);
     const got = Number(f.properties?.area_rai);
-    if (expected === null || !Number.isFinite(got)) {
-      throw new Error(`ป่าชุมชนแถวที่ ${i + 1}: เทียบพื้นที่ไม่ได้`);
+    // expected === 0 ต้องกันเหมือน null — ถ้าปล่อยผ่านไปหาร off = |got-0|/0 = Infinity
+    // เสมอ (หรือ NaN ถ้า got เป็น 0 ด้วย ซึ่ง NaN > 0.001 เป็น false แล้วผ่านไปเงียบ ๆ)
+    // ทั้งสองทางให้ข้อความที่ชี้ผิดสาเหตุ — ป่าไม้ไม่มีแปลงไหนพื้นที่ 0 ไร่จริง ๆ
+    if (expected === undefined || expected === null || expected === 0 || !Number.isFinite(got)) {
+      throw new Error(`ป่าชุมชนหมู่ ${moo}: เทียบพื้นที่ไม่ได้ (ทะเบียน=${expected})`);
     }
     const off = Math.abs(got - expected) / expected;
     if (off > AREA_TOLERANCE) {
       throw new Error(
-        `ป่าชุมชนหมู่ ${f.properties?.moo}: คำนวณได้ ${got} ไร่ แต่ทะเบียนเขียน ` +
+        `ป่าชุมชนหมู่ ${moo}: คำนวณได้ ${got} ไร่ แต่ทะเบียนเขียน ` +
           `${expected.toFixed(2)} ไร่ (ต่างกัน ${(off * 100).toFixed(3)}%) — ` +
           'เกินเกณฑ์ 0.1% แปลว่าการแปลงพิกัดเพี้ยน ไม่ใช่ขอบเขตเปลี่ยน'
       );
     }
     process.stdout.write(
-      `     หมู่ ${f.properties?.moo}: คำนวณ ${got} ไร่ · ทะเบียน ${expected.toFixed(2)} ไร่ ` +
+      `     หมู่ ${moo}: คำนวณ ${got} ไร่ · ทะเบียน ${expected.toFixed(2)} ไร่ ` +
         `(ต่าง ${(off * 100).toFixed(3)}%)\n`
     );
   });
@@ -140,17 +168,9 @@ function assertCommunityArea(fc: FeatureCollection, registry: (number | null)[])
 async function importSeed(
   seed: (typeof FOREST_SEEDS)[number],
   fc: FeatureCollection,
-  communityRegistry: (number | null)[]
+  communityRegistry: Map<number, number | null>
 ): Promise<void> {
   process.stdout.write(`\n── ${seed.layer.title} (${seed.layer.id})\n`);
-
-  // ด่านที่ 1: จำนวน feature ต้องตรงเป๊ะ
-  if (fc.features.length !== seed.expect) {
-    throw new Error(
-      `${seed.layer.id}: ได้ ${fc.features.length} รายการ แต่คาด ${seed.expect} — ` +
-        'ไฟล์ต้นทางเปลี่ยนไปแล้ว ต้องมีคนดูด้วยตาก่อนนำเข้าต่อ'
-    );
-  }
 
   const existing = await getLayer(seed.layer.id);
   const layer: ForestLayer = existing ?? {
