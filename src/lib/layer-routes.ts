@@ -25,7 +25,10 @@ export type AdminLayerRow = {
   versionCount: number;
 };
 
-/** ทุกเลเยอร์พร้อมเวอร์ชันที่เผยแพร่อยู่และร่างที่ค้าง — การ์ดหน้าหลังบ้านใช้ก้อนเดียวนี้ */
+/**
+ * ทุกเลเยอร์พร้อมเวอร์ชันที่เผยแพร่อยู่และร่างที่ค้าง — การ์ดหน้าหลังบ้านใช้ก้อนนี้
+ * ก้อนเดียววาดการ์ดได้ครบ ไม่ต้องยิงต่อเลเยอร์
+ */
 export function makeAdminLayersHandler(domain: LayerDomain): NextApiHandler {
   return async (req, res) => {
     const admin = await requireFeature(req, res, domain.feature);
