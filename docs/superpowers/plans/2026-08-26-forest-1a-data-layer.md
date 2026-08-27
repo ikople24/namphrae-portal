@@ -1894,6 +1894,14 @@ git commit -m "feat(forest): สคริปต์นำเข้า 7 ชั้
 
 ## Task 10: ย้ายชั้นป่าชุมชนออกจากโดเมนแผนที่
 
+> **หมายเหตุจากรีวิว Task 9:** โค้ดเดิมในแผนเรียก `destroyRawAsset(asset.publicId)`
+> ด้วยอาร์กิวเมนต์เดียว ทั้งที่ signature จริงต้องการ `(publicId, type)` — คอมไพล์ไม่ผ่าน
+> แก้แล้วด้านล่าง พร้อมเพิ่มด่านปฏิเสธการลบไฟล์นอกโฟลเดอร์ `namphrae-portal/map/`
+>
+> **ผู้ใช้ยืนยันแล้วว่าให้ลบทั้งสองชั้น** ทั้งที่ทั้งคู่เผยแพร่อยู่จริงบน `/map` ตอนนี้ และ
+> ชั้นป่าไม้ที่จะมาแทนยังเป็นร่างทั้งหมด แปลว่าข้อมูลป่าชุมชนจะหายจากเว็บสาธารณะ
+> จนกว่ารอบ 2 จะขึ้นและมีคนกดเผยแพร่
+
 ชั้น `community-forest` (2 แปลง) และ `community-forest-point` (176 หมุด) ยังอยู่ในโดเมน
 แผนที่ ถ้าปล่อยไว้ `/map` จะโชว์ป่าชุมชน 2 แปลงขณะที่ `/forest` โชว์ 4 แปลง
 
@@ -1944,14 +1952,28 @@ async function main(): Promise<void> {
     process.stdout.write(`── ${id} (${layer.title}) — ${versions.length} เวอร์ชัน\n`);
 
     for (const v of versions) {
-      for (const asset of [v.fullAsset, v.publicAsset]) {
-        if (!asset) continue;
+      // ชนิดของ asset ต่างกันคนละตัว — ไฟล์เต็มเป็น authenticated ส่วนไฟล์สาธารณะ
+      // เป็น upload ส่งชนิดผิดแล้ว Cloudinary จะตอบว่าสำเร็จทั้งที่ไม่มีอะไรถูกลบ
+      const targets: { publicId: string; type: 'upload' | 'authenticated' }[] = [];
+      if (v.fullAsset) targets.push({ publicId: v.fullAsset.publicId, type: 'authenticated' });
+      if (v.publicAsset) targets.push({ publicId: v.publicAsset.publicId, type: 'upload' });
+
+      for (const t of targets) {
+        // กันซ้ำรอยเดิม: เคยมีครั้งหนึ่งที่ publicId ของโดเมนป่าไม้ชนกับของแผนที่
+        // จนไฟล์ของแผนที่ที่เผยแพร่อยู่ถูกเขียนทับ สคริปต์นี้ลบไฟล์แบบถาวร จึงต้อง
+        // ไม่ยอมแตะอะไรที่ไม่ได้อยู่ใต้โฟลเดอร์ของแผนที่ ต่อให้ทะเบียนจะชี้มาก็ตาม
+        if (!t.publicId.startsWith('namphrae-portal/map/')) {
+          throw new Error(
+            `ปฏิเสธการลบไฟล์นอกโฟลเดอร์แผนที่: ${t.publicId} — ทะเบียนของ ${id} ` +
+              'ชี้ไปที่ไฟล์ของโดเมนอื่น ต้องมีคนตรวจด้วยตาก่อน'
+          );
+        }
         try {
-          await destroyRawAsset(asset.publicId);
-          process.stdout.write(`   ลบไฟล์ ${asset.publicId}\n`);
+          await destroyRawAsset(t.publicId, t.type);
+          process.stdout.write(`   ลบไฟล์ ${t.publicId} (${t.type})\n`);
         } catch (err) {
           // ไฟล์ที่หายไปแล้วไม่ใช่เหตุให้หยุด — เป้าหมายคือไม่เหลือไฟล์กำพร้า
-          process.stdout.write(`   ! ลบ ${asset.publicId} ไม่สำเร็จ: ${String(err)}\n`);
+          process.stdout.write(`   ! ลบ ${t.publicId} ไม่สำเร็จ: ${String(err)}\n`);
         }
       }
     }
