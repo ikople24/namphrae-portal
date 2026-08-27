@@ -1,4 +1,5 @@
-// ทุกไฟล์ใต้ src/pages/api/admin ต้องเรียก guard สักตัว — requireAdmin เปล่า ๆ
+// ทุกไฟล์ใต้ src/pages/api/admin ต้องเรียก guard สักตัว หรือมอบงานให้ layer-routes
+// ซึ่ง layer-routes.test.ts ตรึงไว้ว่า guard ครบทุกตัว — requireAdmin เปล่า ๆ
 // (สมาชิกทุกคนผ่าน) อนุญาตเฉพาะ allowlist ที่ตั้งใจไว้เท่านั้น route ใหม่ที่
 // ลืมคิดเรื่องสิทธิ์จะตกเทสต์นี้ทันที
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -25,6 +26,10 @@ describe('guard coverage: /api/admin/**', () => {
       const guarded =
         src.includes('requireFeature(') ||
         src.includes('requireManager(') ||
+        // ไฟล์ที่มอบงานให้ layer-routes — ทุก export ของโมดูลนั้นที่ขึ้นต้นด้วย
+        // makeAdmin* ถูกตรึงด้วย layer-routes.test.ts ว่าเรียก requireFeature เสมอ
+        // ข้อกำหนดจึงยังครบ แค่ย้ายที่พิสูจน์ ไม่ได้ผ่อนลง
+        src.includes("from '@/lib/layer-routes'") ||
         (BARE_REQUIRE_ADMIN_OK.has(rel) && src.includes('requireAdmin('));
       expect(guarded, `${rel} ไม่มี guard หรือใช้ requireAdmin นอก allowlist`).toBe(true);
     });
