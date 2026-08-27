@@ -175,6 +175,13 @@ export function splitWeir(fc: FeatureCollection): {
  *
  * ทิ้ง Xmin/Xmax/Ymin/Ymax เพราะเป็น bbox ที่ซ้ำกับ geometry อยู่แล้ว ส่วน ภาค กับ
  * Typ เป็นค่าเดียวกันทุกแถว จึงไม่ได้บอกอะไรที่ชื่อเลเยอร์ไม่ได้บอก
+ *
+ * rai_gazette กับ rai_rfd เป็นตัวเลขคนละที่มา อาจต่างกันมาก — 8 จาก 26 ป่าจริงต่างกัน
+ * เกิน 10% สูงสุดถึง 37.7% (ป่าแม่ปายฝั่งซ้ายตอนบน) ต่างจาก คทช. ตรงที่ชื่อฟิลด์บอกอยู่
+ * แล้วว่าใครเป็นใคร จึงเปิดสาธารณะทั้งคู่ได้ แต่คนอ่านต้องรู้ว่ามันไม่ใช่ตัวเลขเดียวกัน
+ *
+ * ไม่ปัดเศษทั้งสองฟิลด์เหมือน prepPermanent เพราะเป็นค่าที่อ่านมาจากไฟล์ตรง ๆ ไม่ใช่
+ * ค่าที่ฟังก์ชันนี้คำนวณเอง — ปัดแล้วเท่ากับสร้างความละเอียดที่ไฟล์ต้นทางไม่ได้อ้างว่ามี
  */
 export function prepReserve(fc: FeatureCollection): FeatureCollection {
   return pick(fc.features, {
@@ -187,6 +194,8 @@ export function prepReserve(fc: FeatureCollection): FeatureCollection {
   });
 }
 
+const SQM_PER_RAI = 1600;
+
 /**
  * ป่าไม้ถาวร 29 แปลง
  *
@@ -198,8 +207,6 @@ export function prepReserve(fc: FeatureCollection): FeatureCollection {
  * ด้วยเหตุผลเดียวกับ area_rai — ทศนิยม float เต็มความละเอียดทำให้ sha256 ของไฟล์เดิม
  * เปลี่ยนทุกครั้งที่อัปซ้ำ แล้วตรรกะ "ข้ามถ้า sha ตรง" ใช้ไม่ได้อีกเลย
  */
-const SQM_PER_RAI = 1600;
-
 export function prepPermanent(fc: FeatureCollection): FeatureCollection {
   return pick(fc.features, { per_id: 'per_id', name_th: 'name' }, (f) => {
     const sqm = num(f.properties?.area_gis);

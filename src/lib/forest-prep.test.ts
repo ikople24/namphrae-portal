@@ -235,20 +235,31 @@ describe('prepReserve', () => {
       office: 'สจป.ที่ 1 (เชียงใหม่)',
     });
   });
+
+  it('ชื่อป่าซ้ำกันได้ข้ามจังหวัด — nrf_code เป็นตัวตนจริง ไม่ใช่ FR_NAME', () => {
+    const out = prepReserve(
+      coll([
+        feat({ NRF_CODE: 'L1.004', FR_NAME: 'ป่าแม่ยวมฝั่งซ้าย', Province: 'แม่ฮ่องสอน' }),
+        feat({ NRF_CODE: 'L1.006', FR_NAME: 'ป่าแม่ยวมฝั่งซ้าย', Province: 'แม่ฮ่องสอน' }),
+      ])
+    );
+    expect(out.features.map((f) => f.properties?.nrf_code)).toEqual(['L1.004', 'L1.006']);
+    expect(new Set(out.features.map((f) => f.properties?.name)).size).toBe(1);
+  });
 });
 
 describe('prepPermanent', () => {
-  it('แปลง area_gis จากตารางเมตรเป็นไร่ และทิ้งคอลัมน์ว่าง', () => {
+  it('แปลง area_gis จากตารางเมตรเป็นไร่ และทิ้งฟิลด์ที่ไม่อยู่ใน rename map', () => {
     const out = prepPermanent(
       coll([
         feat({
           objectid: 366,
           name_th: 'ป่าชุมชน',
           per_id: 'pf00330',
-          name_en: '',
+          name_en: 'Community Forest',
           area_pres: 0,
           area_gis: 90022.744,
-          mod_date: '',
+          mod_date: '2020-01-01',
           per_type: 'ป่าไม้ถาวร',
         }),
       ])
@@ -321,6 +332,17 @@ describe('prepStream', () => {
     );
     expect(out.features[0].properties).toEqual({
       class: 3,
+      class_th: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี',
+    });
+  });
+
+  it('ST_CLASS เป็นสตริงในไฟล์จริงเสมอ — ไม่แปลงชนิดให้ ส่งต่อตามที่ได้มา', () => {
+    const out = prepStream(
+      coll([feat({ STRM_TH: 'ห้วยอ้อ', ST_CLASS: '3', ST_CL_T: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี' })])
+    );
+    expect(out.features[0].properties).toEqual({
+      name: 'ห้วยอ้อ',
+      class: '3',
       class_th: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี',
     });
   });
