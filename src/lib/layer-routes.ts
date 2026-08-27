@@ -7,6 +7,7 @@ import {
   fetchRawAsset,
   isCloudinaryConfigured,
   signedRawUrl,
+  signRawUpload,
   uploadRawText,
 } from '@/lib/cloudinary';
 import type { LayerDomain } from '@/lib/layer-domains';
@@ -518,5 +519,128 @@ export function makeAdminDownloadHandler(domain: LayerDomain): NextApiHandler {
     // นี้ไว้ ครั้งถัดไปผู้ใช้จะถูกส่งไป URL ที่ตายแล้ว
     res.setHeader('Cache-Control', 'no-store');
     return res.redirect(302, signedRawUrl(version.fullAsset.publicId, DOWNLOAD_TTL_SECONDS));
+  };
+}
+
+export type PublicLayerSummary = {
+  id: string;
+  title: string;
+  description?: string;
+  geometryType: string;
+  featureCount: number;
+  fields: string[];
+  bbox: [number, number, number, number];
+  updatedAt: string;
+  versionNo: number;
+  geojsonUrl: string;
+};
+
+// รายชื่อเลเยอร์ที่เผยแพร่แล้ว — สาธารณะ ไม่ต้องล็อกอิน
+//
+// คืนเฉพาะ metadata ที่ปลอดภัยเสมอ: ไม่มี publicId ของ Cloudinary (ซึ่งบอกใบ้
+// ที่อยู่ของไฟล์เต็ม) ไม่มีชื่อผู้อัป/ผู้เผยแพร่ (เป็นชื่อเจ้าหน้าที่) และไม่มีผล
+// ด่านตรวจ (บอกจำนวนแถวที่ข้อมูลมีปัญหา ซึ่งเป็นเรื่องภายใน)
+export function makePublicLayersHandler(domain: LayerDomain): NextApiHandler {
+  return async (req, res) => {
+    if (req.method !== 'GET') {
+      res.setHeader('Allow', 'GET');
+      return res.status(405).json({ error: 'method_not_allowed' });
+    }
+
+    const base = `${req.headers['x-forwarded-proto'] ?? 'https'}://${req.headers.host}`;
+    const layers = await domain.store.listLayers();
+    const out: PublicLayerSummary[] = [];
+
+    for (const layer of layers) {
+      if (layer.visibility !== 'public' || layer.currentVersionNo === null) continue;
+      const published = (await domain.store.listVersions(layer.id)).find(
+        (v) => v.status === 'published'
+      );
+      if (!published?.publicAsset) continue;
+
+      out.push({
+        id: layer.id,
+        title: layer.title,
+        description: layer.description,
+        geometryType: layer.geometryType,
+        featureCount: published.stats.featureCount,
+        // เฉพาะฟิลด์ที่เปิดเผยจริง ไม่ใช่ทุกฟิลด์ที่มีในไฟล์ — รายชื่อฟิลด์ที่ถูกปิด
+        // ก็เป็นข้อมูลที่ไม่ควรบอก (own_Hse_no บอกใบ้ว่าไฟล์เต็มมีอะไร)
+        fields: layer.publicFields,
+        bbox: published.stats.bbox,
+        updatedAt: published.publishedAt ?? published.uploadedAt,
+        versionNo: published.versionNo,
+        geojsonUrl: `${base}${domain.publicApiBase}/layers/${layer.id}/geojson`,
+      });
+    }
+
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.status(200).json({ layers: out });
+  };
+}
+
+// GeoJSON สาธารณะของเลเยอร์ — 302 ไป Cloudinary CDN
+//
+// จงใจ redirect ไม่ใช่ proxy: Pages Router เตือนเมื่อ response body เกิน 4MB และ
+// ไฟล์แปลงที่ดินหนักกว่านั้น การ redirect ทำให้ไม่มีไบต์ไหนวิ่งผ่านเซิร์ฟเวอร์เรา
+// เลย รับคนพร้อมกันเท่าไรก็ได้โดยไม่กระทบพอร์ทัลส่วนอื่น
+//
+// ไฟล์ปลายทางถูกกรองฟิลด์ตั้งแต่ตอนเผยแพร่แล้ว ที่นี่จึงไม่ต้องกรองอะไรอีก —
+// และไม่มีอะไรให้กรองพลาดด้วย
+export function makePublicLayerGeojsonHandler(domain: LayerDomain): NextApiHandler {
+  return async (req, res) => {
+    if (req.method !== 'GET') {
+      res.setHeader('Allow', 'GET');
+      return res.status(405).json({ error: 'method_not_allowed' });
+    }
+
+    const layer = await domain.store.getLayer(String(req.query.id));
+    if (!layer) return res.status(404).json({ error: 'layer_not_found' });
+
+    if (layer.visibility !== 'public') {
+      return res.status(403).json({
+        error: 'not_public',
+        message: 'เลเยอร์นี้เปิดให้เฉพาะเจ้าหน้าที่',
+      });
+    }
+
+    const published = await domain.store.getPublishedVersion(layer.id);
+    if (!published?.publicAsset) {
+      return res.status(404).json({
+        error: 'not_published',
+        message: 'เลเยอร์นี้ยังไม่มีเวอร์ชันที่เผยแพร่',
+      });
+    }
+
+    // CDN ของ Cloudinary จัดการ cache ของตัวไฟล์เอง ที่นี่ให้ cache สั้น ๆ พอให้
+    // การเผยแพร่เวอร์ชันใหม่มีผลภายในไม่กี่นาที ไม่ใช่ค้างจน redirect ชี้ไฟล์เก่า
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.redirect(302, published.publicAsset.url);
+  };
+}
+
+// ลายเซ็นให้เบราว์เซอร์อัปไฟล์ GeoJSON ตรงเข้า Cloudinary
+//
+// ไฟล์ไม่วิ่งผ่าน API route นี้ (Pages Router จำกัด body ที่ 1MB โดยปริยาย ส่วน
+// ไฟล์แปลงที่ดินหนัก ~7 MB) ที่นี่ออกแต่ลายเซ็น ตัวไฟล์วิ่งตรงจากเบราว์เซอร์
+export function makeAdminUploadSignatureHandler(domain: LayerDomain): NextApiHandler {
+  return async (req, res) => {
+    const admin = await requireFeature(req, res, domain.feature);
+    if (!admin) return;
+
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      return res.status(405).json({ error: 'method_not_allowed' });
+    }
+
+    if (!isCloudinaryConfigured()) {
+      return res.status(501).json({
+        error: 'cloudinary_not_configured',
+        message:
+          'ยังไม่ได้ตั้งค่า Cloudinary — คลังไฟล์แผนที่ต้องใช้ที่เก็บไฟล์ กรอก CLOUDINARY_* ใน .env ก่อน',
+      });
+    }
+
+    return res.status(200).json(signRawUpload(domain.folderFull));
   };
 }
