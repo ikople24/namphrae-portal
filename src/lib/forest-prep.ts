@@ -164,3 +164,77 @@ export function splitWeir(fc: FeatureCollection): {
     weir: pick(weirRows, { loss: 'name', cause: 'note' }, surveyedAt),
   };
 }
+
+// ── ชั้นอ้างอิงของกรมป่าไม้ ──────────────────────────────────────────────────
+
+/**
+ * ป่าสงวนแห่งชาติ 26 ป่า
+ *
+ * คีย์เป็น nrf_code ไม่ใช่ชื่อ เพราะ "ป่าแม่ยวมฝั่งซ้าย" มีสองแถวในไฟล์ ถ้าใช้ชื่อ
+ * จะติดด่าน duplicate-key ทันที (เหตุผลเดียวกับที่ถนนต้องใช้คีย์ประกอบ)
+ *
+ * ทิ้ง Xmin/Xmax/Ymin/Ymax เพราะเป็น bbox ที่ซ้ำกับ geometry อยู่แล้ว ส่วน ภาค กับ
+ * Typ เป็นค่าเดียวกันทุกแถว จึงไม่ได้บอกอะไรที่ชื่อเลเยอร์ไม่ได้บอก
+ */
+export function prepReserve(fc: FeatureCollection): FeatureCollection {
+  return pick(fc.features, {
+    NRF_CODE: 'nrf_code',
+    FR_NAME: 'name',
+    Province: 'province',
+    AREA_RAI: 'rai_gazette',
+    rai_GIS: 'rai_rfd',
+    'สจป': 'office',
+  });
+}
+
+/**
+ * ป่าไม้ถาวร 29 แปลง
+ *
+ * ทิ้ง objectid ด้วยเหตุผลเดียวกับที่ชั้นอาคารไม่ตั้งคีย์: ArcGIS แจกใหม่ทุกรอบ export
+ * ส่วน per_id (pf00330) เป็นรหัสจริงที่คงที่ และ name_en/mod_date ว่างทั้งคอลัมน์
+ * (0 จาก 29 แถว) ส่วน area_pres เป็น 0 ทุกแถว
+ *
+ * แปลง area_gis จากตารางเมตรเป็นไร่เพื่อให้หน่วยตรงกับชั้นอื่น ปัดสองตำแหน่งตายตัว
+ * ด้วยเหตุผลเดียวกับ area_rai — ทศนิยม float เต็มความละเอียดทำให้ sha256 ของไฟล์เดิม
+ * เปลี่ยนทุกครั้งที่อัปซ้ำ แล้วตรรกะ "ข้ามถ้า sha ตรง" ใช้ไม่ได้อีกเลย
+ */
+const SQM_PER_RAI = 1600;
+
+export function prepPermanent(fc: FeatureCollection): FeatureCollection {
+  return pick(fc.features, { per_id: 'per_id', name_th: 'name' }, (f) => {
+    const sqm = num(f.properties?.area_gis);
+    if (!Number.isFinite(sqm)) return {};
+    return { rai_rfd: Math.round((sqm / SQM_PER_RAI) * 100) / 100 };
+  });
+}
+
+/**
+ * วงรอบ คทช. ป่าแม่ท่าช้าง–ป่าแม่ขนิน 1 วง
+ *
+ * ไฟล์มีเนื้อที่สองชุดในแถวเดียวกัน: Rai/Ngan/wa = 5,935 ไร่ 1 งาน 36 วา (ตรงกับ
+ * Shape_Area) กับ R/Ng/Twa/RA = 5,746 ไร่ 1 งาน 58 วา (ตรงกับ A) ต่างกัน 189 ไร่
+ * น่าจะเป็นวงรอบทั้งหมด vs พื้นที่จัดสรรจริง แต่ยังไม่มีใครยืนยัน
+ *
+ * เก็บชุดใหญ่ไว้ชุดเดียวก่อน และห้ามเปิดสาธารณะจนกว่าจะถามเจ้าของข้อมูลได้ว่าชุดไหน
+ * คืออะไร — ตัวเลขเนื้อที่ผิดบนพอร์ทัลราชการคือสิ่งที่คนเอาไปอ้างต่อ
+ */
+export function prepKortorchor(fc: FeatureCollection): FeatureCollection {
+  return pick(fc.features, { Rai: 'rai', Ngan: 'ngan', wa: 'wa' });
+}
+
+/**
+ * แหล่งน้ำ 327 เส้น
+ *
+ * ทิ้งฟิลด์ name ของต้นทางเพราะเป็นสองฟิลด์เชื่อมด้วย " / " ที่ซ้ำกับ STRM_TH และ
+ * ST_CL_T อยู่แล้ว ส่วนฟิลด์อังกฤษไม่มีที่ใช้บนหน้าเว็บภาษาไทย
+ *
+ * เก็บทั้งรหัสชั้นคุณภาพ (1–6) และคำอธิบายไทย: รหัสใช้กำหนดสีเส้นใน map-style
+ * ส่วนคำอธิบายใช้ในป๊อปอัป ทั้งคู่จับคู่กัน 1:1 ในไฟล์
+ */
+export function prepStream(fc: FeatureCollection): FeatureCollection {
+  return pick(fc.features, {
+    STRM_TH: 'name',
+    ST_CLASS: 'class',
+    ST_CL_T: 'class_th',
+  });
+}

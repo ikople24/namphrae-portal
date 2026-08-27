@@ -1,6 +1,6 @@
 // src/lib/forest-prep.test.ts
 import { describe, expect, it } from 'vitest';
-import { mooFromName, prepCommunityForest, registryRai, splitWeir } from '@/lib/forest-prep';
+import { mooFromName, prepCommunityForest, prepKortorchor, prepPermanent, prepReserve, prepStream, registryRai, splitWeir } from '@/lib/forest-prep';
 import type { Feature, FeatureCollection } from '@/types/map';
 
 const feat = (properties: Record<string, unknown>): Feature => ({
@@ -203,5 +203,125 @@ describe('splitWeir', () => {
     expect(() =>
       splitWeir(coll([pt({ fid: 42, Date: '12/06/2566', loss: 'ฝายทดสอบ' })]))
     ).toThrow(/ฝายทดสอบ/);
+  });
+});
+
+describe('prepReserve', () => {
+  it('เหลือหกฟิลด์ — bbox กับคอลัมน์ค่าเดียวหายหมด', () => {
+    const out = prepReserve(
+      coll([
+        feat({
+          NRF_CODE: 'K1.002',
+          FR_NAME: 'ป่าอินทขิล',
+          Province: 'เชียงใหม่',
+          AREA_RAI: 7625,
+          rai_GIS: 7646.4375,
+          'สจป': 'สจป.ที่ 1 (เชียงใหม่)',
+          'ภาค': '3',
+          Typ: 'ป่าสงวนแห่งชาติ',
+          Xmin: 494413.9307,
+          Xmax: 499218.0433,
+          Ymin: 2114252.8073,
+          Ymax: 2118830.4627,
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({
+      nrf_code: 'K1.002',
+      name: 'ป่าอินทขิล',
+      province: 'เชียงใหม่',
+      rai_gazette: 7625,
+      rai_rfd: 7646.4375,
+      office: 'สจป.ที่ 1 (เชียงใหม่)',
+    });
+  });
+});
+
+describe('prepPermanent', () => {
+  it('แปลง area_gis จากตารางเมตรเป็นไร่ และทิ้งคอลัมน์ว่าง', () => {
+    const out = prepPermanent(
+      coll([
+        feat({
+          objectid: 366,
+          name_th: 'ป่าชุมชน',
+          per_id: 'pf00330',
+          name_en: '',
+          area_pres: 0,
+          area_gis: 90022.744,
+          mod_date: '',
+          per_type: 'ป่าไม้ถาวร',
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({
+      per_id: 'pf00330',
+      name: 'ป่าชุมชน',
+      rai_rfd: 56.26,
+    });
+  });
+
+  it('area_gis อ่านไม่ออก → ไม่มีฟิลด์ rai_rfd ไม่ใช่ NaN', () => {
+    const out = prepPermanent(coll([feat({ per_id: 'pf1', name_th: 'ก', area_gis: 'x' })]));
+    expect(out.features[0].properties).toEqual({ per_id: 'pf1', name: 'ก' });
+  });
+
+  it('area_gis เป็น null → ไม่มีฟิลด์ rai_rfd ไม่ใช่ 0 ไร่', () => {
+    const out = prepPermanent(coll([feat({ per_id: 'pf1', name_th: 'ก', area_gis: null })]));
+    expect(out.features[0].properties).toEqual({ per_id: 'pf1', name: 'ก' });
+  });
+});
+
+describe('prepKortorchor', () => {
+  it('เก็บเนื้อที่ชุดที่ตรงกับ Shape_Area ทิ้งชุดที่สองไว้ก่อน', () => {
+    const out = prepKortorchor(
+      coll([
+        feat({
+          OBJECTID: 1,
+          Shape_Leng: 158295.23207,
+          Shape_Area: 9496546.25174,
+          Rai: 5935,
+          Ngan: 1,
+          wa: 36,
+          A: 9194232.40836,
+          R: 5746,
+          Ng: 1,
+          Twa: 58,
+          RA: 5746.39526,
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({ rai: 5935, ngan: 1, wa: 36 });
+  });
+});
+
+describe('prepStream', () => {
+  it('เก็บชื่อไทยกับชั้นคุณภาพ ทิ้งฟิลด์ผสมและฟิลด์อังกฤษ', () => {
+    const out = prepStream(
+      coll([
+        feat({
+          STRM_TH: 'น้ำแม่ขนิล',
+          STRM_ENG: 'Nam Mae Khanin',
+          ST_CLASS: 2,
+          ST_CL_T: 'แม่น้ำที่มีน้ำไหลตลอดปี',
+          ST_CL_E: 'Perennial stream',
+          name: 'น้ำแม่ขนิล / แม่น้ำที่มีน้ำไหลตลอดปี',
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({
+      name: 'น้ำแม่ขนิล',
+      class: 2,
+      class_th: 'แม่น้ำที่มีน้ำไหลตลอดปี',
+    });
+  });
+
+  it('ลำน้ำไม่มีชื่อ (262 จาก 327 เส้น) ก็ยังได้ชั้นคุณภาพ', () => {
+    const out = prepStream(
+      coll([feat({ STRM_TH: null, ST_CLASS: 3, ST_CL_T: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี' })])
+    );
+    expect(out.features[0].properties).toEqual({
+      class: 3,
+      class_th: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี',
+    });
   });
 });
