@@ -47,6 +47,14 @@ export type UploadSignature = {
 export const MAP_FOLDER_FULL = 'namphrae-portal/map/full';
 export const MAP_FOLDER_PUBLIC = 'namphrae-portal/map/public';
 
+// โดเมนป่าไม้ใช้โฟลเดอร์แยกจากแผนที่ แม้จะมี layerId ชนกันได้ (community-forest
+// เดินตามชื่อจากแผนที่เดิม) — เคยพลาดมาแล้วครั้งหนึ่ง: ตอนที่ยังใช้ MAP_FOLDER_FULL
+// ร่วมกัน ไฟล์เต็มของแผนที่ที่เผยแพร่อยู่ถูกสคริปต์นำเข้าป่าไม้เขียนทับไปเงียบ ๆ
+// เพราะ uploadRawText ตั้ง overwrite: true และ publicId คำนวณจาก layerId เพียงอย่าง
+// เดียวโดยไม่รู้จักโดเมน
+export const FOREST_FOLDER_FULL = 'namphrae-portal/forest/full';
+export const FOREST_FOLDER_PUBLIC = 'namphrae-portal/forest/public';
+
 /** ลายเซ็นให้เบราว์เซอร์อัปไฟล์ตรงเข้า Cloudinary — ข้ามเพดาน body 1MB ของ API route */
 export function signRawUpload(): {
   signature: string;

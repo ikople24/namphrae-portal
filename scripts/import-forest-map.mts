@@ -21,8 +21,8 @@ import './load-env';
 import crypto from 'node:crypto';
 // path แบบ relative ไม่ใช่ alias @/ — tsx ไม่ resolve paths ใน tsconfig ให้
 import {
+  FOREST_FOLDER_FULL,
   isCloudinaryConfigured,
-  MAP_FOLDER_FULL,
   uploadRawText,
 } from '../src/lib/cloudinary';
 import {
@@ -182,7 +182,7 @@ async function importSeed(
 
   const versionNo = nextVersionNo(versions);
   const uploaded = await uploadRawText(JSON.stringify(result.fc), {
-    folder: MAP_FOLDER_FULL,
+    folder: FOREST_FOLDER_FULL,
     publicId: `${layer.id}-v${versionNo}-full.geojson`,
     type: 'authenticated',
   });
