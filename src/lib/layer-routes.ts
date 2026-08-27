@@ -7,13 +7,29 @@ import {
   fetchRawAsset,
   isCloudinaryConfigured,
   signedRawUrl,
+  uploadRawText,
 } from '@/lib/cloudinary';
 import type { LayerDomain } from '@/lib/layer-domains';
-import { buildNewVersion, nextVersionNo } from '@/lib/layer-store';
+import {
+  assetsToPrune,
+  buildNewVersion,
+  buildPublishPatch,
+  nextVersionNo,
+} from '@/lib/layer-store';
 import { ingestMapFile } from '@/lib/map-ingest';
+import { collectIssueRows, toCsv } from '@/lib/map-issues';
 import { parseMapFile } from '@/lib/map-parse';
+import { toPublicFeatureCollection } from '@/lib/map-public';
 import { layerPatchSchema, versionRegisterSchema } from '@/lib/schema';
-import type { FeatureCollection, MapLayer, MapLayerVersion } from '@/types/map';
+import {
+  CHECK_CODES,
+  type CheckCode,
+  type FeatureCollection,
+  LAYER_VERSIONS_KEPT,
+  type MapLayer,
+  type MapLayerVersion,
+  type MapPublicAsset,
+} from '@/types/map';
 
 // ตัวจัดการคำขอของคลังไฟล์ภูมิสารสนเทศ — โดเมนแผนที่กับโดเมนป่าไม้ใช้ชุดเดียวกัน
 //
@@ -271,4 +287,236 @@ async function discard(publicId: string): Promise<void> {
   } catch (err) {
     console.warn('map versions: cleanup of rejected upload failed', err);
   }
+}
+
+// ทิ้งร่าง — ทิ้งได้เฉพาะร่างเท่านั้น
+//
+// เอกสารไม่ถูกลบ แค่เปลี่ยนสถานะเป็น discarded: ประวัติว่าใครอัปอะไรเมื่อไรและ
+// ผลตรวจเป็นอย่างไรคือร่องรอยของงานราชการ ห้ามหายไปพร้อมไฟล์ ส่วนตัวไฟล์เต็ม
+// ถูกลบทิ้งจริงเพราะร่างที่ถูกทิ้งไม่มีทางถูกเผยแพร่ได้อีก
+export function makeAdminVersionHandler(domain: LayerDomain): NextApiHandler {
+  return async (req, res) => {
+    const admin = await requireFeature(req, res, domain.feature);
+    if (!admin) return;
+
+    if (req.method !== 'DELETE') {
+      res.setHeader('Allow', 'DELETE');
+      return res.status(405).json({ error: 'method_not_allowed' });
+    }
+
+    const version = await domain.store.getVersion(String(req.query.vid));
+    if (!version) return res.status(404).json({ error: 'version_not_found' });
+
+    if (version.status !== 'draft') {
+      return res.status(409).json({
+        error: 'not_a_draft',
+        message:
+          'ทิ้งได้เฉพาะร่างที่ยังไม่เผยแพร่ — เวอร์ชันที่เคยเผยแพร่แล้วต้องเก็บไว้เป็นประวัติและเพื่อให้ย้อนกลับได้',
+      });
+    }
+
+    if (version.fullAsset) {
+      try {
+        await destroyRawAsset(version.fullAsset.publicId, 'authenticated');
+      } catch (err) {
+        // ลบไฟล์ไม่สำเร็จไม่ควรกันไม่ให้ทิ้งร่าง — ไฟล์กำพร้าเก็บกวาดทีหลังได้
+        console.warn('map discard: destroying full asset failed', err);
+      }
+    }
+
+    await domain.store.patchVersion(version.id, { status: 'discarded', fullAsset: null });
+    return res.status(200).json({ ok: true });
+  };
+}
+
+// เผยแพร่: กรองฟิลด์ตาม publicFields → อัปไฟล์สาธารณะ → สลับสถานะ
+//
+// ลำดับนี้จงใจให้ล้มเหลวไปทางที่ปลอดภัย — อัปไฟล์สาธารณะให้เสร็จก่อนค่อยสลับ
+// สถานะใน DB ถ้าพังกลางทาง ผลคือมีไฟล์กำพร้าบน Cloudinary (ขยะที่ไม่มีใคร
+// อ้างถึง) แต่เลเยอร์ยังชี้ไปเวอร์ชันเดิมที่ใช้งานได้ ตรงข้ามกับการสลับสถานะก่อน
+// ซึ่งจะทำให้เลเยอร์ชี้ไปไฟล์ที่ยังไม่มีอยู่จริง
+export function makeAdminPublishHandler(domain: LayerDomain): NextApiHandler {
+  return async (req, res) => {
+    const admin = await requireFeature(req, res, domain.feature);
+    if (!admin) return;
+
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      return res.status(405).json({ error: 'method_not_allowed' });
+    }
+    if (!isCloudinaryConfigured()) {
+      return res.status(501).json({ error: 'cloudinary_not_configured' });
+    }
+
+    const version = await domain.store.getVersion(String(req.query.vid));
+    if (!version) return res.status(404).json({ error: 'version_not_found' });
+    if (version.status === 'discarded') {
+      return res.status(409).json({
+        error: 'discarded',
+        message: 'เวอร์ชันนี้ถูกทิ้งไปแล้ว เผยแพร่ไม่ได้',
+      });
+    }
+
+    const layer = await domain.store.getLayer(version.layerId);
+    if (!layer) return res.status(404).json({ error: 'layer_not_found' });
+
+    const currentPublished = await domain.store.getPublishedVersion(layer.id);
+    if (currentPublished?.id === version.id) {
+      return res.status(409).json({
+        error: 'already_published',
+        message: 'เวอร์ชันนี้เผยแพร่อยู่แล้ว',
+      });
+    }
+
+    let publicAsset: MapPublicAsset;
+    if (version.publicAsset) {
+      // ย้อนเวอร์ชัน — ไฟล์สาธารณะยังอยู่ ไม่ต้องประมวลผลใหม่
+      publicAsset = version.publicAsset;
+    } else {
+      if (!version.fullAsset) {
+        return res.status(409).json({
+          error: 'full_asset_gone',
+          message: 'ไฟล์เต็มของเวอร์ชันนี้ถูกลบตามนโยบายเก็บย้อนหลังแล้ว เผยแพร่ใหม่ไม่ได้',
+        });
+      }
+      try {
+        const text = await fetchRawAsset(version.fullAsset.publicId);
+        const parsed = parseMapFile(text, 'full.geojson');
+        if (!parsed.ok) {
+          return res.status(422).json({ error: 'parse_failed', message: parsed.message });
+        }
+        const filtered = toPublicFeatureCollection(parsed.fc, layer.publicFields);
+        const uploaded = await uploadRawText(JSON.stringify(filtered), {
+          folder: domain.folderPublic,
+          // ชื่อคงที่ต่อเวอร์ชันและลงท้าย .geojson เพื่อให้ QGIS/เบราว์เซอร์เดา
+          // ชนิดไฟล์ถูกตอนเปิด URL ที่ redirect ไปถึง
+          publicId: `${layer.id}-v${version.versionNo}.geojson`,
+          type: 'upload',
+        });
+        publicAsset = uploaded;
+      } catch (err) {
+        console.error('map publish: building public asset failed', err);
+        return res.status(502).json({
+          error: 'publish_failed',
+          message: 'สร้างไฟล์สาธารณะไม่สำเร็จ ยังไม่มีอะไรเปลี่ยน ลองใหม่อีกครั้ง',
+        });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const actor = admin.email ?? admin.userId;
+    const patch = buildPublishPatch({ version, currentPublished, publicAsset, actor, now });
+
+    await domain.store.patchVersion(patch.publish.id, patch.publish.set);
+    if (patch.supersede) await domain.store.patchVersion(patch.supersede.id, patch.supersede.set);
+    await domain.store.patchLayer(layer.id, patch.layer);
+
+    // ตัดไฟล์เต็มที่เกินนโยบายทิ้ง — ทำหลังสลับสถานะสำเร็จเท่านั้น และความล้มเหลว
+    // ตรงนี้ไม่ทำให้การเผยแพร่ล้ม เพราะมันเป็นแค่การเก็บกวาดพื้นที่
+    const after = await domain.store.listVersions(layer.id);
+    for (const asset of assetsToPrune(after, LAYER_VERSIONS_KEPT)) {
+      try {
+        await destroyRawAsset(asset.publicId, 'authenticated');
+        const stale = after.find((v) => v.fullAsset?.publicId === asset.publicId);
+        if (stale) await domain.store.patchVersion(stale.id, { fullAsset: null });
+      } catch (err) {
+        console.warn('map publish: pruning old full asset failed', asset.publicId, err);
+      }
+    }
+
+    return res.status(200).json({ version: await domain.store.getVersion(version.id) });
+  };
+}
+
+// CSV ของแถวที่เข้าข่ายคำเตือนหนึ่งข้อ — เอาไปเปิดใน QGIS/Excel แล้วไล่แก้ที่
+// ต้นทางได้ทันที นี่คือสิ่งที่ทำให้คำเตือนเป็นงานที่ทำต่อได้ ไม่ใช่ตัวเลขที่ทุกคน
+// เรียนรู้ที่จะกดข้าม
+//
+// อ่านจากไฟล์เต็มซึ่งมีข้อมูลส่วนบุคคล จึงต้องผ่าน requireAdmin เสมอ
+export function makeAdminIssuesHandler(domain: LayerDomain): NextApiHandler {
+  return async (req, res) => {
+    const admin = await requireFeature(req, res, domain.feature);
+    if (!admin) return;
+
+    if (req.method !== 'GET') {
+      res.setHeader('Allow', 'GET');
+      return res.status(405).json({ error: 'method_not_allowed' });
+    }
+    if (!isCloudinaryConfigured()) {
+      return res.status(501).json({ error: 'cloudinary_not_configured' });
+    }
+
+    const code = String(req.query.code ?? '') as CheckCode;
+    if (!CHECK_CODES.includes(code)) {
+      return res.status(400).json({ error: 'unknown_code' });
+    }
+
+    const version = await domain.store.getVersion(String(req.query.vid));
+    if (!version) return res.status(404).json({ error: 'version_not_found' });
+    if (!version.fullAsset) {
+      return res.status(410).json({ error: 'full_asset_gone' });
+    }
+
+    const layer = await domain.store.getLayer(version.layerId);
+    if (!layer) return res.status(404).json({ error: 'layer_not_found' });
+
+    let text: string;
+    try {
+      text = await fetchRawAsset(version.fullAsset.publicId);
+    } catch (err) {
+      console.error('map issues: fetch full asset failed', err);
+      return res.status(502).json({ error: 'fetch_failed' });
+    }
+
+    const parsed = parseMapFile(text, 'full.geojson');
+    if (!parsed.ok) return res.status(422).json({ error: 'parse_failed' });
+
+    const table = collectIssueRows(parsed.fc, layer, code);
+    const fileName = `${layer.id}-v${version.versionNo}-${code}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).send(toCsv(table));
+  };
+}
+
+// อายุของ signed URL ฝั่งดาวน์โหลดไฟล์เต็ม — คนละค่ากับ TTL_SECONDS ด้านบนซึ่ง
+// เป็นของหน้าแผนที่ฝั่งเจ้าหน้าที่
+const DOWNLOAD_TTL_SECONDS = 300;
+
+// ไฟล์เต็ม (มีข้อมูลส่วนบุคคล) — 302 ไป signed URL อายุ 5 นาที
+//
+// ไม่ proxy เนื้อไฟล์ผ่านที่นี่เพราะ Pages Router เตือนเมื่อ response เกิน 4MB
+// และไฟล์แปลงที่ดินหนัก ~7 MB การตัดสินใจเรื่องสิทธิ์เกิดที่นี่ ส่วนการส่งไบต์
+// เป็นงานของ Cloudinary
+export function makeAdminDownloadHandler(domain: LayerDomain): NextApiHandler {
+  return async (req, res) => {
+    const admin = await requireFeature(req, res, domain.feature);
+    if (!admin) return;
+
+    if (req.method !== 'GET') {
+      res.setHeader('Allow', 'GET');
+      return res.status(405).json({ error: 'method_not_allowed' });
+    }
+    if (!isCloudinaryConfigured()) {
+      return res.status(501).json({ error: 'cloudinary_not_configured' });
+    }
+
+    const version = await domain.store.getVersion(String(req.query.vid));
+    if (!version) return res.status(404).json({ error: 'version_not_found' });
+
+    if (!version.fullAsset) {
+      return res.status(410).json({
+        error: 'full_asset_gone',
+        message:
+          'ไฟล์เต็มของเวอร์ชันนี้ถูกลบตามนโยบายเก็บย้อนหลังแล้ว (ประวัติยังอยู่ครบ)',
+      });
+    }
+
+    // ห้าม cache: URL ที่เซ็นแล้วหมดอายุใน 5 นาที ถ้า CDN/เบราว์เซอร์เก็บ redirect
+    // นี้ไว้ ครั้งถัดไปผู้ใช้จะถูกส่งไป URL ที่ตายแล้ว
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(302, signedRawUrl(version.fullAsset.publicId, DOWNLOAD_TTL_SECONDS));
+  };
 }
