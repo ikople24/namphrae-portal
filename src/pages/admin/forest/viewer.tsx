@@ -6,7 +6,7 @@ import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { FOREST_API } from '@/lib/forest-api';
-import type { AdminLayerRow } from '@/lib/map-api';
+import type { AdminLayerRow } from '@/lib/layer-api';
 import type { ViewerLayer } from '@/components/MapViewer';
 
 export const getServerSideProps = getFeatureSsrProps('forest');
@@ -58,11 +58,8 @@ function AdminForestViewerPage() {
     >
       <p className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-[12px] leading-normal text-amber-800">
         หน้านี้แสดง<strong>ทุกฟิลด์</strong>รวมข้อมูลส่วนบุคคล (เลขโฉนด ที่อยู่เจ้าของ)
-        ตามไฟล์เต็มของเวอร์ชันที่เผยแพร่อยู่ — ต่างจากหน้าแผนที่สาธารณะที่{' '}
-        <Link href="/map" target="_blank" className="underline">
-          /map
-        </Link>{' '}
-        ซึ่งเห็นเฉพาะฟิลด์ที่เปิดไว้
+        ตามไฟล์เต็มของเวอร์ชันที่เผยแพร่อยู่ — ต่างจากไฟล์สาธารณะที่ถูกกรองฟิลด์ตั้งแต่
+        ตอนกดเผยแพร่ ซึ่งเห็นเฉพาะฟิลด์ที่เปิดไว้
       </p>
 
       <p className="mb-3 text-[12px] leading-relaxed text-ink-mute">
@@ -82,9 +79,9 @@ function AdminForestViewerPage() {
           <p className="mt-1 text-[12.5px] text-ink-mute">
             ไปที่{' '}
             <Link href={FOREST_API.indexHref} className="underline">
-              คลังไฟล์แผนที่
+              ข้อมูลป่าไม้
             </Link>{' '}
-            แล้วกดเผยแพร่อย่างน้อยหนึ่งเลเยอร์ก่อน
+            แล้วกดเผยแพร่อย่างน้อยหนึ่งชั้นก่อน
           </p>
         </div>
       ) : (

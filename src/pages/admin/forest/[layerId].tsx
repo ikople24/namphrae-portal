@@ -54,14 +54,14 @@ function ForestLayerDetailPage() {
 
   if (error) {
     return (
-      <AdminLayout title="ไฟล์แผนที่">
+      <AdminLayout title="ข้อมูลป่าไม้">
         <p className="text-[13px] text-red-700">{(error as Error).message}</p>
       </AdminLayout>
     );
   }
   if (!data) {
     return (
-      <AdminLayout title="ไฟล์แผนที่">
+      <AdminLayout title="ข้อมูลป่าไม้">
         <p className="text-[13px] text-ink-mute">กำลังโหลด…</p>
       </AdminLayout>
     );

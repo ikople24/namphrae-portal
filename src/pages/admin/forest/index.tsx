@@ -6,7 +6,7 @@ import { withMemberGuard } from '@/components/admin/MemberGuard';
 import MapLayerCard from '@/components/admin/MapLayerCard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { FOREST_API } from '@/lib/forest-api';
-import type { AdminLayerRow } from '@/lib/map-api';
+import type { AdminLayerRow } from '@/lib/layer-api';
 
 export const getServerSideProps = getFeatureSsrProps('forest');
 
