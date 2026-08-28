@@ -7,12 +7,7 @@ import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import PublicFieldPicker from '@/components/admin/PublicFieldPicker';
 import { getFeatureSsrProps } from '@/lib/auth-server';
-import {
-  downloadUrl,
-  mapFetcher,
-  patchMapLayer,
-  publishVersion,
-} from '@/lib/map-api';
+import { MAP_API } from '@/lib/map-api';
 import type { MapLayer, MapLayerVersion, VersionStatus } from '@/types/map';
 
 export const getServerSideProps = getFeatureSsrProps('map');
@@ -48,7 +43,7 @@ function LayerDetailPage() {
   const { data, error, mutate } = useSWR<{
     layer: MapLayer;
     versions: MapLayerVersion[];
-  }>(layerId ? `/api/admin/map/layers/${encodeURIComponent(layerId)}` : null, mapFetcher, {
+  }>(layerId ? MAP_API.layerKey(layerId) : null, MAP_API.fetcher, {
     revalidateOnFocus: false,
   });
 
@@ -86,7 +81,7 @@ function LayerDetailPage() {
     setProblem(null);
     setNotice(null);
     try {
-      const res = await patchMapLayer(layerId, { publicFields: pendingFields });
+      const res = await MAP_API.patchLayer(layerId, { publicFields: pendingFields });
       setPendingFields(null);
       await mutate();
       setNotice(
@@ -106,7 +101,7 @@ function LayerDetailPage() {
     setProblem(null);
     setNotice(null);
     try {
-      await publishVersion(versionId);
+      await MAP_API.publishVersion(versionId);
       await mutate();
       setNotice('ย้อนเวอร์ชันเรียบร้อย');
     } catch (err) {
@@ -121,7 +116,7 @@ function LayerDetailPage() {
       title={layer.title}
       actions={
         <Link
-          href="/admin/map"
+          href={MAP_API.indexHref}
           className="flex items-center gap-1 text-[12.5px] text-ink-soft hover:underline"
         >
           <Icon name="arrow_back" size={16} />
@@ -191,7 +186,7 @@ function LayerDetailPage() {
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   {v.fullAsset ? (
                     <a
-                      href={downloadUrl(v.id)}
+                      href={MAP_API.downloadUrl(v.id)}
                       className="text-ink-soft hover:underline"
                     >
                       ไฟล์เต็ม

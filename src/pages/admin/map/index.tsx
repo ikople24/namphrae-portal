@@ -5,14 +5,14 @@ import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import MapLayerCard from '@/components/admin/MapLayerCard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
-import { mapFetcher, type AdminLayerRow } from '@/lib/map-api';
+import { MAP_API, type AdminLayerRow } from '@/lib/map-api';
 
 export const getServerSideProps = getFeatureSsrProps('map');
 
 function MapLayersPage() {
   const { data, error, isLoading, mutate } = useSWR<{ layers: AdminLayerRow[] }>(
-    '/api/admin/map/layers',
-    mapFetcher,
+    MAP_API.layersKey,
+    MAP_API.fetcher,
     { revalidateOnFocus: false }
   );
 
@@ -21,7 +21,7 @@ function MapLayersPage() {
       title="ไฟล์แผนที่"
       actions={
         <Link
-          href="/admin/map/viewer"
+          href={MAP_API.viewerHref}
           className="flex items-center gap-1 rounded-lg border border-black/15 px-3 py-1.5 text-[12.5px] font-medium text-ink-soft transition hover:bg-black/[0.04]"
         >
           <Icon name="map" size={16} />
@@ -61,7 +61,7 @@ function MapLayersPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {data?.layers.map((row) => (
-          <MapLayerCard key={row.layer.id} row={row} onChanged={() => void mutate()} />
+          <MapLayerCard key={row.layer.id} row={row} api={MAP_API} onChanged={() => void mutate()} />
         ))}
       </div>
     </AdminLayout>
