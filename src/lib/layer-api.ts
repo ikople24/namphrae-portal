@@ -88,14 +88,23 @@ export type LayerApi = {
   viewerHref: string;
 };
 
+/**
+ * ตัวดึงข้อมูลสำหรับ SWR — ไม่ผูกกับโดเมนเลยเพราะรับ URL เต็มมาอยู่แล้ว
+ *
+ * อยู่ระดับโมดูล ไม่ใช่แค่ในโรงงาน เพราะหน้าแผนที่สาธารณะ (`src/pages/map.tsx`) ก็ใช้
+ * ตัวนี้ แต่ต้องไม่ import binding ของฝั่งหลังบ้านมาใช้ — หน้าสาธารณะที่พึ่ง MAP_API
+ * จะกลายเป็นการผูกกันข้ามชั้นสิทธิ์ ซึ่งเป็นสิ่งที่การแยกโดเมนทั้งหมดนี้มีไว้กัน
+ */
+export const layerFetcher = <T = unknown,>(url: string): Promise<T> =>
+  fetch(url).then((r) => jsonOrThrow<T>(r));
+
 export function createLayerApi(cfg: LayerApiConfig): LayerApi {
   return {
     layersKey: `${cfg.apiBase}/layers`,
 
     layerKey: (layerId) => `${cfg.apiBase}/layers/${encodeURIComponent(layerId)}`,
 
-    fetcher: <T = unknown,>(url: string): Promise<T> =>
-      fetch(url).then((r) => jsonOrThrow<T>(r)),
+    fetcher: layerFetcher,
 
     /**
      * ลากไฟล์วาง → ได้ร่างหนึ่งเวอร์ชัน
