@@ -9,6 +9,7 @@ import {
   LAYER_STYLES,
   labelOf,
   styleOf,
+  VERIFIED_GROUP_SLOTS,
 } from '@/lib/map-style';
 import type { Feature, FeatureCollection } from '@/types/map';
 
@@ -432,7 +433,11 @@ export default function MapViewer({
                 onChange={(e) => setGrouped(e.target.checked)}
                 className="h-3.5 w-3.5 accent-green"
               />
-              แยกสีตามโซน
+              {/* "กลุ่ม" ไม่ใช่ "โซน" — คอมโพเนนต์นี้ใช้ร่วมสี่หน้า บนหน้าป่าไม้
+                  มันแยกตามชั้นคุณภาพแหล่งน้ำและจังหวัด ไม่ใช่โซน ส่วนหัวข้อย่อย
+                  ข้างล่างบอกอยู่แล้วว่าชั้นไหนแยกตามฟิลด์อะไร จึงไม่ต้องส่ง prop
+                  บอกโดเมนเข้ามาให้ผูกกันโดยไม่ได้อะไรเพิ่ม */}
+              แยกสีตามกลุ่ม
             </label>
 
             {grouped ? (
@@ -449,6 +454,17 @@ export default function MapViewer({
                       <p className="text-[10.5px] font-semibold text-ink-mute">
                         {l.title} · {labelOf(COLOR_BY[l.id])}
                       </p>
+                      {colorGroups.current.get(l.id)!.size > VERIFIED_GROUP_SLOTS ? (
+                        // ไม่เงียบเมื่อการเข้ารหัสด้วยสีรับน้ำหนักไม่ไหว — เจ็ดสีแรก
+                        // ของจานเท่านั้นที่ตรวจแล้วว่าแยกออกจากกันได้จริง เกินจากนั้น
+                        // สีเริ่มใกล้กันและวนซ้ำเมื่อเกินสิบสอง ถ้าไม่บอก คนอ่านจะ
+                        // เชื่อว่าสองพื้นที่คนละสีคือคนละกลุ่มเสมอ ซึ่งไม่จริง
+                        <p className="mt-0.5 text-[10px] leading-snug text-ink-mute">
+                          {colorGroups.current.get(l.id)!.size} กลุ่ม — เกิน{' '}
+                          {VERIFIED_GROUP_SLOTS} สีที่แยกออกได้แน่นอน ใช้รายการข้างล่าง
+                          เทียบสีแทนการดูสีอย่างเดียว
+                        </p>
+                      ) : null}
                       <ul className="mt-1 flex flex-wrap gap-x-2.5 gap-y-1">
                         {[...colorGroups.current.get(l.id)!].map(([value, color]) => (
                           <li

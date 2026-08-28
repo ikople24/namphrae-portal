@@ -6,6 +6,7 @@ export default function SiteHeader({ site }: { site: SiteSettings }) {
   const nav = [
     { href: '/#services', label: 'บริการ' },
     { href: '/map', label: 'แผนที่' },
+    { href: '/forest', label: 'ป่าไม้' },
     { href: '/#services', label: 'ข่าวสาร' },
     { href: '/#contact', label: 'ติดต่อ' },
   ];
