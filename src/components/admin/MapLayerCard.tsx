@@ -6,7 +6,7 @@ import {
   type AdminLayerRow,
   type LayerApi,
   type UploadStage,
-} from '@/lib/map-api';
+} from '@/lib/layer-api';
 import type { MapCheck, MapLayerVersion } from '@/types/map';
 
 const ACCEPT = '.geojson,.json,.js,.zip';
