@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toPublicFeatureCollection } from '@/lib/map-public';
+import { publicAssetIsStale, toPublicFeatureCollection } from '@/lib/map-public';
 import type { FeatureCollection } from '@/types/map';
 
 const fc: FeatureCollection = {
@@ -81,5 +81,45 @@ describe('toPublicFeatureCollection', () => {
     const out = toPublicFeatureCollection(withMeta, []);
     expect(out.name).toBeUndefined();
     expect(out.crs).toBeUndefined();
+  });
+});
+
+describe('publicAssetIsStale', () => {
+  const asset = (publicFields?: string[]) => ({
+    publicId: 'x',
+    url: 'https://cdn/x',
+    bytes: 1,
+    ...(publicFields ? { publicFields } : {}),
+  });
+
+  it('นโยบายเหมือนเดิม → ไม่เก่า ใช้ไฟล์เดิมต่อได้', () => {
+    expect(publicAssetIsStale(asset(['moo', 'rai']), ['moo', 'rai'])).toBe(false);
+  });
+
+  it('ลำดับต่างกันแต่ชุดเดียวกัน → ไม่เก่า ไม่ต้องสร้างไฟล์ใหม่ให้เปลือง', () => {
+    expect(publicAssetIsStale(asset(['rai', 'moo']), ['moo', 'rai'])).toBe(false);
+  });
+
+  it('ปิดฟิลด์ไปหนึ่งตัว → เก่า ต้องกรองใหม่', () => {
+    expect(publicAssetIsStale(asset(['moo', 'photo']), ['moo'])).toBe(true);
+  });
+
+  it('เปิดฟิลด์เพิ่ม → เก่า', () => {
+    expect(publicAssetIsStale(asset(['moo']), ['moo', 'rai'])).toBe(true);
+  });
+
+  it('ปิดหมดทุกฟิลด์ → เก่า', () => {
+    expect(publicAssetIsStale(asset(['moo']), [])).toBe(true);
+  });
+
+  // ไฟล์ที่สร้างก่อนระบบจะเริ่มจำนโยบายไม่มีฟิลด์นี้ ต้องถือว่าเก่าเสมอ — สร้างใหม่
+  // เปลืองแค่ครั้งเดียว ส่วนการเดาว่ามันยังตรงอยู่แล้วเดาผิดคือ PII หลุด
+  it('ไฟล์เก่าที่ไม่ได้บันทึกนโยบายไว้ → ถือว่าเก่าเสมอ', () => {
+    expect(publicAssetIsStale(asset(), ['moo'])).toBe(true);
+    expect(publicAssetIsStale(asset(), [])).toBe(true);
+  });
+
+  it('ยังไม่เคยมีไฟล์สาธารณะ → เก่า', () => {
+    expect(publicAssetIsStale(null, ['moo'])).toBe(true);
   });
 });
