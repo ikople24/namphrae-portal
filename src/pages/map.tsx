@@ -3,7 +3,7 @@ import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 import SiteHeader from '@/components/SiteHeader';
 import { getConfig, toPublicConfig } from '@/lib/config-store';
-import { mapFetcher } from '@/lib/map-api';
+import { layerFetcher } from '@/lib/layer-api';
 import type { ViewerLayer } from '@/components/MapViewer';
 import type { PublicConfig } from '@/types/portal';
 
@@ -30,7 +30,7 @@ type PublicLayer = {
 export default function PublicMapPage({ config }: { config: PublicConfig }) {
   const { data, error } = useSWR<{ layers: PublicLayer[] }>(
     '/api/map/layers',
-    mapFetcher,
+    layerFetcher,
     { revalidateOnFocus: false }
   );
 

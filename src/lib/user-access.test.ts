@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_FEATURES,
   FEATURES,
+  FEATURE_HOME,
+  FEATURE_LABELS,
   firstAllowedPath,
   hasFeature,
   isEnvManager,
@@ -75,5 +77,27 @@ describe('hasFeature / firstAllowedPath', () => {
 
   it('ไม่มีสิทธิ์เลย → null', () => {
     expect(firstAllowedPath({ isManager: false, features: [] })).toBe(null);
+  });
+});
+
+describe('สิทธิ์ forest', () => {
+  it('อยู่ใน FEATURES แต่ไม่อยู่ในชุดเริ่มต้น — ผู้จัดการต้องติ๊กเปิดเอง', () => {
+    expect(FEATURES).toContain('forest');
+    expect(DEFAULT_FEATURES).not.toContain('forest');
+  });
+
+  it('สมาชิกเดิมที่ยังไม่เคยถูกตั้งค่า ไม่ได้สิทธิ์นี้ติดมาเงียบ ๆ', () => {
+    const r = resolveAccess({ doc: null, clerkId: 'user_a', managerEnvId: undefined });
+    expect(hasFeature({ features: r.features, isManager: false }, 'forest')).toBe(false);
+  });
+
+  it('ผู้จัดการเห็นทุกฟีเจอร์รวม forest', () => {
+    const r = resolveAccess({ doc: null, clerkId: 'mgr', managerEnvId: 'mgr' });
+    expect(hasFeature({ features: r.features, isManager: r.isManager }, 'forest')).toBe(true);
+  });
+
+  it('มีหน้าแรกและป้ายภาษาไทยครบเหมือนฟีเจอร์อื่น', () => {
+    expect(FEATURE_HOME.forest).toBe('/admin/forest');
+    expect(FEATURE_LABELS.map((f) => f.key)).toContain('forest');
   });
 });

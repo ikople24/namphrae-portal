@@ -23,6 +23,32 @@ const TRIANGLE = JSON.stringify({
   ],
 });
 
+// รูปเดียวกันแต่พิกัดพกทศนิยม 10 ตำแหน่ง และวางไว้ให้การปัดเหลือ 3 ตำแหน่งขยับ
+// จุดยอดจริง ๆ — ด้านยาวขึ้นจาก 0.011° เป็น 0.012° พื้นที่จึงต่างกันราว 19%
+// มากพอให้เทสต์เรื่องลำดับจับได้ว่าพื้นที่ถูกคิดบนรูปทรงที่ปัดแล้วหรือยัง
+const TRIANGLE_LONG = JSON.stringify({
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [98.8604999999, 18.6804999999],
+            [98.8715000001, 18.6804999999],
+            [98.8715000001, 18.6915000001],
+          ],
+        ],
+      },
+      properties: { moo: '10' },
+    },
+  ],
+});
+
+/** จำนวนตำแหน่งทศนิยมของตัวเลข — ใช้ยืนยันว่าปัดจริง ไม่ใช่แค่ค่าใกล้เคียง */
+const decimals = (n: number): number => (String(n).split('.')[1] ?? '').length;
+
 const layer = (over: Partial<MapLayer> = {}): MapLayer => ({
   id: 'community-forest',
   title: 'ป่าชุมชน',
@@ -91,5 +117,66 @@ describe('ingestMapFile: computeArea', () => {
     };
     expect(run(true)).not.toBe(run(false));
     expect(run(true)).toBe(run(true));
+  });
+});
+
+describe('ingestMapFile: coordinatePrecision', () => {
+  it('ปัดพิกัดเมื่อเลเยอร์ตั้งค่าไว้', () => {
+    const r = ingestMapFile({
+      text: TRIANGLE_LONG,
+      fileName: 'forest.geojson',
+      layer: layer({ coordinatePrecision: 6 }),
+      previous: null,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const ring = (r.fc.features[0].geometry as { coordinates: number[][][] }).coordinates[0];
+    for (const [lon, lat] of ring) {
+      expect(decimals(lon)).toBeLessThanOrEqual(6);
+      expect(decimals(lat)).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('ไม่แตะพิกัดเลยเมื่อไม่ได้ตั้งค่า — ทศนิยม 10 ตำแหน่งยังอยู่ครบ', () => {
+    const r = ingestMapFile({
+      text: TRIANGLE_LONG,
+      fileName: 'forest.geojson',
+      layer: layer(),
+      previous: null,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const ring = (r.fc.features[0].geometry as { coordinates: number[][][] }).coordinates[0];
+    expect(ring[0]).toEqual([98.8604999999, 18.6804999999]);
+  });
+
+  it('พื้นที่ถูกคิดบนรูปทรงที่ปัดแล้ว — คือหลักฐานว่าปัดก่อน withArea', () => {
+    const areaOf = (over: Partial<MapLayer>) => {
+      const r = ingestMapFile({
+        text: TRIANGLE_LONG,
+        fileName: 'forest.geojson',
+        layer: layer({ computeArea: true, ...over }),
+        previous: null,
+      });
+      if (!r.ok) throw new Error(r.message);
+      return r.fc.features[0].properties?.area_rai as number;
+    };
+    // ถ้าปัดหลัง withArea ตัวเลขสองอันนี้จะเท่ากัน เพราะพื้นที่จะถูกคิดบนรูปทรงเดิมทั้งคู่
+    expect(areaOf({ coordinatePrecision: 3 })).not.toBe(areaOf({}));
+  });
+
+  it('sha256 ต่างกันระหว่างปัดกับไม่ปัด แต่คงที่เมื่อเรียกซ้ำ — เงื่อนไขของด่าน identical', () => {
+    const run = (over: Partial<MapLayer>) => {
+      const r = ingestMapFile({
+        text: TRIANGLE_LONG,
+        fileName: 'forest.geojson',
+        layer: layer(over),
+        previous: null,
+      });
+      if (!r.ok) throw new Error(r.message);
+      return r.sha256;
+    };
+    expect(run({ coordinatePrecision: 6 })).not.toBe(run({}));
+    expect(run({ coordinatePrecision: 6 })).toBe(run({ coordinatePrecision: 6 }));
   });
 });

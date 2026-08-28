@@ -1,0 +1,349 @@
+// src/lib/forest-prep.test.ts
+import { describe, expect, it } from 'vitest';
+import { mooFromName, prepCommunityForest, prepKortorchor, prepPermanent, prepReserve, prepStream, registryRai, splitWeir } from '@/lib/forest-prep';
+import type { Feature, FeatureCollection } from '@/types/map';
+
+const feat = (properties: Record<string, unknown>): Feature => ({
+  type: 'Feature',
+  geometry: { type: 'MultiPolygon', coordinates: [] },
+  properties,
+});
+const coll = (features: Feature[]): FeatureCollection => ({
+  type: 'FeatureCollection',
+  features,
+});
+
+describe('mooFromName', () => {
+  it('อ่านเลขหมู่ได้จากทั้งสองรูปแบบที่ปนกันในไฟล์เดียว', () => {
+    expect(mooFromName('เขตป่าชุมชน หมู่ 7')).toBe(7);
+    expect(mooFromName('เขตป่าชุมชน หมู่ 9')).toBe(9);
+    expect(mooFromName('พิกัดป่าชุมชนหมู่ 10')).toBe(10);
+    expect(mooFromName('พิกัดป่าชุมชนหมู่ 11')).toBe(11);
+  });
+
+  it('รองรับ "หมู่ที่ N" ด้วย', () => {
+    expect(mooFromName('แผนที่ป่าชุมชนหมู่ที่ 10')).toBe(10);
+  });
+
+  it('หาไม่เจอ → โยน error ไม่เดาเป็น 0', () => {
+    expect(() => mooFromName('ป่าชุมชน')).toThrow(/หาเลขหมู่/);
+    expect(() => mooFromName(null)).toThrow(/หาเลขหมู่/);
+  });
+});
+
+describe('registryRai', () => {
+  it('รวม ไร่ + งาน + ตารางวา เป็นไร่ทศนิยม', () => {
+    // หมู่ 11 ในไฟล์จริง: 1941 ไร่ 0 งาน 81.59 วา
+    expect(registryRai(feat({ 'ไร่': 1941, 'งาน': 0, 'ตาร\uFFFD': 81.59 }))).toBeCloseTo(
+      1941.204,
+      3
+    );
+    // หมู่ 9: 707 ไร่ 2 งาน 44.15 วา
+    expect(registryRai(feat({ 'ไร่': 707, 'งาน': 2, 'ตาร\uFFFD': 44.15 }))).toBeCloseTo(
+      707.61,
+      2
+    );
+  });
+
+  it('คีย์ตารางวาถูกตัดกลางคำต่างกันก็ยังหาเจอ', () => {
+    expect(registryRai(feat({ 'ไร่': 50, 'งาน': 0, 'ตารางวา': 8.41 }))).toBeCloseTo(50.02, 2);
+  });
+
+  it('ฟิลด์ไม่ครบ → null ไม่ใช่ NaN', () => {
+    expect(registryRai(feat({ 'ไร่': 50 }))).toBeNull();
+  });
+
+  it('ช่องว่างในทะเบียน → null ไม่ใช่ 0 — 0 จะทำให้ด่านตรวจรายงานผิดสาเหตุ', () => {
+    expect(registryRai(feat({ 'ไร่': null, 'งาน': 0, 'ตาร\uFFFD': 0 }))).toBeNull();
+    expect(registryRai(feat({ 'ไร่': '', 'งาน': 0, 'ตาร\uFFFD': 0 }))).toBeNull();
+  });
+
+  it('เลขที่มาเป็นสตริงก็อ่านได้ — ถุง properties ไม่รับประกันชนิด', () => {
+    expect(registryRai(feat({ 'ไร่': '463', 'งาน': '0', 'ตาร\uFFFD': '36.76' }))).toBeCloseTo(
+      463.0919,
+      4
+    );
+  });
+
+  it('ไม่หยิบคอลัมน์ ตารางเมตร มาใช้แทน — สองชื่อนี้ถูกตัดเหลือชื่อ DBF เดียวกัน', () => {
+    expect(
+      registryRai(feat({ 'ไร่': 50, 'งาน': 0, 'ตารางเมตร': 20000, 'ตาร\uFFFD': 8.41 }))
+    ).toBeCloseTo(50.021, 3);
+    expect(registryRai(feat({ 'ไร่': 50, 'งาน': 0, 'ตารางเมตร': 20000 }))).toBeNull();
+  });
+});
+
+describe('prepCommunityForest', () => {
+  it('เหลือแค่ moo — ฟิลด์ขยะจาก QGIS หายหมด', () => {
+    const out = prepCommunityForest(
+      coll([
+        feat({
+          id: 1,
+          name: 'เขตป่าชุมชน หมู่ 7',
+          Area: 740947.05,
+          path: 'D:/Qgis/ป่าไม้/ป่าชุมชน/เขตป่าชุมชน หมู่',
+          'ไร่': 463,
+          'งาน': 0,
+          'ตาร\uFFFD': 36.76,
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toStrictEqual({ moo: 7 });
+  });
+
+  it('ไม่แตะ geometry', () => {
+    const g = { type: 'MultiPolygon', coordinates: [[[[98.1, 18.1]]]] };
+    const out = prepCommunityForest(
+      coll([{ type: 'Feature', geometry: g, properties: { name: 'หมู่ 10' } }])
+    );
+    expect(out.features[0].geometry).toEqual(g);
+  });
+
+  it('ทิ้ง crs ระดับบน — ป้าย UTM ที่ค้างมาจะทำให้ parseMapFile ปฏิเสธไฟล์ที่ประกอบใหม่', () => {
+    const out = prepCommunityForest({
+      type: 'FeatureCollection',
+      crs: { properties: { name: 'urn:ogc:def:crs:EPSG::32647' } },
+      features: [feat({ name: 'หมู่ 7' })],
+    });
+    expect(Object.keys(out)).toEqual(['type', 'features']);
+  });
+
+  it('ชื่อแปลงเดียวที่อ่านไม่ออกทำให้ทั้งก้อนล้ม ไม่ใช่นำเข้าครึ่ง ๆ กลาง ๆ', () => {
+    expect(() =>
+      prepCommunityForest(
+        coll([feat({ name: 'เขตป่าชุมชน หมู่ 7' }), feat({ name: 'ป่าชุมชน' })])
+      )
+    ).toThrow(/หาเลขหมู่/);
+  });
+});
+
+const pt = (properties: Record<string, unknown>): Feature => ({
+  type: 'Feature',
+  geometry: { type: 'Point', coordinates: [98.89, 18.71] },
+  properties,
+});
+
+const RAW_WEIR = [
+  pt({
+    fid: 1,
+    Name: 'Photo(1).jpg',
+    Date: '2025-06-18',
+    Altitude: 335,
+    Path: 'D:/Qgis/ป่าไม้/ฝาย\\Photo(1).jpg',
+    RelPath: 'ฝาย\\Photo(1).jpg',
+    Images: '<img src = "ฝาย\\Photo(1).jpg" width="300" height="225"/>',
+    Link: 'file:///D:/Qgis/ป่าไม้/ฝาย\\Photo(1).jpg',
+    cause: null,
+    loss: null,
+    LAT: 18.71541,
+    LON: 98.89409,
+  }),
+  pt({ fid: 41, Name: 'Photo(41).jpg', Date: '2025-06-20', Altitude: 356 }),
+  pt({ fid: 42, Name: null, Date: '18-มิ.ย.-68', cause: 'ภัยแล้ง ไม่มีน้ำ', loss: 'ฝายม่อนหินขาว ม.7' }),
+  pt({ fid: 54, Name: null, Date: '๒๐-ก.ย.-๖๔', cause: 'ภัยแล้ง ไม่มีน้ำ', loss: 'ฝายป็อกกลาง' }),
+];
+
+describe('splitWeir', () => {
+  it('แบ่งที่ fid 41/42 — ไม่มีจุดไหนคาบเกี่ยว', () => {
+    const { weir, survey } = splitWeir(coll(RAW_WEIR));
+    expect(survey.features).toHaveLength(2);
+    expect(weir.features).toHaveLength(2);
+  });
+
+  it('จุดสำรวจเหลือ photo/surveyed_at/elevation_m — path บนไดรฟ์ D: หายหมด', () => {
+    const { survey } = splitWeir(coll(RAW_WEIR));
+    expect(survey.features[0].properties).toEqual({
+      photo: 'Photo(1).jpg',
+      elevation_m: 335,
+      surveyed_at: '2025-06-18',
+    });
+  });
+
+  it('ฝายเหลือ name/note/surveyed_at โดย loss กลายเป็นชื่อฝาย', () => {
+    const { weir } = splitWeir(coll(RAW_WEIR));
+    expect(weir.features[0].properties).toEqual({
+      name: 'ฝายม่อนหินขาว ม.7',
+      note: 'ภัยแล้ง ไม่มีน้ำ',
+      surveyed_at: '2025-06-18',
+    });
+  });
+
+  it('แปลงวันที่เลขไทยของฝายเก่าให้เป็น ISO', () => {
+    const { weir } = splitWeir(coll(RAW_WEIR));
+    expect(weir.features[1].properties?.surveyed_at).toBe('2021-09-20');
+  });
+
+  it('แถวที่ไม่มี fid → โยน error ไม่เดาว่าอยู่ฝั่งไหน', () => {
+    expect(() => splitWeir(coll([pt({ Name: 'x', Date: '2025-06-18' })]))).toThrow(/fid/);
+  });
+
+  it('fid เป็น null → โยน error ไม่ไหลไปอยู่ฝั่งจุดสำรวจ', () => {
+    // null คือรูปแบบที่ไฟล์ชุดนี้ใช้เขียนช่องว่างจริง ๆ ไม่ใช่การละคีย์ทิ้ง
+    expect(() =>
+      splitWeir(
+        coll([pt({ fid: null, Date: '18-มิ.ย.-68', cause: 'ภัยแล้ง ไม่มีน้ำ', loss: 'ฝายสภาเด็ก' })])
+      )
+    ).toThrow(/fid/);
+    expect(() => splitWeir(coll([pt({ fid: 0, Date: '2025-06-18' })]))).toThrow(/fid/);
+    expect(() => splitWeir(coll([pt({ fid: 54.7, Date: '2025-06-18' })]))).toThrow(/fid/);
+  });
+
+  it('fid ที่เป็นสตริงตัวเลขยังใช้ได้', () => {
+    const { weir } = splitWeir(coll([pt({ fid: '42', Date: '2025-06-18', loss: 'ฝายทดสอบ' })]));
+    expect(weir.features).toHaveLength(1);
+  });
+
+  it('แถวฝายที่ไม่มีชื่อ → โยน error เพราะชื่อคือคีย์ประจำรายการ', () => {
+    expect(() =>
+      splitWeir(coll([pt({ fid: 42, Date: '2025-06-18', cause: 'ภัยแล้ง ไม่มีน้ำ' })]))
+    ).toThrow(/ไม่มีชื่อ/);
+  });
+
+  it('วันที่อ่านไม่ออกต้องบอกด้วยว่าแถวไหน', () => {
+    expect(() =>
+      splitWeir(coll([pt({ fid: 42, Date: '12/06/2566', loss: 'ฝายทดสอบ' })]))
+    ).toThrow(/ฝายทดสอบ/);
+  });
+});
+
+describe('prepReserve', () => {
+  it('เหลือหกฟิลด์ — bbox กับคอลัมน์ค่าเดียวหายหมด', () => {
+    const out = prepReserve(
+      coll([
+        feat({
+          NRF_CODE: 'K1.002',
+          FR_NAME: 'ป่าอินทขิล',
+          Province: 'เชียงใหม่',
+          AREA_RAI: 7625,
+          rai_GIS: 7646.4375,
+          'สจป': 'สจป.ที่ 1 (เชียงใหม่)',
+          'ภาค': '3',
+          Typ: 'ป่าสงวนแห่งชาติ',
+          Xmin: 494413.9307,
+          Xmax: 499218.0433,
+          Ymin: 2114252.8073,
+          Ymax: 2118830.4627,
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({
+      nrf_code: 'K1.002',
+      name: 'ป่าอินทขิล',
+      province: 'เชียงใหม่',
+      rai_gazette: 7625,
+      rai_rfd: 7646.4375,
+      office: 'สจป.ที่ 1 (เชียงใหม่)',
+    });
+  });
+
+  it('ชื่อป่าซ้ำกันได้ข้ามจังหวัด — nrf_code เป็นตัวตนจริง ไม่ใช่ FR_NAME', () => {
+    const out = prepReserve(
+      coll([
+        feat({ NRF_CODE: 'L1.004', FR_NAME: 'ป่าแม่ยวมฝั่งซ้าย', Province: 'แม่ฮ่องสอน' }),
+        feat({ NRF_CODE: 'L1.006', FR_NAME: 'ป่าแม่ยวมฝั่งซ้าย', Province: 'แม่ฮ่องสอน' }),
+      ])
+    );
+    expect(out.features.map((f) => f.properties?.nrf_code)).toEqual(['L1.004', 'L1.006']);
+    expect(new Set(out.features.map((f) => f.properties?.name)).size).toBe(1);
+  });
+});
+
+describe('prepPermanent', () => {
+  it('แปลง area_gis จากตารางเมตรเป็นไร่ และทิ้งฟิลด์ที่ไม่อยู่ใน rename map', () => {
+    const out = prepPermanent(
+      coll([
+        feat({
+          objectid: 366,
+          name_th: 'ป่าชุมชน',
+          per_id: 'pf00330',
+          name_en: 'Community Forest',
+          area_pres: 0,
+          area_gis: 90022.744,
+          mod_date: '2020-01-01',
+          per_type: 'ป่าไม้ถาวร',
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({
+      per_id: 'pf00330',
+      name: 'ป่าชุมชน',
+      rai_rfd: 56.26,
+    });
+  });
+
+  it('area_gis อ่านไม่ออก → ไม่มีฟิลด์ rai_rfd ไม่ใช่ NaN', () => {
+    const out = prepPermanent(coll([feat({ per_id: 'pf1', name_th: 'ก', area_gis: 'x' })]));
+    expect(out.features[0].properties).toEqual({ per_id: 'pf1', name: 'ก' });
+  });
+
+  it('area_gis เป็น null → ไม่มีฟิลด์ rai_rfd ไม่ใช่ 0 ไร่', () => {
+    const out = prepPermanent(coll([feat({ per_id: 'pf1', name_th: 'ก', area_gis: null })]));
+    expect(out.features[0].properties).toEqual({ per_id: 'pf1', name: 'ก' });
+  });
+});
+
+describe('prepKortorchor', () => {
+  it('เก็บเนื้อที่ชุดที่ตรงกับ Shape_Area ทิ้งชุดที่สองไว้ก่อน', () => {
+    const out = prepKortorchor(
+      coll([
+        feat({
+          OBJECTID: 1,
+          Shape_Leng: 158295.23207,
+          Shape_Area: 9496546.25174,
+          Rai: 5935,
+          Ngan: 1,
+          wa: 36,
+          A: 9194232.40836,
+          R: 5746,
+          Ng: 1,
+          Twa: 58,
+          RA: 5746.39526,
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({ rai: 5935, ngan: 1, wa: 36 });
+  });
+});
+
+describe('prepStream', () => {
+  it('เก็บชื่อไทยกับชั้นคุณภาพ ทิ้งฟิลด์ผสมและฟิลด์อังกฤษ', () => {
+    const out = prepStream(
+      coll([
+        feat({
+          STRM_TH: 'น้ำแม่ขนิล',
+          STRM_ENG: 'Nam Mae Khanin',
+          ST_CLASS: 2,
+          ST_CL_T: 'แม่น้ำที่มีน้ำไหลตลอดปี',
+          ST_CL_E: 'Perennial stream',
+          name: 'น้ำแม่ขนิล / แม่น้ำที่มีน้ำไหลตลอดปี',
+        }),
+      ])
+    );
+    expect(out.features[0].properties).toEqual({
+      name: 'น้ำแม่ขนิล',
+      class: 2,
+      class_th: 'แม่น้ำที่มีน้ำไหลตลอดปี',
+    });
+  });
+
+  it('ลำน้ำไม่มีชื่อ (262 จาก 327 เส้น) ก็ยังได้ชั้นคุณภาพ', () => {
+    const out = prepStream(
+      coll([feat({ STRM_TH: null, ST_CLASS: 3, ST_CL_T: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี' })])
+    );
+    expect(out.features[0].properties).toEqual({
+      class: 3,
+      class_th: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี',
+    });
+  });
+
+  it('ST_CLASS เป็นสตริงในไฟล์จริงเสมอ — ไม่แปลงชนิดให้ ส่งต่อตามที่ได้มา', () => {
+    const out = prepStream(
+      coll([feat({ STRM_TH: 'ห้วยอ้อ', ST_CLASS: '3', ST_CL_T: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี' })])
+    );
+    expect(out.features[0].properties).toEqual({
+      name: 'ห้วยอ้อ',
+      class: '3',
+      class_th: 'แม่น้ำที่มีน้ำไหลไม่ตลอดปี',
+    });
+  });
+});

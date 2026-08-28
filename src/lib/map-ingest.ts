@@ -3,6 +3,7 @@ import { computeStats, sha256OfFeatureCollection } from '@/lib/map-stats';
 import { runChecks } from '@/lib/map-checks';
 import { computeDiff } from '@/lib/map-diff';
 import { withArea } from '@/lib/map-area';
+import { withPrecision } from '@/lib/map-precision';
 import type {
   FeatureCollection,
   MapCheck,
@@ -45,7 +46,13 @@ export function ingestMapFile(args: {
   // เติมพื้นที่ก่อนนับสถิติและก่อนคิด sha256 — ฟิลด์ที่เกิดทีหลังจะไม่เข้าไปอยู่ใน
   // stats (ด่าน field-removed/new-value ของเวอร์ชันหน้าเทียบกับ stats ไม่ใช่กับไฟล์)
   // และไฟล์ที่ผู้เรียกเอาไปอัปขึ้น Cloudinary คือ fc ก้อนนี้ ไม่ใช่ก้อนที่ parse มา
-  const fc = args.layer.computeArea ? withArea(parsed.fc) : parsed.fc;
+  // ปัดพิกัดก่อนเติมพื้นที่ เพื่อให้ตัวเลขไร่ตรงกับรูปทรงที่เผยแพร่จริง ไม่ใช่ตรงกับ
+  // รูปทรงก่อนปัดที่ไม่มีใครได้เห็น
+  const rounded =
+    args.layer.coordinatePrecision === undefined
+      ? parsed.fc
+      : withPrecision(parsed.fc, args.layer.coordinatePrecision);
+  const fc = args.layer.computeArea ? withArea(rounded) : rounded;
   const stats = computeStats(fc);
   const sha256 = sha256OfFeatureCollection(fc);
 

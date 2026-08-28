@@ -47,8 +47,22 @@ export type UploadSignature = {
 export const MAP_FOLDER_FULL = 'namphrae-portal/map/full';
 export const MAP_FOLDER_PUBLIC = 'namphrae-portal/map/public';
 
-/** ลายเซ็นให้เบราว์เซอร์อัปไฟล์ตรงเข้า Cloudinary — ข้ามเพดาน body 1MB ของ API route */
-export function signRawUpload(): {
+// โดเมนป่าไม้ใช้โฟลเดอร์แยกจากแผนที่ แม้จะมี layerId ชนกันได้ (community-forest
+// เดินตามชื่อจากแผนที่เดิม) — เคยพลาดมาแล้วครั้งหนึ่ง: ตอนที่ยังใช้ MAP_FOLDER_FULL
+// ร่วมกัน ไฟล์เต็มของแผนที่ที่เผยแพร่อยู่ถูกสคริปต์นำเข้าป่าไม้เขียนทับไปเงียบ ๆ
+// เพราะ uploadRawText ตั้ง overwrite: true และ publicId คำนวณจาก layerId เพียงอย่าง
+// เดียวโดยไม่รู้จักโดเมน
+export const FOREST_FOLDER_FULL = 'namphrae-portal/forest/full';
+export const FOREST_FOLDER_PUBLIC = 'namphrae-portal/forest/public';
+
+/**
+ * ลายเซ็นให้เบราว์เซอร์อัปไฟล์ตรงเข้า Cloudinary — ข้ามเพดาน body 1MB ของ API route
+ *
+ * รับโฟลเดอร์เป็นพารามิเตอร์ ไม่ใช่ฝัง MAP_FOLDER_FULL ไว้ข้างใน — สองโดเมนมี
+ * layerId ชนกันได้ (community-forest อยู่ทั้งสองฝั่ง) ถ้าโฟลเดอร์ไม่แยก ไฟล์ของโดเมน
+ * หนึ่งจะเขียนทับอีกโดเมนหนึ่งเพราะ publicId คำนวณจาก layerId อย่างเดียว
+ */
+export function signRawUpload(folder: string): {
   signature: string;
   timestamp: number;
   apiKey: string;
@@ -59,7 +73,7 @@ export function signRawUpload(): {
   const timestamp = Math.round(Date.now() / 1000);
   const params = {
     timestamp,
-    folder: MAP_FOLDER_FULL,
+    folder,
     type: 'authenticated',
   };
   const signature = getCloudinary().utils.api_sign_request(
@@ -71,7 +85,7 @@ export function signRawUpload(): {
     timestamp,
     apiKey: process.env.CLOUDINARY_API_KEY as string,
     cloudName: process.env.CLOUDINARY_CLOUD_NAME as string,
-    folder: MAP_FOLDER_FULL,
+    folder,
     type: 'authenticated',
   };
 }

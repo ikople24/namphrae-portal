@@ -17,6 +17,7 @@ const NAV = [
   { href: '/admin/calendar', label: 'ปฏิทินปฏิบัติงาน', icon: 'calendar_month', exact: false, feature: 'calendar' },
   { href: '/admin/categories', label: 'หมวดหมู่', icon: 'category', exact: false, feature: 'categories' },
   { href: '/admin/map', label: 'ไฟล์แผนที่', icon: 'layers', exact: false, feature: 'map' },
+  { href: '/admin/forest', label: 'ข้อมูลป่าไม้', icon: 'forest', exact: false, feature: 'forest' },
   { href: '/admin/settings', label: 'ตั้งค่าเว็บไซต์', icon: 'tune', exact: false, feature: 'settings' },
   { href: '/admin/users', label: 'จัดการผู้ใช้', icon: 'group', exact: false, feature: 'manager' },
   { href: '/admin/data', label: 'นำเข้า/ส่งออก', icon: 'swap_vert', exact: false, feature: 'data' },

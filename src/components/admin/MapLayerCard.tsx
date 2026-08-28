@@ -2,15 +2,11 @@ import Link from 'next/link';
 import { useRef, useState } from 'react';
 import Icon from '@/components/Icon';
 import {
-  discardVersion,
-  downloadUrl,
-  issuesCsvUrl,
-  publishVersion,
-  uploadLayerFile,
   UploadRejectedError,
   type AdminLayerRow,
+  type LayerApi,
   type UploadStage,
-} from '@/lib/map-api';
+} from '@/lib/layer-api';
 import type { MapCheck, MapLayerVersion } from '@/types/map';
 
 const ACCEPT = '.geojson,.json,.js,.zip';
@@ -41,9 +37,11 @@ function thaiDate(iso: string): string {
 
 export default function MapLayerCard({
   row,
+  api,
   onChanged,
 }: {
   row: AdminLayerRow;
+  api: LayerApi;
   onChanged: () => void;
 }) {
   const { layer, published, versionCount } = row;
@@ -60,7 +58,7 @@ export default function MapLayerCard({
     setError(null);
     setBlockingChecks(null);
     try {
-      const version = await uploadLayerFile(layer.id, file, setStage);
+      const version = await api.uploadLayerFile(layer.id, file, setStage);
       setDraft(version);
       onChanged();
     } catch (err) {
@@ -77,7 +75,7 @@ export default function MapLayerCard({
     setBusy(true);
     setError(null);
     try {
-      await publishVersion(draft.id);
+      await api.publishVersion(draft.id);
       setDraft(null);
       onChanged();
     } catch (err) {
@@ -92,7 +90,7 @@ export default function MapLayerCard({
     setBusy(true);
     setError(null);
     try {
-      await discardVersion(draft.id);
+      await api.discardVersion(draft.id);
       setDraft(null);
       onChanged();
     } catch (err) {
@@ -258,7 +256,7 @@ export default function MapLayerCard({
                     ) : null}
                     {CSV_CODES.has(c.code) ? (
                       <a
-                        href={issuesCsvUrl(draft.id, c.code)}
+                        href={api.issuesCsvUrl(draft.id, c.code)}
                         className="ml-3 inline-block font-medium underline"
                       >
                         ดาวน์โหลด CSV
@@ -301,12 +299,12 @@ export default function MapLayerCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-[12px]">
         {published?.fullAsset ? (
-          <a href={downloadUrl(published.id)} className="text-ink-soft hover:underline">
+          <a href={api.downloadUrl(published.id)} className="text-ink-soft hover:underline">
             ดาวน์โหลดไฟล์เต็ม
           </a>
         ) : null}
         <Link
-          href={`/admin/map/${layer.id}`}
+          href={api.settingsHref(layer.id)}
           className="text-ink-soft hover:underline"
         >
           ประวัติ {versionCount} เวอร์ชัน · ตั้งค่า

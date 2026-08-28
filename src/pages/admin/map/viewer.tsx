@@ -5,7 +5,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import Icon from '@/components/Icon';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
-import { mapFetcher, type AdminLayerRow } from '@/lib/map-api';
+import { MAP_API, type AdminLayerRow } from '@/lib/map-api';
 import type { ViewerLayer } from '@/components/MapViewer';
 
 export const getServerSideProps = getFeatureSsrProps('map');
@@ -26,8 +26,8 @@ const MapViewer = dynamic(() => import('@/components/MapViewer'), {
 
 function AdminMapViewerPage() {
   const { data, error } = useSWR<{ layers: AdminLayerRow[] }>(
-    '/api/admin/map/layers',
-    mapFetcher,
+    MAP_API.layersKey,
+    MAP_API.fetcher,
     { revalidateOnFocus: false }
   );
 
@@ -39,7 +39,7 @@ function AdminMapViewerPage() {
       id: row.layer.id,
       title: row.layer.title,
       featureCount: row.published!.stats.featureCount,
-      geojsonUrl: `/api/admin/map/layers/${encodeURIComponent(row.layer.id)}/geojson`,
+      geojsonUrl: MAP_API.adminGeojsonUrl(row.layer.id),
     }));
 
   return (
@@ -47,7 +47,7 @@ function AdminMapViewerPage() {
       title="แผนที่ (ข้อมูลเต็ม)"
       actions={
         <Link
-          href="/admin/map"
+          href={MAP_API.indexHref}
           className="flex items-center gap-1 text-[12.5px] text-ink-soft hover:underline"
         >
           <Icon name="arrow_back" size={16} />
@@ -75,7 +75,7 @@ function AdminMapViewerPage() {
           </p>
           <p className="mt-1 text-[12.5px] text-ink-mute">
             ไปที่{' '}
-            <Link href="/admin/map" className="underline">
+            <Link href={MAP_API.indexHref} className="underline">
               คลังไฟล์แผนที่
             </Link>{' '}
             แล้วกดเผยแพร่อย่างน้อยหนึ่งเลเยอร์ก่อน
