@@ -20,7 +20,7 @@ import {
 import { ingestMapFile } from '@/lib/map-ingest';
 import { collectIssueRows, toCsv } from '@/lib/map-issues';
 import { parseMapFile } from '@/lib/map-parse';
-import { toPublicFeatureCollection } from '@/lib/map-public';
+import { publicAssetIsStale, toPublicFeatureCollection } from '@/lib/map-public';
 import { layerPatchSchema, versionRegisterSchema } from '@/lib/schema';
 import {
   CHECK_CODES,
@@ -362,16 +362,32 @@ export function makeAdminPublishHandler(domain: LayerDomain): NextApiHandler {
     if (!layer) return res.status(404).json({ error: 'layer_not_found' });
 
     const currentPublished = await domain.store.getPublishedVersion(layer.id);
-    if (currentPublished?.id === version.id) {
+
+    // ไฟล์สาธารณะที่มีอยู่ยังตรงกับ publicFields ปัจจุบันไหม — ตัวนี้เป็นคำตอบของทั้ง
+    // "กดเผยแพร่ซ้ำได้ไหม" และ "ใช้ไฟล์เดิมต่อได้ไหม" เพราะทั้งสองคำถามคือคำถาม
+    // เดียวกัน: ไฟล์ที่วางอยู่ยังถูกต้องตามนโยบายวันนี้หรือเปล่า
+    const stale = publicAssetIsStale(version.publicAsset, layer.publicFields);
+
+    // เผยแพร่ซ้ำตัวเดิมได้เมื่อนโยบายฟิลด์เปลี่ยนไปแล้วเท่านั้น — ถ้ายังตรงอยู่ก็ไม่มี
+    // อะไรให้ทำจริง ๆ
+    //
+    // เดิมบล็อกนี้ปฏิเสธทุกกรณีโดยไม่ดูนโยบาย ผลคือปิดฟิลด์แล้วกดเผยแพร่ใหม่ไม่ได้เลย
+    // ทั้งที่หน้าตั้งค่าขึ้นเตือนเองว่าต้องกด (republishNeeded) — ระบบบอกให้ทำสิ่งที่
+    // ตัวมันเองไม่ยอมให้ทำ
+    if (currentPublished?.id === version.id && !stale) {
       return res.status(409).json({
         error: 'already_published',
-        message: 'เวอร์ชันนี้เผยแพร่อยู่แล้ว',
+        message: 'เวอร์ชันนี้เผยแพร่อยู่แล้ว และรายการฟิลด์สาธารณะไม่ได้เปลี่ยน',
       });
     }
 
     let publicAsset: MapPublicAsset;
-    if (version.publicAsset) {
-      // ย้อนเวอร์ชัน — ไฟล์สาธารณะยังอยู่ ไม่ต้องประมวลผลใหม่
+    if (version.publicAsset && !stale) {
+      // ย้อนเวอร์ชัน — ไฟล์สาธารณะยังอยู่และกรองด้วยนโยบายชุดเดียวกับวันนี้
+      //
+      // ต้องเช็ค stale ด้วย ไม่ใช่แค่ว่ามีไฟล์อยู่: ถ้าเวอร์ชันนี้เคยเผยแพร่ตอนที่เปิด
+      // ฟิลด์ PII ไว้ แล้วมีคนปิดฟิลด์นั้นไป การย้อนกลับมาจะเอาไฟล์เก่าที่มี PII ขึ้น
+      // CDN อีกครั้งโดยไม่มีใครเห็น
       publicAsset = version.publicAsset;
     } else {
       if (!version.fullAsset) {
@@ -394,7 +410,9 @@ export function makeAdminPublishHandler(domain: LayerDomain): NextApiHandler {
           publicId: `${layer.id}-v${version.versionNo}.geojson`,
           type: 'upload',
         });
-        publicAsset = uploaded;
+        // บันทึกนโยบายที่ใช้กรองไว้กับตัวไฟล์ ไม่ใช่แค่ผลลัพธ์การอัป — เป็นสิ่งเดียว
+        // ที่ทำให้ครั้งหน้ารู้ได้ว่าไฟล์นี้ยังตรงกับนโยบายอยู่หรือต้องกรองใหม่
+        publicAsset = { ...uploaded, publicFields: [...layer.publicFields] };
       } catch (err) {
         console.error('map publish: building public asset failed', err);
         return res.status(502).json({

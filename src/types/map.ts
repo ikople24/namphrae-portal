@@ -95,7 +95,19 @@ export type MapDiff = {
 };
 
 export type MapAsset = { publicId: string; bytes: number };
-export type MapPublicAsset = MapAsset & { url: string };
+export type MapPublicAsset = MapAsset & {
+  url: string;
+  /**
+   * รายชื่อฟิลด์ที่ใช้กรองตอนสร้างไฟล์นี้ — ไม่ใช่นโยบายปัจจุบันของเลเยอร์
+   *
+   * ต้องเก็บไว้กับตัวไฟล์ เพราะการกรองเกิดตอนเผยแพร่ครั้งเดียว ไฟล์บน CDN จึงตรึง
+   * นโยบายของวันที่มันถูกสร้างไว้ตลอดไป การเทียบสองอย่างนี้คือสิ่งเดียวที่บอกได้ว่า
+   * ต้องกรองใหม่หรือใช้ไฟล์เดิมต่อได้ (ดู publicAssetIsStale)
+   *
+   * ไม่บังคับ เพราะไฟล์ที่เผยแพร่ไปก่อนหน้านี้ไม่มีค่านี้ — ถือว่าเก่าเสมอ
+   */
+  publicFields?: string[];
+};
 
 export type MapLayer = {
   id: string;
