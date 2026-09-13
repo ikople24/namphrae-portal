@@ -933,6 +933,7 @@ git commit -m "feat(saraban): สร้างหนังสือใหม่�
 import {
   buildNewDoc,
   displayStatus,
+  isOpen,
   isOverdue,
   makeEvent,
   matches,
@@ -1205,6 +1206,7 @@ import {
   displayStatus,
   EDITABLE_FIELDS,
   editableFieldsOf,
+  isOpen,
   isOverdue,
   makeEvent,
   matches,
@@ -3239,7 +3241,7 @@ Expected: ไม่มี output — ไม่มี `data/saraban-*.json` ค�
 | ใช้ทำอะไรใน 1B | จากรอบนี้ |
 |---|---|
 | ตรวจ body/query | `receiveInputSchema` · `sendInputSchema` · `docPatchSchema` · `docListQuerySchema` · `unitInputSchema` · `unitPatchSchema` · `yearStartSchema` |
-| ทะเบียน + ปุ่มกรอง + badge + แถบค้างข้ามปี | `listDocs` · `registerCounts` · `countDocs({ statusIn })` · `listFiscalYears` · `PAGE_SIZE` |
+| ทะเบียน + ปุ่มกรอง + badge + แถบค้างข้ามปี | `listDocs` · `registerCounts` · `listFiscalYears` · `PAGE_SIZE` · badge = `countDocs({ register: 'in', statusIn: ['pending'] })` · แถบค้างข้ามปี = `countDocs({ register, beforeFiscalYear: fy, statusIn: OPEN_STATUSES })` (ใช้ `OPEN_STATUSES` ไม่พิมพ์รายการเอง) |
 | ลงรับ / ออกเลข | `createDoc` (+ `composeRef` สำหรับ `refFor`) → `CreateDocResult` แปลงเป็น 201 / 200 (ส่งซ้ำ) / 409 `id_conflict` / 503 `number_busy` |
 | แก้ไข / ยกเลิก / ส่งแล้ว | `buildEdit` · `voidTransition` · `sentTransition` · `makeEvent` · `applyPatch` (null + `getDoc` เจอ = 409 `stale` · ไม่เจอ = 404) |
 | ไฟล์แนบ | `checkAttachment` · `SARABAN_FOLDER` · `MAX_FILES_PER_DOC` · `addFile` · `removeFile` · `canAddFile` · `canRemoveFile` |
