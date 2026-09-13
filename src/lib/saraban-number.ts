@@ -4,31 +4,48 @@
 
 import type { SarabanRegister } from '@/types/saraban';
 
-// 'en-CA' ให้รูปแบบ YYYY-MM-DD พอดี (แนวเดียวกับ todayInBangkok ใน calendar-grid.ts)
-const BANGKOK_DATE = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Bangkok',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+// เวลาไทยคงที่ UTC+7 ไม่มีเวลาออมแสง — บวกชั่วโมงแล้วตัดวันที่จาก ISO ได้ตรงทุกเครื่อง
+// ไม่พึ่ง Intl.DateTimeFormat('en-CA') แบบ todayInBangkok(): รูปแบบของ locale เป็นข้อมูล
+// CLDR ไม่ใช่สัญญา (เคยมี browser ที่คืน en-CA เป็น M/D/YYYY) ที่ปฏิทินแค่แสดงผลเพี้ยน
+// แต่ที่นี่ปีงบเป็นส่วนหนึ่งของ unique key ของทะเบียนราชการ
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 /**
- * วันที่ตามเวลากรุงเทพฯ ของเวลาจริงขณะหนึ่ง — รับ Date เข้ามาแทนที่จะเรียก new Date()
- * เอง เพื่อให้เทสต์ส่งเวลาข้ามเที่ยงคืนได้ (todayInBangkok() ของปฏิทินทำแบบนั้นไม่ได้)
+ * วันที่ตามเวลากรุงเทพฯ ของเวลาจริงขณะหนึ่ง
+ *
+ * รับ Date เข้ามาแทนที่จะเรียก new Date() เอง เพราะ createDoc() ต้องได้ปีงบกับเวลาลงทะเบียน
+ * จากขณะเดียวกัน — ถ้าต่างคนต่างอ่านนาฬิกา ตอนเที่ยงคืน 1 ต.ค. เวลาอาจเป็นวันใหม่แต่ปีงบ
+ * ยังเป็นปีเก่า (ผลพลอยได้: เทสต์ส่งเวลาข้ามเที่ยงคืนได้ตรง ๆ)
  */
 export function bangkokDateOf(at: Date): string {
-  return BANGKOK_DATE.format(at);
+  return new Date(at.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+const ISO_DATE = /^(\d{4})-(\d{2})-\d{2}$/;
+
 /**
- * ปีงบประมาณ พ.ศ. ของวันที่ 'YYYY-MM-DD' — ปีงบเริ่ม 1 ต.ค.
+ * ปีงบประมาณ พ.ศ. ของวันที่ 'YYYY-MM-DD' ปี ค.ศ. — ปีงบเริ่ม 1 ต.ค.
  *   '2026-09-30' → 2569 · '2026-10-01' → 2570
  *
- * ขอบปีอยู่ที่นี่ที่เดียว (สเปกข้อ 1.6) — ระเบียบงานสารบรรณ ข้อ 38.1/40.1 เขียนว่า
- * "จนสิ้นปีปฏิทิน" ถ้าวันหนึ่งเทศบาลเปลี่ยนไปใช้ปีปฏิทิน แก้ฟังก์ชันนี้ฟังก์ชันเดียว
+ * ผลลัพธ์เป็นส่วนหนึ่งของ unique key ของทะเบียน จึงโยน error แทนการคืนค่าที่ดูเหมือนจริง —
+ * ถ้าไม่เช็ค '' จะได้ 543 · ปี พ.ศ. ที่หลุดมา '2569-10-01' จะได้ 3113 · รูปแบบอื่นได้ NaN แล้ว
+ * Mongo ออกเลขต่อใน "ปี NaN" ได้เงียบ ๆ
+ *
+ * ขอบปีอยู่ที่นี่ที่เดียว (สเปกข้อ 1.6) — ระเบียบงานสารบรรณ ข้อ 38.1/40.1 เขียนว่า "จนสิ้นปี
+ * ปฏิทิน" ถ้าวันหนึ่งเทศบาลเปลี่ยนไปใช้ปีปฏิทิน แก้ที่นี่ แต่ **ต้องตัดสินเรื่องปีรอยต่อด้วย**:
+ * เปลี่ยนกลางปีงบ เลขปีเดียวกัน (เช่น 2570) จะเป็นทั้งปีงบเก่าและปีปฏิทินใหม่ max+1 จะรันต่อ
+ * จากเลขของ ต.ค.–ธ.ค. แทนที่จะเริ่ม 1 และชื่อฟิลด์ fiscalYear กับป้าย "ปีงบประมาณ" ต้องเปลี่ยนตาม
  */
 export function fiscalYearOf(date: string): number {
-  const [year, month] = date.split('-').map(Number);
+  const match = ISO_DATE.exec(date);
+  if (!match) {
+    throw new Error(`fiscalYearOf: ต้องเป็นวันที่ 'YYYY-MM-DD' ได้ ${JSON.stringify(date)}`);
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (year < 1900 || year > 2100) {
+    throw new Error(`fiscalYearOf: ปี ${year} ไม่ใช่ ค.ศ. — ดูเหมือนปี พ.ศ. หลุดมา`);
+  }
   return (month >= 10 ? year + 1 : year) + 543;
 }
 
@@ -37,8 +54,8 @@ export function fiscalYearOf(date: string): number {
  * @param maxNo เลขมากสุดที่มีอยู่ รวมแถวที่ยกเลิกแล้ว (เลขไม่ถูกใช้ซ้ำ) · null = ยังไม่มีหนังสือ
  * @param startNo เลขเริ่มต้นที่ตั้งไว้ของปีนั้น · null = ไม่ได้ตั้ง
  *
- * startNo มีผลเฉพาะตอนปีนั้นยังว่าง — พอมีหนังสือแล้วใช้ max + 1 เสมอ ข้อนี้คือเหตุผลที่
- * setStartNo() ใน saraban-store.ts ไม่ต้อง atomic
+ * startNo มีผลเฉพาะตอนปีนั้นยังว่าง — พอมีหนังสือแล้วใช้ max + 1 เสมอ ข้อนี้ทำให้ setStartNo()
+ * ใน saraban-store.ts ไม่ต้อง atomic เพื่อกันเลขซ้ำหรือมีรู (ส่วนที่ยังเหลือดูคอมเมนต์ที่นั่น)
  */
 export function nextNo(maxNo: number | null, startNo: number | null): number {
   if (maxNo !== null) return maxNo + 1;

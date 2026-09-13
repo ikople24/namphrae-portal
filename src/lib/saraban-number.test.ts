@@ -24,6 +24,12 @@ describe('fiscalYearOf — ปีงบเริ่ม 1 ต.ค.', () => {
   it('31 ธ.ค. กับ 1 ม.ค. อยู่ปีงบเดียวกัน — ปีปฏิทินไม่ใช่ขอบ', () => {
     expect(fiscalYearOf('2026-12-31')).toBe(fiscalYearOf('2027-01-01'));
   });
+
+  it('ค่าที่ไม่ใช่วันที่ ค.ศ. → โยน error ไม่คืนปีที่ดูเหมือนจริง (ปีงบเป็นส่วนของ unique key)', () => {
+    expect(() => fiscalYearOf('')).toThrow();
+    expect(() => fiscalYearOf('10/1/2026')).toThrow();
+    expect(() => fiscalYearOf('2569-10-01')).toThrow('พ.ศ.');
+  });
 });
 
 describe('bangkokDateOf — วันที่ต้องคิดตามเวลากรุงเทพฯ ไม่ใช่ UTC', () => {
@@ -40,6 +46,11 @@ describe('bangkokDateOf — วันที่ต้องคิดตามเ�
 
   it('23:59 ที่กรุงเทพฯ ยังเป็นวันเดิม', () => {
     expect(bangkokDateOf(new Date('2026-09-30T16:59:00Z'))).toBe('2026-09-30');
+  });
+
+  it('เที่ยงคืนตรงเป๊ะ — 17:00:00Z คือ 00:00 ของวันใหม่ ส่วน 16:59:59.999Z ยังเป็นวันเดิม', () => {
+    expect(bangkokDateOf(new Date('2026-09-30T17:00:00Z'))).toBe('2026-10-01');
+    expect(bangkokDateOf(new Date('2026-09-30T16:59:59.999Z'))).toBe('2026-09-30');
   });
 });
 
