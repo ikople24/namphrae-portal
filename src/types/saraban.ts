@@ -23,7 +23,7 @@ export type SarabanStatus = (typeof SARABAN_STATUSES)[number];
 export const DISPLAY_STATUSES = [...SARABAN_STATUSES, 'overdue'] as const;
 export type DisplayStatus = (typeof DISPLAY_STATUSES)[number];
 
-export const SEND_METHODS = ['system', 'post', 'hand'] as const; // ระบบ | ไปรษณีย์ | นำส่งเอง
+export const SEND_METHODS = ['system', 'post', 'hand'] as const; // ระบบ | ไปรษณีย์ | พนักงานเดินหนังสือ
 export type SendMethod = (typeof SEND_METHODS)[number];
 
 export const SARABAN_FILE_FORMATS = ['pdf', 'jpg', 'png'] as const;
