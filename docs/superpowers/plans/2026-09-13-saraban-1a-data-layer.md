@@ -742,7 +742,8 @@ describe('displayStatus', () => {
   });
 
   it('ไม่เกินก็แสดงสถานะจริง', () => {
-    expect(displayStatus(makeDoc(), TODAY)).toBe('pending');
+    // ต้องระบุ dueDate เอง — ค่าเริ่มต้นของ fixture (2026-10-10) เลย TODAY ไปแล้ว
+    expect(displayStatus(makeDoc({ dueDate: '2026-10-20' }), TODAY)).toBe('pending');
     expect(displayStatus(makeDoc({ status: 'void' }), TODAY)).toBe('void');
   });
 });
