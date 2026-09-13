@@ -1443,6 +1443,7 @@ import {
   SARABAN_FOLDER,
   type CloudinaryResource,
 } from '@/lib/saraban-attachment';
+import { SARABAN_FILE_FORMATS } from '@/types/saraban';
 
 function resource(overrides: Partial<CloudinaryResource> = {}): CloudinaryResource {
   return {
@@ -1536,6 +1537,13 @@ describe('checkAttachment — เชื่อ Cloudinary ไม่เชื่�
       error: 'too_large',
     });
   });
+
+  it('ทุกนามสกุลใน SARABAN_FILE_FORMATS ผ่านและเก็บเป็นค่าเดิม — FORMATS ต้องครอบรายการกลางครบ', () => {
+    for (const format of SARABAN_FILE_FORMATS) {
+      const result = checkAttachment(resource({ format }));
+      expect(result.ok && result.file.format, format).toBe(format);
+    }
+  });
 });
 ```
 
@@ -1555,7 +1563,11 @@ Expected: FAIL — `Failed to resolve import "@/lib/saraban-attachment"`
 // แผนที่ฉบับเต็ม (type authenticated เหมือนกัน และมีข้อมูลส่วนบุคคล) เข้ามาเป็นไฟล์แนบ
 // แล้วเปิดผ่าน URL ชั่วคราวของสารบรรณได้ — ผู้มีสิทธิ์สารบรรณไม่จำเป็นต้องมีสิทธิ์แผนที่
 
-import type { SarabanFile, SarabanFileFormat } from '@/types/saraban';
+import {
+  SARABAN_RESOURCE_TYPES,
+  type SarabanFile,
+  type SarabanFileFormat,
+} from '@/types/saraban';
 
 // โฟลเดอร์แยกจากโดเมนอื่น — บทเรียนจากป่าไม้ที่เคยใช้โฟลเดอร์ร่วมกับแผนที่แล้วไฟล์ถูก
 // เขียนทับ (ดูคอมเมนต์ FOREST_FOLDER_FULL ใน cloudinary.ts)
@@ -1609,8 +1621,9 @@ export function checkAttachment(r: CloudinaryResource): AttachmentCheck {
   // ต้องมี '/' ต่อท้าย — 'namphrae-portal/saraban-evil/x' ขึ้นต้นด้วยชื่อโฟลเดอร์เราเหมือนกัน
   if (!r.public_id.startsWith(`${SARABAN_FOLDER}/`)) return { ok: false, error: 'wrong_folder' };
   if (r.type !== 'authenticated') return { ok: false, error: 'not_authenticated' };
-  const resourceType =
-    r.resource_type === 'image' ? 'image' : r.resource_type === 'raw' ? 'raw' : null;
+  // find() บนอาเรย์กลางแทน ternary — ได้ชนิด SarabanResourceType กลับมาเลย และรายการไม่ถูก
+  // พิมพ์ซ้ำ (หัวไฟล์ types/saraban.ts)
+  const resourceType = SARABAN_RESOURCE_TYPES.find((t) => t === r.resource_type) ?? null;
   if (!resourceType) return { ok: false, error: 'bad_resource_type' };
   const format = FORMATS.get(extensionOf(r));
   if (!format) return { ok: false, error: 'bad_format' };
@@ -1632,7 +1645,7 @@ export function checkAttachment(r: CloudinaryResource): AttachmentCheck {
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน**
 
 Run: `npx vitest run src/lib/saraban-attachment.test.ts`
-Expected: PASS — 9 tests
+Expected: PASS — 10 tests
 
 - [ ] **Step 5: Commit**
 
@@ -3107,8 +3120,8 @@ year 2 null 3
 - [ ] **Step 2: เทสต์ทั้งหมด**
 
 Run: `npm test`
-Expected: `Test Files  34 passed (34)` · `Tests  490 passed (490)`
-(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 15 · labels 6 · doc 58 · attachment 9 · schema 21 ·
+Expected: `Test Files  34 passed (34)` · `Tests  491 passed (491)`
+(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 15 · labels 6 · doc 58 · attachment 10 · schema 21 ·
 store 8 · และ user-access +5)
 
 - [ ] **Step 3: ชนิดและ lint**
