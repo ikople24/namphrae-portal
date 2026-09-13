@@ -6,6 +6,10 @@ import {
   isOpen,
   isOverdue,
   makeEvent,
+  matches,
+  REGISTER_VIEWS,
+  toMongoQuery,
+  type DocFilter,
   type NewDocFields,
 } from '@/lib/saraban-doc';
 import type { SarabanDoc } from '@/types/saraban';
@@ -162,5 +166,132 @@ describe('isOpen — รายการเดียวของ "ยังเป
     expect(isOpen('in-progress')).toBe(true);
     expect(isOpen('done')).toBe(false);
     expect(isOpen('void')).toBe(false);
+  });
+});
+
+// ---- ตัวกรองทะเบียน -------------------------------------------------------
+
+// ตัวประเมิน query ของ Mongo แบบย่อ — รู้จักเฉพาะ operator ที่ toMongoQuery() ใช้จริง
+// เจอ operator อื่นให้ throw เพื่อบังคับให้คนที่เพิ่ม operator ใหม่ใน toMongoQuery ต้องมา
+// สอนตัวประเมินนี้ด้วย ไม่งั้นเทสต์เทียบสองฝั่งจะผ่านแบบไม่ได้ตรวจอะไรจริง
+function evalQuery(doc: Record<string, unknown>, query: Record<string, unknown>): boolean {
+  return Object.entries(query).every(([key, cond]) => {
+    if (key === '$and') return (cond as Record<string, unknown>[]).every((q) => evalQuery(doc, q));
+    if (key === '$or') return (cond as Record<string, unknown>[]).some((q) => evalQuery(doc, q));
+    if (key.startsWith('$')) throw new Error(`evalQuery ไม่รู้จัก ${key}`);
+    const value = doc[key];
+    if (cond !== null && typeof cond === 'object' && !Array.isArray(cond)) {
+      return Object.entries(cond as Record<string, unknown>).every(([op, arg]) => {
+        switch (op) {
+          case '$in':
+            return (arg as unknown[]).includes(value);
+          case '$ne':
+            return value !== arg;
+          case '$lt':
+            return (value as string | number) < (arg as string | number);
+          case '$gte':
+            return (value as string | number) >= (arg as string | number);
+          default:
+            throw new Error(`evalQuery ไม่รู้จัก ${op} — เพิ่มที่นี่ก่อนใช้ใน toMongoQuery`);
+        }
+      });
+    }
+    return value === cond;
+  });
+}
+
+// TODAY = '2026-10-15' — ชื่อ id บอกว่าหนังสือแต่ละเรื่องควรตกอยู่ใต้ปุ่มไหน
+const FIXTURE: SarabanDoc[] = [
+  makeDoc({ id: 'in-pending', no: 1, status: 'pending', dueDate: '2026-10-20' }),
+  makeDoc({ id: 'in-pending-nodue', no: 2, status: 'pending', dueDate: '' }),
+  makeDoc({ id: 'in-overdue', no: 3, status: 'pending', dueDate: '2026-10-01' }),
+  makeDoc({ id: 'in-progress', no: 4, status: 'in-progress', dueDate: TODAY }),
+  makeDoc({ id: 'in-progress-late', no: 5, status: 'in-progress', dueDate: '2026-10-14' }),
+  makeDoc({ id: 'in-done', no: 6, status: 'done', dueDate: '2026-10-01' }),
+  makeDoc({ id: 'in-void', no: 7, status: 'void', dueDate: '' }),
+  makeDoc({ id: 'in-old-open', fiscalYear: 2569, no: 400, status: 'pending', dueDate: '' }),
+  makeDoc({ id: 'in-old-done', fiscalYear: 2569, no: 401, status: 'done', dueDate: '' }),
+  // ส่ง/เวียนผ่าน fieldOverrides ให้ buildNewDoc กำหนดสถานะและ dueDate ตามจริง (ดูคอมเมนต์ makeDoc)
+  makeDoc({ id: 'out-waiting', no: 1 }, { register: 'out' }),
+  makeDoc({ id: 'out-sent', no: 2, status: 'done' }, { register: 'out' }),
+  makeDoc({ id: 'circ-waiting', no: 1 }, { register: 'circular' }),
+];
+
+function idsFor(filter: DocFilter): string[] {
+  return FIXTURE.filter((d) => matches(d, filter, TODAY)).map((d) => d.id);
+}
+
+describe('matches — ปุ่มกรองแยกขาดตามป้ายที่เห็น', () => {
+  const view = (v: DocFilter['view']): DocFilter => ({ register: 'in', fiscalYear: 2570, view: v });
+
+  it('ทั้งหมด = ทุกเรื่องของทะเบียนและปีงบนั้น รวมที่ยกเลิก', () => {
+    expect(idsFor(view('all'))).toEqual([
+      'in-pending', 'in-pending-nodue', 'in-overdue', 'in-progress',
+      'in-progress-late', 'in-done', 'in-void',
+    ]);
+  });
+
+  it('รอเกษียนไม่รวมเรื่องที่เกินกำหนด — เรื่องนั้นอยู่ใต้ปุ่มเกินกำหนดที่เดียว', () => {
+    expect(idsFor(view('pending'))).toEqual(['in-pending', 'in-pending-nodue']);
+    expect(idsFor(view('overdue'))).toEqual(['in-overdue', 'in-progress-late']);
+  });
+
+  it('ดำเนินการ · เสร็จสิ้น · ยกเลิก', () => {
+    expect(idsFor(view('in-progress'))).toEqual(['in-progress']);
+    expect(idsFor(view('done'))).toEqual(['in-done']);
+    expect(idsFor(view('void'))).toEqual(['in-void']);
+  });
+
+  it('ตัวเลขบนปุ่มทุกปุ่ม (ยกเว้นทั้งหมด) รวมกันได้เท่ากับทั้งหมดพอดี', () => {
+    const sum = REGISTER_VIEWS.filter((v) => v !== 'all')
+      .map((v) => idsFor(view(v)).length)
+      .reduce((a, b) => a + b, 0);
+    expect(sum).toBe(idsFor(view('all')).length);
+  });
+
+  it('หนังสือส่งไม่มีทางเกินกำหนด และแยกจากหนังสือเวียน', () => {
+    expect(idsFor({ register: 'out', fiscalYear: 2570, view: 'in-progress' })).toEqual(['out-waiting']);
+    expect(idsFor({ register: 'out', fiscalYear: 2570, view: 'done' })).toEqual(['out-sent']);
+    expect(idsFor({ register: 'out', fiscalYear: 2570, view: 'overdue' })).toEqual([]);
+    expect(idsFor({ register: 'circular', fiscalYear: 2570 })).toEqual(['circ-waiting']);
+  });
+});
+
+describe('matches — สถานะดิบ (badge และแถบค้างข้ามปี)', () => {
+  it('badge: รอเกษียนทุกปีงบ รวมเรื่องที่เกินกำหนด', () => {
+    expect(idsFor({ register: 'in', statusIn: ['pending'] })).toEqual([
+      'in-pending', 'in-pending-nodue', 'in-overdue', 'in-old-open',
+    ]);
+  });
+
+  it('แถบค้างข้ามปี: เรื่องที่ยังเปิดอยู่ของปีงบก่อนหน้า', () => {
+    expect(
+      idsFor({ register: 'in', beforeFiscalYear: 2570, statusIn: ['pending', 'in-progress'] })
+    ).toEqual(['in-old-open']);
+  });
+});
+
+describe('toMongoQuery — ต้องพูดกฎเดียวกับ matches ทุกกรณี', () => {
+  const FILTERS: DocFilter[] = [
+    { register: 'in' },
+    { register: 'in', fiscalYear: 2569 },
+    ...REGISTER_VIEWS.map((view): DocFilter => ({ register: 'in', fiscalYear: 2570, view })),
+    ...REGISTER_VIEWS.map((view): DocFilter => ({ register: 'out', fiscalYear: 2570, view })),
+    { register: 'circular', fiscalYear: 2570, view: 'in-progress' },
+    { register: 'in', statusIn: ['pending'] },
+    { register: 'in', beforeFiscalYear: 2570, statusIn: ['pending', 'in-progress'] },
+  ];
+
+  it.each(FILTERS)('%j', (filter) => {
+    const query = toMongoQuery(filter, TODAY);
+    for (const doc of FIXTURE) {
+      expect(evalQuery(doc as unknown as Record<string, unknown>, query), doc.id).toBe(
+        matches(doc, filter, TODAY)
+      );
+    }
+  });
+
+  it('ตัวกรองทะเบียนอย่างเดียวได้ query แบนธรรมดา ไม่ห่อ $and', () => {
+    expect(toMongoQuery({ register: 'in' }, TODAY)).toEqual({ register: 'in' });
   });
 });

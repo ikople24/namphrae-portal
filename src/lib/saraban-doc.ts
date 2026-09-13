@@ -5,14 +5,16 @@
 // id และเวลาทุกตัวรับเป็นพารามิเตอร์ ไม่สร้างเองข้างใน — id ของหนังสือมาจาก client (เป็น
 // idempotency key) ส่วน eventId กับเวลา store เป็นคนสร้าง และเทสต์ส่งค่าคงที่ได้
 
-import type {
-  DisplayStatus,
-  SarabanDoc,
-  SarabanEvent,
-  SarabanEventKind,
-  SarabanFieldChange,
-  SarabanFile,
-  SarabanStatus,
+import {
+  DISPLAY_STATUSES,
+  type DisplayStatus,
+  type SarabanDoc,
+  type SarabanEvent,
+  type SarabanEventKind,
+  type SarabanFieldChange,
+  type SarabanFile,
+  type SarabanRegister,
+  type SarabanStatus,
 } from '@/types/saraban';
 
 export type Actor = { id: string; name: string };
@@ -124,4 +126,72 @@ export function isOverdue(doc: OverdueInput, today: string): boolean {
 /** สถานะที่แสดงบนจอ — เกินกำหนดแสดงแทนสถานะจริง · today: ดู isOverdue */
 export function displayStatus(doc: OverdueInput, today: string): DisplayStatus {
   return isOverdue(doc, today) ? 'overdue' : doc.status;
+}
+
+// ---- ตัวกรองทะเบียน -------------------------------------------------------
+
+// ปุ่ม "ทั้งหมด" + ทุกสถานะที่แสดงบนจอ — สร้างจาก DISPLAY_STATUSES ไม่พิมพ์รายการซ้ำ
+// เพิ่มสถานะใหม่ใน types/saraban.ts แล้วปุ่มกรองกับ docListQuerySchema ตามมาเอง
+export const REGISTER_VIEWS = ['all', ...DISPLAY_STATUSES] as const;
+export type RegisterView = (typeof REGISTER_VIEWS)[number];
+
+/**
+ * ตัวกรองของทะเบียน — ทุกช่องต่อกันแบบ AND
+ * - view: ปุ่มกรองบนหน้าทะเบียน แยกขาดตาม "ป้ายที่เห็น" (displayStatus) — เรื่องที่เกิน
+ *   กำหนดอยู่ใต้ปุ่มเกินกำหนดที่เดียว ไม่ซ้ำใต้รอเกษียน ตัวเลขบนปุ่มจึงรวมกันได้พอดี
+ * - statusIn: สถานะดิบ ไม่สนเกินกำหนด — badge (รอเกษียนทุกเรื่อง) และแถบค้างข้ามปี
+ */
+export type DocFilter = {
+  register: SarabanRegister;
+  fiscalYear?: number;
+  beforeFiscalYear?: number;
+  view?: RegisterView;
+  statusIn?: readonly SarabanStatus[];
+};
+
+/**
+ * กฎกรองของแบ็กเอนด์ไฟล์ — toMongoQuery() ด้านล่างพูดกฎเดียวกันแยกคนละที่ ถ้าแก้ฝั่งหนึ่ง
+ * ต้องแก้อีกฝั่ง saraban-doc.test.ts เทียบสองฝั่งให้ทุกคู่ (หนังสือ × ตัวกรอง)
+ */
+export function matches(doc: SarabanDoc, f: DocFilter, today: string): boolean {
+  if (doc.register !== f.register) return false;
+  if (f.fiscalYear !== undefined && doc.fiscalYear !== f.fiscalYear) return false;
+  if (f.beforeFiscalYear !== undefined && doc.fiscalYear >= f.beforeFiscalYear) return false;
+  if (f.statusIn && !f.statusIn.includes(doc.status)) return false;
+  if (f.view && f.view !== 'all' && displayStatus(doc, today) !== f.view) return false;
+  return true;
+}
+
+// 'YYYY-MM-DD' เทียบแบบสตริงได้ผลตรงกับเทียบวันที่ แต่ '' น้อยกว่าทุกวันที่ จึงต้องมี
+// $ne: '' กำกับทุกครั้งที่ถาม "เลยกำหนดแล้ว"
+//
+// ไม่เช็ค register === 'in' ในเงื่อนไข "ไม่เกินกำหนด" ของปุ่มรอเกษียน/ดำเนินการ เพราะ
+// buildNewDoc บังคับ dueDate ของส่ง/เวียนเป็น '' เสมอ และกฎแก้ไข (editableFieldsOf)
+// ไม่ให้แก้ dueDate ของส่ง/เวียน — ถ้าวันหนึ่งสองข้อนี้เปลี่ยน ต้องกลับมาแก้ตรงนี้
+function viewQuery(view: Exclude<RegisterView, 'all'>, today: string): Record<string, unknown> {
+  const notOverdue = { $or: [{ dueDate: '' }, { dueDate: { $gte: today } }] };
+  switch (view) {
+    case 'pending':
+    case 'in-progress':
+      return { status: view, ...notOverdue };
+    case 'done':
+    case 'void':
+      return { status: view };
+    case 'overdue':
+      return {
+        register: 'in',
+        status: { $in: [...OPEN_STATUSES] },
+        dueDate: { $ne: '', $lt: today },
+      };
+  }
+}
+
+/** query ของ Mongo ที่ให้ผลเดียวกับ matches() — ตัวกรองทะเบียนอย่างเดียวได้ query แบน ๆ */
+export function toMongoQuery(f: DocFilter, today: string): Record<string, unknown> {
+  const and: Record<string, unknown>[] = [{ register: f.register }];
+  if (f.fiscalYear !== undefined) and.push({ fiscalYear: f.fiscalYear });
+  if (f.beforeFiscalYear !== undefined) and.push({ fiscalYear: { $lt: f.beforeFiscalYear } });
+  if (f.statusIn) and.push({ status: { $in: [...f.statusIn] } });
+  if (f.view && f.view !== 'all') and.push(viewQuery(f.view, today));
+  return and.length === 1 ? and[0] : { $and: and };
 }
