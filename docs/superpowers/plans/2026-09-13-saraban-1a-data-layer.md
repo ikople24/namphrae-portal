@@ -600,6 +600,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   buildNewDoc,
   displayStatus,
+  isOpen,
   isOverdue,
   makeEvent,
   type NewDocFields,
@@ -610,6 +611,8 @@ const ACTOR = { id: 'user_clerk_1', name: 'สมหญิง ใจดี' };
 const NOW = '2026-10-02T02:30:00.000Z';
 const TODAY = '2026-10-15';
 
+// dueDate เริ่มต้นอยู่หลัง TODAY โดยตั้งใจ — หนังสือตั้งต้นต้องยังไม่เกินกำหนด เทสต์ที่อยากได้
+// เรื่องเกินกำหนดต้องใส่ dueDate เองให้เห็นในเทสต์นั้น
 function fields(overrides: Partial<NewDocFields> = {}): NewDocFields {
   return {
     register: 'in',
@@ -618,12 +621,15 @@ function fields(overrides: Partial<NewDocFields> = {}): NewDocFields {
     party: 'ที่ทำการปกครองอำเภอหางดง',
     subject: 'ขอเชิญประชุมหัวหน้าส่วนราชการ',
     level: 'urgent',
-    dueDate: '2026-10-10',
+    dueDate: '2026-10-20',
     holderUnitId: 'palad',
     ...overrides,
   };
 }
 
+// overrides ทับหลังสร้าง (ข้ามกฎของ buildNewDoc) — ใช้แก้ค่าเดียวที่เทสต์สนใจ เช่น status
+// fieldOverrides ผ่าน buildNewDoc — ใช้เปลี่ยนทะเบียน จะได้สถานะ/dueDate/event ตามทะเบียนจริง
+// (makeDoc({ register: 'out' }) ได้หนังสือที่เป็นไปไม่ได้: ส่งแต่ pending และมี dueDate)
 function makeDoc(
   overrides: Partial<SarabanDoc> = {},
   fieldOverrides: Partial<NewDocFields> = {}
@@ -664,7 +670,7 @@ describe('buildNewDoc', () => {
   it('หนังสือรับ: รอเกษียน · event ลงรับ · เก็บกำหนดแล้วเสร็จ', () => {
     const doc = makeDoc();
     expect(doc.status).toBe('pending');
-    expect(doc.dueDate).toBe('2026-10-10');
+    expect(doc.dueDate).toBe('2026-10-20');
     expect(doc.events).toEqual([
       {
         id: 'ev-1',
@@ -742,9 +748,17 @@ describe('displayStatus', () => {
   });
 
   it('ไม่เกินก็แสดงสถานะจริง', () => {
-    // ต้องระบุ dueDate เอง — ค่าเริ่มต้นของ fixture (2026-10-10) เลย TODAY ไปแล้ว
-    expect(displayStatus(makeDoc({ dueDate: '2026-10-20' }), TODAY)).toBe('pending');
+    expect(displayStatus(makeDoc(), TODAY)).toBe('pending');
     expect(displayStatus(makeDoc({ status: 'void' }), TODAY)).toBe('void');
+  });
+});
+
+describe('isOpen — รายการเดียวของ "ยังเปิดอยู่"', () => {
+  it('รอเกษียนและดำเนินการเปิดอยู่ · เสร็จและยกเลิกปิดแล้ว', () => {
+    expect(isOpen('pending')).toBe(true);
+    expect(isOpen('in-progress')).toBe(true);
+    expect(isOpen('done')).toBe(false);
+    expect(isOpen('void')).toBe(false);
   });
 });
 ```
@@ -761,8 +775,8 @@ Expected: FAIL — `Failed to resolve import "@/lib/saraban-doc"`
 // ตรรกะบริสุทธิ์ของหนังสือหนึ่งเรื่อง — client-safe: ห้าม import mongodb/cloudinary/fs/node:*
 // หน้าจอใช้ displayStatus/canVoid วาดป้ายและปุ่ม ส่วน API ใช้ฟังก์ชันเดียวกันตัดสินจริง
 //
-// id และเวลารับเป็นพารามิเตอร์ ไม่สร้างเองข้างใน — store เป็นคนสร้าง (node:crypto)
-// และเทสต์ส่งค่าคงที่ได้
+// id และเวลาทุกตัวรับเป็นพารามิเตอร์ ไม่สร้างเองข้างใน — id ของหนังสือมาจาก client (เป็น
+// idempotency key) ส่วน eventId กับเวลา store เป็นคนสร้าง และเทสต์ส่งค่าคงที่ได้
 
 import type {
   DisplayStatus,
@@ -771,8 +785,7 @@ import type {
   SarabanEventKind,
   SarabanFieldChange,
   SarabanFile,
-  SarabanLevel,
-  SarabanRegister,
+  SarabanStatus,
 } from '@/types/saraban';
 
 export type Actor = { id: string; name: string };
@@ -797,17 +810,13 @@ export function makeEvent(args: {
   return event;
 }
 
-// ช่องที่มาจากฟอร์ม (ผ่าน zod แล้ว) — ส่วนที่ระบบกำหนดเองอยู่ใน NewDocMeta
-export type NewDocFields = {
-  register: SarabanRegister;
-  ref: string;
-  docDate: string;
-  party: string;
-  subject: string;
-  level: SarabanLevel;
-  dueDate: string;
-  holderUnitId: string;
-};
+// ช่องที่ผู้เรียกกำหนด — รับ: มาจากฟอร์มที่ผ่าน zod · ส่ง/เวียน: ref ประกอบจาก refFor() และ
+// dueDate เป็น '' (buildNewDoc บังคับซ้ำอีกชั้น) · ส่วนที่ระบบกำหนดเองอยู่ใน NewDocMeta
+// Pick จาก SarabanDoc ไม่เขียนชนิดซ้ำ — แก้ชนิดใน types/saraban.ts แล้วที่นี่ตามเอง
+export type NewDocFields = Pick<
+  SarabanDoc,
+  'register' | 'ref' | 'docDate' | 'party' | 'subject' | 'level' | 'dueDate' | 'holderUnitId'
+>;
 
 export type NewDocMeta = {
   id: string;
@@ -821,9 +830,10 @@ export type NewDocMeta = {
 };
 
 /**
- * ประกอบหนังสือใหม่ — เขียนทุกคีย์เสมอแม้ค่าว่าง (sendMethod/voidReason = '')
- * เหตุผลเดียวกับ buildNewJob ใน jobs-store.ts: หนังสือที่ไม่เคยยกเลิกกับที่ยกเลิกแล้วต้องมี
- * รูปร่างเดียวกัน ไม่งั้นโค้ดที่เช็ค `'voidReason' in doc` จะแสดงผลสองแบบ
+ * ประกอบหนังสือใหม่ — เขียนทุกคีย์เสมอแม้ค่าว่าง ('' ไม่ใช่ตัดคีย์ทิ้ง) แนวเดียวกับ buildNewJob
+ * เหตุผลที่หนักที่สุดของที่นี่: query ของ Mongo ใน toMongoQuery() ถาม { dueDate: '' } ซึ่ง
+ * ไม่ตรงกับเอกสารที่ไม่มีคีย์นั้นเลย ถ้าบางเรื่องไม่มีคีย์ Mongo จะทำหนังสือหายจากปุ่มกรองเงียบ ๆ
+ * ขณะที่ matches() ของแบ็กเอนด์ไฟล์ยังเห็น — dev กับ production เห็นทะเบียนไม่ตรงกัน
  *
  * สถานะเริ่มต้นตามทะเบียน: รับ → รอเกษียน · ส่ง/เวียน → รอส่ง (ออกเลขแล้วแต่ยังไม่ส่ง)
  * dueDate ของส่ง/เวียนถูกบังคับเป็น '' ที่นี่ — toMongoQuery() พึ่งข้อนี้อยู่ (ดูที่นั่น)
@@ -861,23 +871,30 @@ export function buildNewDoc(fields: NewDocFields, meta: NewDocMeta): SarabanDoc 
   };
 }
 
+// สถานะที่หนังสือยัง "เปิดอยู่" — ใช้ร่วมทุกกฎที่ถามคำถามนี้ (เกินกำหนด · ยกเลิกได้ · ลบไฟล์ได้ ·
+// query เกินกำหนดของ Mongo · แถบค้างข้ามปี) ไม่ให้แต่ละที่เขียนรายการเองแล้วเพี้ยนกันทีหลัง
+export const OPEN_STATUSES = ['pending', 'in-progress'] as const satisfies readonly SarabanStatus[];
+
+export function isOpen(status: SarabanStatus): boolean {
+  return (OPEN_STATUSES as readonly SarabanStatus[]).includes(status);
+}
+
 type OverdueInput = Pick<SarabanDoc, 'register' | 'dueDate' | 'status'>;
 
 /**
  * เกินกำหนด = หนังสือรับที่ยังเปิดอยู่และกำหนดแล้วเสร็จผ่านไปแล้ว — วันกำหนดพอดียังไม่เกิน
  * คำนวณทุกครั้ง ไม่เก็บเป็นสถานะ: ถ้าเก็บต้องมี cron คอยเปลี่ยน วันที่ cron ไม่ทำงาน
  * สถานะจะผิดเงียบ ๆ
+ *
+ * @param today 'YYYY-MM-DD' ตามเวลากรุงเทพฯ จาก bangkokDateOf() เท่านั้น — ห้ามส่ง ISO เต็ม
+ *   ('2026-10-15' < '2026-10-15T01:00…' เป็นจริง เรื่องที่ครบกำหนดวันนี้จะกลายเป็นเกิน) และ
+ *   ห้ามตัดวันที่จาก UTC (ช้ากว่ากรุงเทพฯ ได้ถึง 7 ชั่วโมง)
  */
 export function isOverdue(doc: OverdueInput, today: string): boolean {
-  return (
-    doc.register === 'in' &&
-    doc.dueDate !== '' &&
-    doc.dueDate < today &&
-    (doc.status === 'pending' || doc.status === 'in-progress')
-  );
+  return doc.register === 'in' && doc.dueDate !== '' && doc.dueDate < today && isOpen(doc.status);
 }
 
-/** สถานะที่แสดงบนจอ — เกินกำหนดแสดงแทนสถานะจริง */
+/** สถานะที่แสดงบนจอ — เกินกำหนดแสดงแทนสถานะจริง · today: ดู isOverdue */
 export function displayStatus(doc: OverdueInput, today: string): DisplayStatus {
   return isOverdue(doc, today) ? 'overdue' : doc.status;
 }
@@ -886,7 +903,7 @@ export function displayStatus(doc: OverdueInput, today: string): DisplayStatus {
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน และตรวจชนิด (expectTypeOf ตรวจจริงตอน tsc)**
 
 Run: `npx vitest run src/lib/saraban-doc.test.ts && npx tsc --noEmit -p .`
-Expected: PASS — 15 tests · tsc ไม่มี output
+Expected: PASS — 16 tests · tsc ไม่มี output
 
 - [ ] **Step 5: Commit**
 
@@ -971,9 +988,10 @@ const FIXTURE: SarabanDoc[] = [
   makeDoc({ id: 'in-void', no: 7, status: 'void', dueDate: '' }),
   makeDoc({ id: 'in-old-open', fiscalYear: 2569, no: 400, status: 'pending', dueDate: '' }),
   makeDoc({ id: 'in-old-done', fiscalYear: 2569, no: 401, status: 'done', dueDate: '' }),
-  makeDoc({ id: 'out-waiting', register: 'out', no: 1, status: 'in-progress', dueDate: '' }),
-  makeDoc({ id: 'out-sent', register: 'out', no: 2, status: 'done', dueDate: '' }),
-  makeDoc({ id: 'circ-waiting', register: 'circular', no: 1, status: 'in-progress', dueDate: '' }),
+  // ส่ง/เวียนผ่าน fieldOverrides ให้ buildNewDoc กำหนดสถานะและ dueDate ตามจริง (ดูคอมเมนต์ makeDoc)
+  makeDoc({ id: 'out-waiting', no: 1 }, { register: 'out' }),
+  makeDoc({ id: 'out-sent', no: 2, status: 'done' }, { register: 'out' }),
+  makeDoc({ id: 'circ-waiting', no: 1 }, { register: 'circular' }),
 ];
 
 function idsFor(filter: DocFilter): string[] {
@@ -1072,7 +1090,6 @@ import {
   type SarabanEventKind,
   type SarabanFieldChange,
   type SarabanFile,
-  type SarabanLevel,
   type SarabanRegister,
   type SarabanStatus,
 } from '@/types/saraban';
@@ -1133,7 +1150,7 @@ function viewQuery(view: Exclude<RegisterView, 'all'>, today: string): Record<st
     case 'overdue':
       return {
         register: 'in',
-        status: { $in: ['pending', 'in-progress'] },
+        status: { $in: [...OPEN_STATUSES] },
         dueDate: { $ne: '', $lt: today },
       };
   }
@@ -1153,7 +1170,7 @@ export function toMongoQuery(f: DocFilter, today: string): Record<string, unknow
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน**
 
 Run: `npx vitest run src/lib/saraban-doc.test.ts && npx tsc --noEmit -p .`
-Expected: PASS — 40 tests (15 เดิม + 7 matches + 17 ตัวกรองใน it.each + 1 query แบน) · tsc ไม่มี output
+Expected: PASS — 41 tests (16 เดิม + 7 matches + 17 ตัวกรองใน it.each + 1 query แบน) · tsc ไม่มี output
 
 - [ ] **Step 5: Commit**
 
@@ -1370,7 +1387,6 @@ import {
   type SarabanEventKind,
   type SarabanFieldChange,
   type SarabanFile,
-  type SarabanLevel,
   type SarabanRegister,
   type SarabanStatus,
   type SendMethod,
@@ -1440,7 +1456,7 @@ export function buildEdit(doc: SarabanDoc, edit: DocEdit): EditResult {
 }
 
 export function canVoid(doc: Pick<SarabanDoc, 'status'>): boolean {
-  return doc.status === 'pending' || doc.status === 'in-progress';
+  return isOpen(doc.status);
 }
 
 export function canMarkSent(doc: Pick<SarabanDoc, 'register' | 'status'>): boolean {
@@ -1454,7 +1470,7 @@ export function canAddFile(doc: Pick<SarabanDoc, 'status'>): boolean {
 }
 
 export function canRemoveFile(doc: Pick<SarabanDoc, 'status'>): boolean {
-  return doc.status === 'pending' || doc.status === 'in-progress';
+  return isOpen(doc.status);
 }
 
 /** ผลของการเปลี่ยนสถานะ — route เอา kind/note ไปสร้าง event แล้วเรียก applyPatch */
@@ -1487,7 +1503,7 @@ export function sentTransition(
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน**
 
 Run: `npx vitest run src/lib/saraban-doc.test.ts && npx tsc --noEmit -p .`
-Expected: PASS — 59 tests (40 เดิม + 5 editableFieldsOf + 6 buildEdit + 3 can* + 4 transition + 1 ชื่อไทยครบ) · tsc ไม่มี output
+Expected: PASS — 60 tests (41 เดิม + 5 editableFieldsOf + 6 buildEdit + 3 can* + 4 transition + 1 ชื่อไทยครบ) · tsc ไม่มี output
 
 - [ ] **Step 5: Commit**
 
@@ -2674,6 +2690,7 @@ import {
   canAddFile,
   canRemoveFile,
   matches,
+  OPEN_STATUSES,
   REGISTER_VIEWS,
   toMongoQuery,
   type Actor,
@@ -3093,7 +3110,7 @@ export async function removeFile(
 ): Promise<SarabanDoc | null> {
   if (isMongoConfigured()) {
     return (await docsCollection()).findOneAndUpdate(
-      { id, status: { $in: ['pending', 'in-progress'] }, 'files.id': fileId },
+      { id, status: { $in: [...OPEN_STATUSES] }, 'files.id': fileId },
       { $pull: { files: { id: fileId } }, $push: { events: event }, $set: { updatedAt: event.at } },
       { returnDocument: 'after', projection: { _id: 0 } }
     );
@@ -3198,8 +3215,8 @@ year 2 null 3
 - [ ] **Step 2: เทสต์ทั้งหมด**
 
 Run: `npm test`
-Expected: `Test Files  34 passed (34)` · `Tests  495 passed (495)`
-(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 17 · labels 7 · doc 59 · attachment 10 · schema 21 ·
+Expected: `Test Files  34 passed (34)` · `Tests  496 passed (496)`
+(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 17 · labels 7 · doc 60 · attachment 10 · schema 21 ·
 store 8 · และ user-access +5)
 
 - [ ] **Step 3: ชนิดและ lint**
@@ -3242,6 +3259,11 @@ Expected: ไม่มี output — ไม่มี `data/saraban-*.json` ค�
   (id ของหน่วย) route ต้องแปลงเป็นชื่อหน่วย ณ ขณะนั้นก่อนสร้าง event ไม่งั้นเปลี่ยนชื่อหน่วยทีหลังแล้ว
   ประวัติที่แสดงจะเปลี่ยนตาม ขัดกับสเปกข้อ 3 (audit trail ต้องไม่ถูกแก้ย้อนหลัง) — ค่าอื่นเก็บดิบได้:
   ชั้นความเร็วเป็นคีย์คงที่ (แปลด้วย `LEVEL_LABELS`) วันที่เป็น ISO (พบตอนรีวิว Task 3)
+- **แก้แล้วไม่มีอะไรเปลี่ยน (`buildEdit` ได้ `changes` ว่าง) ให้คืนหนังสือเดิม 200 โดยไม่เรียก
+  `applyPatch`** — applyPatch ต่อ event เสมอ จะได้ "แก้ไขข้อมูล" เปล่า ๆ บนไทม์ไลน์ (พบตอนรีวิว Task 4)
+- **`today` ที่ส่งให้ `listDocs`/`registerCounts` = `bangkokDateOf(new Date())` และ API ของทะเบียนต้อง
+  คืน `today` ตัวนั้นกลับไปด้วย** ให้หน้าจอส่งค่าเดียวกันเข้า `displayStatus` — ป้ายบนแถวกับตัวเลขบนปุ่ม
+  กรองจะได้ไม่ขัดกันตอนข้ามเที่ยงคืน หรือเมื่อนาฬิกาเครื่องผู้ใช้เพี้ยน (พบตอนรีวิว Task 4)
 - ฟิลด์ที่รอบหลังจะเพิ่มบน `SarabanDoc` (การรับทราบของรอบ 2, `folder` ของรอบ 5) จะไม่มีในหนังสือเก่า
   ทั้งที่กติกาคือ "เขียนทุกคีย์เสมอ" — รอบที่เพิ่มต้องมีขั้น normalise ตอนอ่านแบบ `normalise()` ของ
   `config-store.ts`
