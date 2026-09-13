@@ -82,7 +82,7 @@ export type SarabanStatus = (typeof SARABAN_STATUSES)[number];
 export const DISPLAY_STATUSES = [...SARABAN_STATUSES, 'overdue'] as const;
 export type DisplayStatus = (typeof DISPLAY_STATUSES)[number];
 
-export const SEND_METHODS = ['system', 'post', 'hand'] as const; // ระบบ | ไปรษณีย์ | นำส่งเอง
+export const SEND_METHODS = ['system', 'post', 'hand'] as const; // ระบบ | ไปรษณีย์ | พนักงานเดินหนังสือ
 export type SendMethod = (typeof SEND_METHODS)[number];
 
 export const SARABAN_FILE_FORMATS = ['pdf', 'jpg', 'png'] as const;
@@ -414,13 +414,19 @@ git commit -m "feat(saraban): ปีงบตามเวลากรุงเ�
 // src/lib/saraban-labels.test.ts
 import { describe, expect, it } from 'vitest';
 import {
+  EVENT_KIND_LABELS,
   fieldLabel,
   LEVEL_LABELS,
   REGISTER_LABELS,
   SEND_METHOD_LABELS,
   statusLabel,
 } from '@/lib/saraban-labels';
-import { SARABAN_LEVELS, SARABAN_REGISTERS, SEND_METHODS } from '@/types/saraban';
+import {
+  SARABAN_EVENT_KINDS,
+  SARABAN_LEVELS,
+  SARABAN_REGISTERS,
+  SEND_METHODS,
+} from '@/types/saraban';
 
 describe('statusLabel', () => {
   it('หนังสือรับใช้ป้ายตามต้นแบบ', () => {
@@ -436,7 +442,7 @@ describe('statusLabel', () => {
     expect(statusLabel('circular', 'done')).toBe('ส่งแล้ว');
   });
 
-  it('ยกเลิกและเกินกำหนดเหมือนกันทุกทะเบียน', () => {
+  it('ยกเลิกเหมือนกันทุกทะเบียน · เกินกำหนดเกิดกับหนังสือรับเท่านั้น แต่ส่ง/เวียนมีป้ายสำรองให้ Record ครบ', () => {
     for (const register of SARABAN_REGISTERS) {
       expect(statusLabel(register, 'void')).toBe('ยกเลิก');
       expect(statusLabel(register, 'overdue')).toBe('เกินกำหนด');
@@ -450,12 +456,18 @@ describe('ป้ายครบทุกค่า', () => {
     for (const l of SARABAN_LEVELS) expect(LEVEL_LABELS[l]).toBeTruthy();
     for (const m of SEND_METHODS) expect(SEND_METHOD_LABELS[m]).toBeTruthy();
   });
+
+  it('ชื่อเหตุการณ์บนไทม์ไลน์ครบทุกชนิด', () => {
+    for (const k of SARABAN_EVENT_KINDS) expect(EVENT_KIND_LABELS[k]).toBeTruthy();
+  });
 });
 
 describe('fieldLabel — ชื่อช่องในประวัติการแก้ไข', () => {
-  it('"จาก" กับ "ถึง" ขึ้นกับทะเบียน', () => {
+  it('"จาก/ถึง" และ "เสนอถึง/เจ้าของเรื่อง" ขึ้นกับทะเบียน', () => {
     expect(fieldLabel('in', 'party')).toBe('จาก');
     expect(fieldLabel('out', 'party')).toBe('ถึง');
+    expect(fieldLabel('in', 'holderUnitId')).toBe('เสนอถึง');
+    expect(fieldLabel('circular', 'holderUnitId')).toBe('ส่วนราชการเจ้าของเรื่อง');
   });
 
   it('ช่องที่ไม่รู้จักคืนชื่อเดิม — รวมชื่อที่ชนกับ property ของ Object', () => {
@@ -478,6 +490,7 @@ Expected: FAIL — `Failed to resolve import "@/lib/saraban-labels"`
 
 import type {
   DisplayStatus,
+  SarabanEventKind,
   SarabanLevel,
   SarabanRegister,
   SendMethod,
@@ -498,10 +511,23 @@ export const LEVEL_LABELS: Record<SarabanLevel, string> = {
 
 // ข้อความเต็มประโยค เพราะใช้เป็น note ของ event "ส่งแล้ว" ตรง ๆ และตรงกับคอลัมน์
 // "การปฏิบัติ" ของรายงานทะเบียนส่งในต้นแบบ
+// ข้อความนี้ถูกเก็บถาวรใน note ของ event "ส่งแล้ว" — ใช้ศัพท์ของระเบียบงานสารบรรณ
+// (พนักงานเดินหนังสือ) ไม่ใช่ภาษาพูด เพราะแก้ย้อนหลังในหนังสือที่บันทึกไปแล้วไม่ได้
 export const SEND_METHOD_LABELS: Record<SendMethod, string> = {
   system: 'ส่งทางระบบสารบรรณอิเล็กทรอนิกส์',
   post: 'ส่งทางไปรษณีย์',
-  hand: 'นำส่งเอง',
+  hand: 'ส่งทางพนักงานเดินหนังสือ',
+};
+
+// ชื่อเหตุการณ์บนไทม์ไลน์ "เส้นทางหนังสือ" ของหน้า /saraban/track/[id] (สเปกข้อ 6)
+export const EVENT_KIND_LABELS: Record<SarabanEventKind, string> = {
+  received: 'ลงรับหนังสือ',
+  issued: 'ออกเลขหนังสือ',
+  edited: 'แก้ไขข้อมูล',
+  'file-added': 'แนบไฟล์',
+  'file-removed': 'ลบไฟล์แนบ',
+  sent: 'ส่งหนังสือแล้ว',
+  voided: 'ยกเลิกเลขทะเบียน',
 };
 
 const IN_STATUS_LABELS: Record<DisplayStatus, string> = {
@@ -512,7 +538,8 @@ const IN_STATUS_LABELS: Record<DisplayStatus, string> = {
   overdue: 'เกินกำหนด',
 };
 
-// ส่ง/เวียนเริ่มที่ in-progress เสมอ ('pending' ไม่เกิดจริง ใส่ไว้ให้ Record ครบ)
+// ส่ง/เวียนเริ่มที่ in-progress เสมอและไม่มีกำหนดแล้วเสร็จ — 'pending' กับ 'overdue' ไม่เกิดจริง
+// ใส่ไว้ให้ Record ครบ (ข้อมูลเสียจนเจอค่าเหล่านี้ก็ยังได้ป้ายที่อ่านรู้เรื่อง)
 // จงใจเบี่ยงจากต้นแบบ — วงจรของหนังสือส่งคือ "ออกเลข → ส่ง" ป้ายควรบอกตรง ๆ (สเปกข้อ 3)
 const OUTGOING_STATUS_LABELS: Record<DisplayStatus, string> = {
   pending: 'รอส่ง',
@@ -548,7 +575,7 @@ export function fieldLabel(register: SarabanRegister, field: string): string {
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน**
 
 Run: `npx vitest run src/lib/saraban-labels.test.ts`
-Expected: PASS — 6 tests
+Expected: PASS — 7 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1172,6 +1199,14 @@ import {
 } from '@/lib/saraban-doc';
 ```
 
+แล้วแทนบรรทัด `import type { SarabanDoc } from '@/types/saraban';` ในไฟล์เดียวกันด้วยสองบรรทัดนี้
+(เพิ่ม import ของป้าย และ `SARABAN_REGISTERS` ที่เทสต์ใหม่ใช้):
+
+```ts
+import { fieldLabel } from '@/lib/saraban-labels';
+import { SARABAN_REGISTERS, type SarabanDoc } from '@/types/saraban';
+```
+
 แล้วเพิ่มท้ายไฟล์:
 
 ```ts
@@ -1301,6 +1336,18 @@ describe('voidTransition / sentTransition', () => {
 
   it('หนังสือรับบันทึกว่าส่งแล้วไม่ได้ → null', () => {
     expect(sentTransition({ register: 'in', status: 'in-progress' }, 'post')).toBeNull();
+  });
+});
+
+// fieldLabel ใช้ map แบบ string key (ต้องแปลชื่อช่องของ event เก่าได้แม้ช่องนั้นเลิกใช้แล้ว)
+// คอมไพเลอร์จึงไม่เช็คให้ — เทสต์นี้กันเพิ่มช่องใน EDITABLE_FIELDS แล้วลืมตั้งชื่อไทย
+describe('EDITABLE_FIELDS มีชื่อไทยครบ', () => {
+  it('ทุกช่องที่แก้ได้มีชื่อไทยในประวัติการแก้ไข ทุกทะเบียน', () => {
+    for (const register of SARABAN_REGISTERS) {
+      for (const field of EDITABLE_FIELDS) {
+        expect(fieldLabel(register, field), `${register}.${field}`).not.toBe(field);
+      }
+    }
   });
 });
 ```
@@ -1439,7 +1486,7 @@ export function sentTransition(
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน**
 
 Run: `npx vitest run src/lib/saraban-doc.test.ts && npx tsc --noEmit -p .`
-Expected: PASS — 58 tests (40 เดิม + 5 editableFieldsOf + 6 buildEdit + 3 can* + 4 transition) · tsc ไม่มี output
+Expected: PASS — 59 tests (40 เดิม + 5 editableFieldsOf + 6 buildEdit + 3 can* + 4 transition + 1 ชื่อไทยครบ) · tsc ไม่มี output
 
 - [ ] **Step 5: Commit**
 
@@ -3150,8 +3197,8 @@ year 2 null 3
 - [ ] **Step 2: เทสต์ทั้งหมด**
 
 Run: `npm test`
-Expected: `Test Files  34 passed (34)` · `Tests  493 passed (493)`
-(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 17 · labels 6 · doc 58 · attachment 10 · schema 21 ·
+Expected: `Test Files  34 passed (34)` · `Tests  495 passed (495)`
+(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 17 · labels 7 · doc 59 · attachment 10 · schema 21 ·
 store 8 · และ user-access +5)
 
 - [ ] **Step 3: ชนิดและ lint**
@@ -3190,8 +3237,19 @@ Expected: ไม่มี output — ไม่มี `data/saraban-*.json` ค�
   (ตัวเลือก `pages?: boolean` ใน `node_modules/cloudinary/types/index.d.ts`) ถ้าลืม PDF ทุกไฟล์จะถูก
   บันทึกเป็น `pages: 0` (ไม่รู้) แยกไม่ออกจากไฟล์ raw และสถิติกระดาษรอบ 6 ไม่มีข้อมูลย้อนหลัง
   (พบตอนรีวิว Task 1)
+- **แก้ "เสนอถึง" ต้องเก็บชื่อหน่วยใน `changes` ไม่ใช่ id** — `buildEdit()` คืน `from/to` เป็นค่าดิบ
+  (id ของหน่วย) route ต้องแปลงเป็นชื่อหน่วย ณ ขณะนั้นก่อนสร้าง event ไม่งั้นเปลี่ยนชื่อหน่วยทีหลังแล้ว
+  ประวัติที่แสดงจะเปลี่ยนตาม ขัดกับสเปกข้อ 3 (audit trail ต้องไม่ถูกแก้ย้อนหลัง) — ค่าอื่นเก็บดิบได้:
+  ชั้นความเร็วเป็นคีย์คงที่ (แปลด้วย `LEVEL_LABELS`) วันที่เป็น ISO (พบตอนรีวิว Task 3)
 - ฟิลด์ที่รอบหลังจะเพิ่มบน `SarabanDoc` (การรับทราบของรอบ 2, `folder` ของรอบ 5) จะไม่มีในหนังสือเก่า
   ทั้งที่กติกาคือ "เขียนทุกคีย์เสมอ" — รอบที่เพิ่มต้องมีขั้น normalise ตอนอ่านแบบ `normalise()` ของ
   `config-store.ts`
 - ตรวจสองเรื่องที่สเปกข้อ 12 ให้เป็นงานแรกของแผน: Cloudinary ส่ง PDF ได้ไหม · URL ชั่วคราวหมดอายุจริงไหม
 - เพิ่ม `/saraban` ใน `src/proxy.ts`
+
+**บันทึกไว้ให้รอบ 1C (หน้าจอ)**
+- ปุ่มกรองต้องแยกตามทะเบียน — `REGISTER_VIEWS` มีครบ 6 ค่าเพื่อ query แต่หน้าทะเบียนส่งห้ามวาดปุ่ม
+  "รอเกษียน/เกินกำหนด" (ผ่าน `statusLabel('out', …)` จะได้ "รอส่ง" สองปุ่ม) สเปกข้อ 6: รับ = ทั้งหมด ·
+  รอเกษียน · ดำเนินการ · เสร็จสิ้น · เกินกำหนด · ส่ง/เวียน = ทั้งหมด · รอส่ง · ส่งแล้ว — "ยกเลิก" แสดง
+  เมื่อมีอย่างน้อย 1 ทั้งสองแบบ ให้มีฟังก์ชันบริสุทธิ์ `viewsOf(register)` ไม่คำนวณใน component
+- ไทม์ไลน์ใช้ `EVENT_KIND_LABELS` · ประวัติการแก้ไขใช้ `fieldLabel` + `LEVEL_LABELS` + `thaiShortDate`
