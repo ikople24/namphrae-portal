@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   buildNewDoc,
   displayStatus,
+  isOpen,
   isOverdue,
   makeEvent,
   type NewDocFields,
@@ -13,6 +14,8 @@ const ACTOR = { id: 'user_clerk_1', name: 'สมหญิง ใจดี' };
 const NOW = '2026-10-02T02:30:00.000Z';
 const TODAY = '2026-10-15';
 
+// dueDate เริ่มต้นอยู่หลัง TODAY โดยตั้งใจ — หนังสือตั้งต้นต้องยังไม่เกินกำหนด เทสต์ที่อยากได้
+// เรื่องเกินกำหนดต้องใส่ dueDate เองให้เห็นในเทสต์นั้น
 function fields(overrides: Partial<NewDocFields> = {}): NewDocFields {
   return {
     register: 'in',
@@ -21,12 +24,15 @@ function fields(overrides: Partial<NewDocFields> = {}): NewDocFields {
     party: 'ที่ทำการปกครองอำเภอหางดง',
     subject: 'ขอเชิญประชุมหัวหน้าส่วนราชการ',
     level: 'urgent',
-    dueDate: '2026-10-10',
+    dueDate: '2026-10-20',
     holderUnitId: 'palad',
     ...overrides,
   };
 }
 
+// overrides ทับหลังสร้าง (ข้ามกฎของ buildNewDoc) — ใช้แก้ค่าเดียวที่เทสต์สนใจ เช่น status
+// fieldOverrides ผ่าน buildNewDoc — ใช้เปลี่ยนทะเบียน จะได้สถานะ/dueDate/event ตามทะเบียนจริง
+// (makeDoc({ register: 'out' }) ได้หนังสือที่เป็นไปไม่ได้: ส่งแต่ pending และมี dueDate)
 function makeDoc(
   overrides: Partial<SarabanDoc> = {},
   fieldOverrides: Partial<NewDocFields> = {}
@@ -67,7 +73,7 @@ describe('buildNewDoc', () => {
   it('หนังสือรับ: รอเกษียน · event ลงรับ · เก็บกำหนดแล้วเสร็จ', () => {
     const doc = makeDoc();
     expect(doc.status).toBe('pending');
-    expect(doc.dueDate).toBe('2026-10-10');
+    expect(doc.dueDate).toBe('2026-10-20');
     expect(doc.events).toEqual([
       {
         id: 'ev-1',
@@ -145,8 +151,16 @@ describe('displayStatus', () => {
   });
 
   it('ไม่เกินก็แสดงสถานะจริง', () => {
-    // ต้องระบุ dueDate เอง — ค่าเริ่มต้นของ fixture (2026-10-10) เลย TODAY ไปแล้ว
-    expect(displayStatus(makeDoc({ dueDate: '2026-10-20' }), TODAY)).toBe('pending');
+    expect(displayStatus(makeDoc(), TODAY)).toBe('pending');
     expect(displayStatus(makeDoc({ status: 'void' }), TODAY)).toBe('void');
+  });
+});
+
+describe('isOpen — รายการเดียวของ "ยังเปิดอยู่"', () => {
+  it('รอเกษียนและดำเนินการเปิดอยู่ · เสร็จและยกเลิกปิดแล้ว', () => {
+    expect(isOpen('pending')).toBe(true);
+    expect(isOpen('in-progress')).toBe(true);
+    expect(isOpen('done')).toBe(false);
+    expect(isOpen('void')).toBe(false);
   });
 });
