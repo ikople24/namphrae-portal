@@ -50,7 +50,7 @@ signed URL · หน้าตาทำตามแบบ hi-fi แต่ใช�
 
 ```
 src/types/saraban.ts                    SarabanDoc · SarabanFile · SarabanEvent · SarabanUnit · SarabanYear
-src/lib/saraban-number.ts               fiscalYearOf · nextNo · formatNo · composeRef      (บริสุทธิ์)
+src/lib/saraban-number.ts               bangkokDateOf · fiscalYearOf · nextNo · formatNo · composeRef (บริสุทธิ์)
 src/lib/saraban-doc.ts                  buildNewDoc · isOverdue · matches · canVoid · canMarkSent (บริสุทธิ์)
 src/lib/saraban-attachment.ts           checkAttachment                                     (บริสุทธิ์)
 src/lib/saraban-schema.ts               zod: ลงรับ · ออกเลขส่ง · PATCH · สมุดผู้รับ · เลขเริ่มต้น
@@ -234,8 +234,10 @@ fiscalYearOf('2026-09-30') → 2569
 fiscalYearOf('2026-10-01') → 2570
 ```
 
-รับวันที่ **ตามเวลากรุงเทพฯ** (`todayInBangkok()` ที่มีอยู่แล้วใน `calendar-grid.ts`) — ลงรับตอน
+รับวันที่ **ตามเวลากรุงเทพฯ** ด้วย `bangkokDateOf(now)` ใน `saraban-number.ts` — ลงรับตอน
 00:30 วันที่ 1 ต.ค. คือ 17:30 UTC วันที่ 30 ก.ย. ถ้าคิดจาก UTC จะได้เลขของปีงบเก่า
+(`bangkokDateOf` รับเวลาเข้ามาเพื่อให้ปีงบกับเวลาลงทะเบียนมาจากขณะเดียวกัน และคำนวณจาก UTC+7
+คงที่ ไม่พึ่งรูปแบบ locale แบบ `todayInBangkok()` — ปีงบเป็นส่วนของ unique key)
 
 หนังสือลงวันที่ 28 ก.ย. ที่มาถึงวันที่ 2 ต.ค. ได้เลขของปีงบใหม่ — เลขทะเบียนเป็นของ "วันที่ลงรับ"
 

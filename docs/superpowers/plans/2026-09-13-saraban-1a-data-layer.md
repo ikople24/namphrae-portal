@@ -223,6 +223,12 @@ describe('fiscalYearOf — ปีงบเริ่ม 1 ต.ค.', () => {
   it('31 ธ.ค. กับ 1 ม.ค. อยู่ปีงบเดียวกัน — ปีปฏิทินไม่ใช่ขอบ', () => {
     expect(fiscalYearOf('2026-12-31')).toBe(fiscalYearOf('2027-01-01'));
   });
+
+  it('ค่าที่ไม่ใช่วันที่ ค.ศ. → โยน error ไม่คืนปีที่ดูเหมือนจริง (ปีงบเป็นส่วนของ unique key)', () => {
+    expect(() => fiscalYearOf('')).toThrow();
+    expect(() => fiscalYearOf('10/1/2026')).toThrow();
+    expect(() => fiscalYearOf('2569-10-01')).toThrow('พ.ศ.');
+  });
 });
 
 describe('bangkokDateOf — วันที่ต้องคิดตามเวลากรุงเทพฯ ไม่ใช่ UTC', () => {
@@ -239,6 +245,11 @@ describe('bangkokDateOf — วันที่ต้องคิดตามเ�
 
   it('23:59 ที่กรุงเทพฯ ยังเป็นวันเดิม', () => {
     expect(bangkokDateOf(new Date('2026-09-30T16:59:00Z'))).toBe('2026-09-30');
+  });
+
+  it('เที่ยงคืนตรงเป๊ะ — 17:00:00Z คือ 00:00 ของวันใหม่ ส่วน 16:59:59.999Z ยังเป็นวันเดิม', () => {
+    expect(bangkokDateOf(new Date('2026-09-30T17:00:00Z'))).toBe('2026-10-01');
+    expect(bangkokDateOf(new Date('2026-09-30T16:59:59.999Z'))).toBe('2026-09-30');
   });
 });
 
@@ -297,31 +308,48 @@ Expected: FAIL — `Failed to resolve import "@/lib/saraban-number"`
 
 import type { SarabanRegister } from '@/types/saraban';
 
-// 'en-CA' ให้รูปแบบ YYYY-MM-DD พอดี (แนวเดียวกับ todayInBangkok ใน calendar-grid.ts)
-const BANGKOK_DATE = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Bangkok',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+// เวลาไทยคงที่ UTC+7 ไม่มีเวลาออมแสง — บวกชั่วโมงแล้วตัดวันที่จาก ISO ได้ตรงทุกเครื่อง
+// ไม่พึ่ง Intl.DateTimeFormat('en-CA') แบบ todayInBangkok(): รูปแบบของ locale เป็นข้อมูล
+// CLDR ไม่ใช่สัญญา (เคยมี browser ที่คืน en-CA เป็น M/D/YYYY) ที่ปฏิทินแค่แสดงผลเพี้ยน
+// แต่ที่นี่ปีงบเป็นส่วนหนึ่งของ unique key ของทะเบียนราชการ
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 /**
- * วันที่ตามเวลากรุงเทพฯ ของเวลาจริงขณะหนึ่ง — รับ Date เข้ามาแทนที่จะเรียก new Date()
- * เอง เพื่อให้เทสต์ส่งเวลาข้ามเที่ยงคืนได้ (todayInBangkok() ของปฏิทินทำแบบนั้นไม่ได้)
+ * วันที่ตามเวลากรุงเทพฯ ของเวลาจริงขณะหนึ่ง
+ *
+ * รับ Date เข้ามาแทนที่จะเรียก new Date() เอง เพราะ createDoc() ต้องได้ปีงบกับเวลาลงทะเบียน
+ * จากขณะเดียวกัน — ถ้าต่างคนต่างอ่านนาฬิกา ตอนเที่ยงคืน 1 ต.ค. เวลาอาจเป็นวันใหม่แต่ปีงบ
+ * ยังเป็นปีเก่า (ผลพลอยได้: เทสต์ส่งเวลาข้ามเที่ยงคืนได้ตรง ๆ)
  */
 export function bangkokDateOf(at: Date): string {
-  return BANGKOK_DATE.format(at);
+  return new Date(at.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+const ISO_DATE = /^(\d{4})-(\d{2})-\d{2}$/;
+
 /**
- * ปีงบประมาณ พ.ศ. ของวันที่ 'YYYY-MM-DD' — ปีงบเริ่ม 1 ต.ค.
+ * ปีงบประมาณ พ.ศ. ของวันที่ 'YYYY-MM-DD' ปี ค.ศ. — ปีงบเริ่ม 1 ต.ค.
  *   '2026-09-30' → 2569 · '2026-10-01' → 2570
  *
- * ขอบปีอยู่ที่นี่ที่เดียว (สเปกข้อ 1.6) — ระเบียบงานสารบรรณ ข้อ 38.1/40.1 เขียนว่า
- * "จนสิ้นปีปฏิทิน" ถ้าวันหนึ่งเทศบาลเปลี่ยนไปใช้ปีปฏิทิน แก้ฟังก์ชันนี้ฟังก์ชันเดียว
+ * ผลลัพธ์เป็นส่วนหนึ่งของ unique key ของทะเบียน จึงโยน error แทนการคืนค่าที่ดูเหมือนจริง —
+ * ถ้าไม่เช็ค '' จะได้ 543 · ปี พ.ศ. ที่หลุดมา '2569-10-01' จะได้ 3113 · รูปแบบอื่นได้ NaN แล้ว
+ * Mongo ออกเลขต่อใน "ปี NaN" ได้เงียบ ๆ
+ *
+ * ขอบปีอยู่ที่นี่ที่เดียว (สเปกข้อ 1.6) — ระเบียบงานสารบรรณ ข้อ 38.1/40.1 เขียนว่า "จนสิ้นปี
+ * ปฏิทิน" ถ้าวันหนึ่งเทศบาลเปลี่ยนไปใช้ปีปฏิทิน แก้ที่นี่ แต่ **ต้องตัดสินเรื่องปีรอยต่อด้วย**:
+ * เปลี่ยนกลางปีงบ เลขปีเดียวกัน (เช่น 2570) จะเป็นทั้งปีงบเก่าและปีปฏิทินใหม่ max+1 จะรันต่อ
+ * จากเลขของ ต.ค.–ธ.ค. แทนที่จะเริ่ม 1 และชื่อฟิลด์ fiscalYear กับป้าย "ปีงบประมาณ" ต้องเปลี่ยนตาม
  */
 export function fiscalYearOf(date: string): number {
-  const [year, month] = date.split('-').map(Number);
+  const match = ISO_DATE.exec(date);
+  if (!match) {
+    throw new Error(`fiscalYearOf: ต้องเป็นวันที่ 'YYYY-MM-DD' ได้ ${JSON.stringify(date)}`);
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (year < 1900 || year > 2100) {
+    throw new Error(`fiscalYearOf: ปี ${year} ไม่ใช่ ค.ศ. — ดูเหมือนปี พ.ศ. หลุดมา`);
+  }
   return (month >= 10 ? year + 1 : year) + 543;
 }
 
@@ -330,8 +358,8 @@ export function fiscalYearOf(date: string): number {
  * @param maxNo เลขมากสุดที่มีอยู่ รวมแถวที่ยกเลิกแล้ว (เลขไม่ถูกใช้ซ้ำ) · null = ยังไม่มีหนังสือ
  * @param startNo เลขเริ่มต้นที่ตั้งไว้ของปีนั้น · null = ไม่ได้ตั้ง
  *
- * startNo มีผลเฉพาะตอนปีนั้นยังว่าง — พอมีหนังสือแล้วใช้ max + 1 เสมอ ข้อนี้คือเหตุผลที่
- * setStartNo() ใน saraban-store.ts ไม่ต้อง atomic
+ * startNo มีผลเฉพาะตอนปีนั้นยังว่าง — พอมีหนังสือแล้วใช้ max + 1 เสมอ ข้อนี้ทำให้ setStartNo()
+ * ใน saraban-store.ts ไม่ต้อง atomic เพื่อกันเลขซ้ำหรือมีรู (ส่วนที่ยังเหลือดูคอมเมนต์ที่นั่น)
  */
 export function nextNo(maxNo: number | null, startNo: number | null): number {
   if (maxNo !== null) return maxNo + 1;
@@ -360,7 +388,7 @@ export function composeRef(
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน**
 
 Run: `npx vitest run src/lib/saraban-number.test.ts`
-Expected: PASS — 15 tests
+Expected: PASS — 17 tests
 
 - [ ] **Step 5: Commit**
 
@@ -2801,8 +2829,10 @@ export async function getYearInfo(register: SarabanRegister, fiscalYear: number)
 /**
  * ตั้งเลขเริ่มต้นของปี — ได้เฉพาะเมื่อปีนั้นยังไม่มีหนังสือเลย (สเปกข้อ 4)
  *
- * เช็คแล้วค่อยเขียน ไม่ atomic — ถ้ามีคนลงรับแทรกระหว่างสองขั้น startNo จะถูกบันทึกหลังปีนั้น
- * มีหนังสือแล้ว แต่ไม่เสียหาย: nextNo() ใช้ startNo เฉพาะตอนปีนั้นยังว่าง มีหนังสือแล้วใช้ max+1
+ * เช็คแล้วค่อยเขียน ไม่ atomic — ถ้ามีคนลงรับแทรกระหว่างสองขั้น เลขยังไม่ซ้ำและไม่มีรู
+ * (nextNo() ใช้ startNo เฉพาะตอนปีนั้นยังว่าง มีหนังสือแล้วใช้ max+1) แต่หนังสือเรื่องแรกได้เลข 1
+ * แทนเลขต่อจากทะเบียนกระดาษ ขณะที่หน้าจอยังได้ 'ok' — ยอมรับได้เพราะในทางปฏิบัติคนตั้งเลข
+ * เริ่มต้นกับคนลงรับเรื่องแรกคือธุรการคนเดียวกัน และ "เลขรับถัดไป" บนหน้าลงรับเผยให้เห็นทันที
  */
 export async function setStartNo(
   register: SarabanRegister,
@@ -3120,8 +3150,8 @@ year 2 null 3
 - [ ] **Step 2: เทสต์ทั้งหมด**
 
 Run: `npm test`
-Expected: `Test Files  34 passed (34)` · `Tests  491 passed (491)`
-(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 15 · labels 6 · doc 58 · attachment 10 · schema 21 ·
+Expected: `Test Files  34 passed (34)` · `Tests  493 passed (493)`
+(baseline 28/368 + ไฟล์ใหม่ 6 ไฟล์: number 17 · labels 6 · doc 58 · attachment 10 · schema 21 ·
 store 8 · และ user-access +5)
 
 - [ ] **Step 3: ชนิดและ lint**
