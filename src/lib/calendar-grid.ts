@@ -138,3 +138,12 @@ export function nextDate(date: string): string {
 export function tomorrowInBangkok(): string {
   return nextDate(todayInBangkok());
 }
+
+/** ลำดับวันในสัปดาห์แบบเริ่มจันทร์ (0=จ..6=อา) ให้ตรงกับ THAI_DOW — สูตรเดียวกับที่
+ * buildMonthGrid ใช้ภายใน ดึงออกมาแยกเพราะตอนนี้มีผู้ใช้คนที่สอง (endpoint digest
+ * ที่ต้องเช็คว่า "วันนี้" เป็นวันศุกร์หรือเปล่า — ดู daily-digest.ts)
+ */
+export function weekdayMonFirst(date: string): number {
+  const [year, month, day] = date.split('-').map(Number);
+  return (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
+}
