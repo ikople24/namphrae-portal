@@ -1,13 +1,22 @@
 import crypto from 'node:crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { tomorrowInBangkok } from '@/lib/calendar-grid';
+import {
+  nextDate,
+  todayInBangkok,
+  tomorrowInBangkok,
+  weekdayMonFirst,
+} from '@/lib/calendar-grid';
 import { listJobs } from '@/lib/jobs-store';
-import { formatDailyDigestMessage } from '@/lib/line-message';
+import {
+  formatDailyDigestMessage,
+  formatWeekendBridgeDigestMessage,
+} from '@/lib/line-message';
 import { pushGroupText } from '@/lib/line';
 import { clientIp, rateLimit } from '@/lib/rate-limit';
 
-// POST /api/cron/daily-digest — n8n ยิงทุก 17:00 ไทย (Schedule Trigger →
-// HTTP Request) สรุปตารางงานพรุ่งนี้เข้ากลุ่ม LINE เจ้าหน้าที่
+// POST /api/cron/daily-digest — n8n ยิง จ-ศ 17:00 ไทย (Schedule Trigger →
+// HTTP Request) สรุปตารางงานเข้ากลุ่ม LINE เจ้าหน้าที่ — ศุกร์สรุปเสาร์+อาทิตย์+
+// จันทร์รวมข้อความเดียว (n8n ไม่ยิงมาวันเสาร์-อาทิตย์ ประหยัดโควตา LINE OA)
 //
 // จงใจไม่ตั้ง cron ที่ Railway — ผู้ดูแลอยากเห็น/แก้ตารางเวลาที่ n8n ที่เดียว
 // และ n8n เห็นประวัติ run สำเร็จ/ล้มเหลวเป็น dashboard ในตัว
@@ -48,6 +57,34 @@ export default async function handler(
     return res.status(401).end();
   }
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
+
+  // ศุกร์: n8n ไม่ยิงมาวันเสาร์-อาทิตย์แล้ว ข้อความศุกร์จึงต้องครอบคลุมเสาร์+
+  // อาทิตย์+จันทร์ ไม่งั้นงานวันจันทร์จะไม่มีใครถูกแจ้งเตือนล่วงหน้าเลย (ดู spec
+  // docs/superpowers/specs/2026-09-28-line-weekday-digest-design.md)
+  if (weekdayMonFirst(todayInBangkok()) === 4) {
+    const sat = tomorrowInBangkok();
+    const sun = nextDate(sat);
+    const mon = nextDate(sun);
+    const dates = [sat, sun, mon];
+    const days = await Promise.all(
+      dates.map(async (date) => ({
+        date,
+        jobs: (await listJobs({ month: date.slice(0, 7) })).filter(
+          (j) => j.date === date && j.status === 'approved'
+        ),
+      }))
+    );
+    const jobCount = days.reduce((n, d) => n + d.jobs.length, 0);
+    const sent = await pushGroupText(
+      formatWeekendBridgeDigestMessage(days, siteUrl)
+    );
+    if (!sent) {
+      return res.status(502).json({ sent: false, dates, jobs: jobCount });
+    }
+    return res.status(200).json({ sent: true, dates, jobs: jobCount });
+  }
+
   const date = tomorrowInBangkok();
   // JobFilter กรองได้แค่ month — กรอง date/สถานะที่นี่ (งานต่อเดือนมีน้อย)
   // listJobs เรียง (date, time, createdAt, id) มาแล้ว formatter ใช้ลำดับนั้นตรง ๆ
@@ -59,7 +96,6 @@ export default async function handler(
     (j) => j.date === date && j.status === 'approved'
   );
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
   const sent = await pushGroupText(formatDailyDigestMessage(jobs, date, siteUrl));
 
   // ส่งไม่ออก → 502 ให้ run ใน n8n ขึ้น fail มองเห็นได้ ไม่เงียบหาย (สาเหตุจริง

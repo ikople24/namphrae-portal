@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { formatDailyDigestMessage } from '@/lib/line-message';
+import {
+  formatDailyDigestMessage,
+  formatWeekendBridgeDigestMessage,
+} from '@/lib/line-message';
 import type { CalendarJob } from '@/types/portal';
 
 const BASE: CalendarJob = {
@@ -172,5 +175,87 @@ describe('formatDailyDigestMessage', () => {
     const shownBlocks = msg.split('\n').filter((l) => l.startsWith('🚑')).length;
     expect(jobs.length - rest).toBe(shownBlocks);
     expect(rest).toBeGreaterThan(0); // เทสต์พิสูจน์ตัวเองว่ามีการตัดเกิดขึ้นจริง
+  });
+});
+
+describe('formatWeekendBridgeDigestMessage', () => {
+  // 2026-09-05 เสาร์, 2026-09-06 อาทิตย์, 2026-09-07 จันทร์ (ต่อเนื่องจาก 2026-08-01
+  // ที่เป็นวันเสาร์ — ดูคอมเมนต์ buildMonthGrid ในไฟล์ calendar-grid.test.ts)
+  const BRIDGE_BASE: CalendarJob = {
+    id: 'job-1',
+    kind: 'ems',
+    status: 'approved',
+    date: '2026-09-05',
+    time: '06:00',
+    title: 'สมชาย ใจดี',
+    village: 'ม.3 ต.น้ำแพร่',
+    origin: 'บ้านที่อาศัย',
+    destination: 'รพ.สวนดอก',
+    phone: '0812345678',
+    createdAt: '2026-09-04T11:00:00.000Z',
+    createdBy: 'staff@example.com',
+  };
+
+  it('สามวันมีงานครบ — ขึ้นหัวข้อ 📅 ต่อวันตามลำดับเสาร์→อาทิตย์→จันทร์', () => {
+    const days = [
+      { date: '2026-09-05', jobs: [{ ...BRIDGE_BASE, id: 'sat', title: 'งานวันเสาร์' }] },
+      { date: '2026-09-06', jobs: [{ ...BRIDGE_BASE, id: 'sun', title: 'งานวันอาทิตย์' }] },
+      { date: '2026-09-07', jobs: [{ ...BRIDGE_BASE, id: 'mon', title: 'งานวันจันทร์' }] },
+    ];
+    const msg = formatWeekendBridgeDigestMessage(days, 'https://namphrae-portal.app');
+    expect(msg).toContain('📅 ส. 5 ก.ย. 69');
+    expect(msg).toContain('📅 อา. 6 ก.ย. 69');
+    expect(msg).toContain('📅 จ. 7 ก.ย. 69');
+    expect(msg.indexOf('งานวันเสาร์')).toBeLessThan(msg.indexOf('งานวันอาทิตย์'));
+    expect(msg.indexOf('งานวันอาทิตย์')).toBeLessThan(msg.indexOf('งานวันจันทร์'));
+    expect(msg).toContain('ไม่มีข้อความแจ้งเตือนวันเสาร์-อาทิตย์');
+  });
+
+  it('วันอาทิตย์ไม่มีงาน — ขึ้น "ไม่มีงาน" เฉพาะวันนั้น วันอื่นไม่กระทบ', () => {
+    const days = [
+      { date: '2026-09-05', jobs: [{ ...BRIDGE_BASE, id: 'sat' }] },
+      { date: '2026-09-06', jobs: [] },
+      { date: '2026-09-07', jobs: [{ ...BRIDGE_BASE, id: 'mon' }] },
+    ];
+    const msg = formatWeekendBridgeDigestMessage(days);
+    expect(msg).toContain('📅 อา. 6 ก.ย. 69\nไม่มีงาน');
+    expect(msg).toContain('🚑 สมชาย ใจดี');
+  });
+
+  it('ทุกวันว่าง — ยังส่งข้อความครบสามวัน (เงียบ = ผิดปกติ)', () => {
+    const days = [
+      { date: '2026-09-05', jobs: [] },
+      { date: '2026-09-06', jobs: [] },
+      { date: '2026-09-07', jobs: [] },
+    ];
+    const msg = formatWeekendBridgeDigestMessage(days);
+    expect(msg).toBe(
+      [
+        '📋 สรุปตารางงานเสาร์-จันทร์นี้ (ไม่มีข้อความแจ้งเตือนวันเสาร์-อาทิตย์)',
+        '📅 ส. 5 ก.ย. 69\nไม่มีงาน',
+        '📅 อา. 6 ก.ย. 69\nไม่มีงาน',
+        '📅 จ. 7 ก.ย. 69\nไม่มีงาน',
+      ].join('\n\n')
+    );
+  });
+
+  it('งานกระจุกวันจันทร์จนเกินเพดาน — เสาร์และอาทิตย์เห็นครบ จันทร์ถูกตัดพร้อมลิงก์', () => {
+    const monMany: CalendarJob[] = Array.from({ length: 300 }, (_, i) => ({
+      ...BRIDGE_BASE,
+      id: `mon-${i}`,
+      title: `งานทดสอบข้อความยาวลำดับที่ ${i} ของวันจันทร์`,
+    }));
+    const days = [
+      { date: '2026-09-05', jobs: [{ ...BRIDGE_BASE, id: 'sat', title: 'งานวันเสาร์' }] },
+      { date: '2026-09-06', jobs: [{ ...BRIDGE_BASE, id: 'sun', title: 'งานวันอาทิตย์' }] },
+      { date: '2026-09-07', jobs: monMany },
+    ];
+    const msg = formatWeekendBridgeDigestMessage(days, 'https://namphrae-portal.app');
+    expect(msg.length).toBeLessThanOrEqual(5000);
+    expect(msg).toContain('งานวันเสาร์');
+    expect(msg).toContain('งานวันอาทิตย์');
+    expect(msg).toMatch(
+      /📅 จ\. 7 ก\.ย\. 69\n\n🚑[\s\S]*…และอีก \d+ งาน ดูทั้งหมดที่ https:\/\/namphrae-portal\.app\/admin\/calendar$/
+    );
   });
 });

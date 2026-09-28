@@ -1,4 +1,4 @@
-import { thaiShortDate } from '@/lib/calendar-grid';
+import { thaiShortDate, THAI_DOW, weekdayMonFirst } from '@/lib/calendar-grid';
 import type { CalendarJob } from '@/types/portal';
 
 // ใช้ข้อความ text ธรรมดา ไม่ใช่ Flex — อ่านง่ายพอกันในกลุ่ม LINE แต่ไม่ต้อง
@@ -92,5 +92,77 @@ export function formatDailyDigestMessage(
   }
   // เหลืองานเดียวก็ยังเกินได้ในทางทฤษฎี (title ยาวผิดปกติ) — ยอมส่งตามนั้น
   // ให้ pushGroupText รายงาน 400 ใน log ดีกว่าเงียบหาย
+  return build(1);
+}
+
+export type DailyDigestDay = { date: string; jobs: CalendarJob[] };
+
+/** สรุปตารางงานเสาร์+อาทิตย์+จันทร์ ส่งแทนที่ formatDailyDigestMessage เฉพาะตอน
+ * "วันนี้" เป็นศุกร์ — n8n ไม่ยิงมาวันเสาร์-อาทิตย์แล้ว (ประหยัดโควตา LINE OA) ข้อความ
+ * ศุกร์จึงต้องครอบคลุมงานวันจันทร์ไว้ด้วย ไม่งั้นงานจันทร์จะไม่มีใครถูกแจ้งเตือนล่วงหน้าเลย
+ * (ดู docs/superpowers/specs/2026-09-28-line-weekday-digest-design.md)
+ *
+ * @param days เรียงเสาร์→อาทิตย์→จันทร์เสมอ (ผู้เรียกรับผิดชอบลำดับ ฟังก์ชันนี้ไม่ sort)
+ * งานในแต่ละวันกรองสถานะ/เรียงมาแล้วเหมือน formatDailyDigestMessage
+ */
+export function formatWeekendBridgeDigestMessage(
+  days: DailyDigestDay[],
+  adminUrl?: string
+): string {
+  const intro =
+    '📋 สรุปตารางงานเสาร์-จันทร์นี้ (ไม่มีข้อความแจ้งเตือนวันเสาร์-อาทิตย์)';
+
+  const dayHeader = (date: string): string =>
+    `📅 ${THAI_DOW[weekdayMonFirst(date)]}. ${thaiShortDate(date)}`;
+
+  // count = งบจำนวนงานที่ยังแสดงได้รวมทุกวัน ไล่จ่ายตามลำดับ days (เสาร์ก่อน) — วัน
+  // ท้าย ๆ (จันทร์) จึงโดนตัดก่อนเสมอเมื่องบไม่พอ เพราะใกล้ตัวกว่าควรเห็นครบก่อน (แนว
+  // เดียวกับ build(count) ของ formatDailyDigestMessage แต่ขยายให้จ่ายงบข้ามวันได้)
+  const build = (count: number): string => {
+    let remaining = count;
+    const sections: string[] = [intro];
+
+    for (const day of days) {
+      const header = dayHeader(day.date);
+      if (day.jobs.length === 0) {
+        sections.push(`${header}\nไม่มีงาน`);
+        continue;
+      }
+
+      const take = Math.max(0, Math.min(day.jobs.length, remaining));
+      remaining -= take;
+
+      if (take === 0) {
+        sections.push(
+          adminUrl
+            ? `${header}\n…และอีก ${day.jobs.length} งาน ดูทั้งหมดที่ ${adminUrl}/admin/calendar`
+            : `${header}\n…และอีก ${day.jobs.length} งาน`
+        );
+        continue;
+      }
+
+      const blocks = day.jobs.slice(0, take).map(digestJobBlock).join('\n\n');
+      let section = `${header}\n\n${blocks}`;
+      if (take < day.jobs.length) {
+        const rest = day.jobs.length - take;
+        section += adminUrl
+          ? `\n\n…และอีก ${rest} งาน ดูทั้งหมดที่ ${adminUrl}/admin/calendar`
+          : `\n\n…และอีก ${rest} งาน`;
+      }
+      sections.push(section);
+    }
+
+    return sections.join('\n\n');
+  };
+
+  const totalJobs = days.reduce((n, d) => n + d.jobs.length, 0);
+  if (totalJobs === 0) return build(0);
+
+  for (let count = totalJobs; count > 1; count--) {
+    const msg = build(count);
+    if (msg.length <= LINE_TEXT_LIMIT) return msg;
+  }
+  // เหลืองานเดียวก็ยังเกินได้ในทางทฤษฎี (title ยาวผิดปกติ) — ยอมส่งตามนั้นเหมือน
+  // formatDailyDigestMessage
   return build(1);
 }

@@ -10,6 +10,7 @@ import {
   THAI_DOW,
   todayInBangkok,
   tomorrowInBangkok,
+  weekdayMonFirst,
 } from '@/lib/calendar-grid';
 
 afterEach(() => {
@@ -115,6 +116,21 @@ describe('thaiShortDate', () => {
     expect(() => thaiShortDate(undefined as unknown as string)).not.toThrow();
     expect(typeof thaiShortDate(undefined as unknown as string)).toBe('string');
     expect(() => thaiShortDate(null as unknown as string)).not.toThrow();
+  });
+});
+
+describe('weekdayMonFirst', () => {
+  // 2026-08-01 เป็นวันเสาร์ (ดูคอมเมนต์ buildMonthGrid ด้านบน) → 2026-08-03 คือจันทร์
+  it('วันจันทร์คืน 0 (ตรงกับ THAI_DOW[0] = "จ")', () => {
+    expect(weekdayMonFirst('2026-08-03')).toBe(0);
+  });
+
+  it('วันศุกร์คืน 4 (ตรงกับ THAI_DOW[4] = "ศ")', () => {
+    expect(weekdayMonFirst('2026-08-07')).toBe(4);
+  });
+
+  it('วันอาทิตย์คืน 6 (ตรงกับ THAI_DOW[6] = "อา")', () => {
+    expect(weekdayMonFirst('2026-08-02')).toBe(6);
   });
 });
 
