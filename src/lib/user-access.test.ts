@@ -101,3 +101,31 @@ describe('สิทธิ์ forest', () => {
     expect(FEATURE_LABELS.map((f) => f.key)).toContain('forest');
   });
 });
+
+describe('สิทธิ์ saraban', () => {
+  it('อยู่ใน FEATURES แต่ไม่อยู่ในชุดเริ่มต้น — ผู้จัดการต้องติ๊กเปิดเอง', () => {
+    expect(FEATURES).toContain('saraban');
+    expect(DEFAULT_FEATURES).not.toContain('saraban');
+  });
+
+  it('สมาชิกเดิมที่ยังไม่เคยถูกตั้งค่า ไม่ได้สิทธิ์นี้ติดมาเงียบ ๆ', () => {
+    const r = resolveAccess({ doc: null, clerkId: 'user_a', managerEnvId: undefined });
+    expect(hasFeature({ features: r.features, isManager: false }, 'saraban')).toBe(false);
+  });
+
+  it('หน้าแรกอยู่นอก /admin เพราะสารบรรณมี shell ของตัวเอง', () => {
+    expect(FEATURE_HOME.saraban).toBe('/saraban');
+    expect(firstAllowedPath({ isManager: false, features: ['saraban'] })).toBe('/saraban');
+  });
+
+  it('ต่อท้ายสุด — สมาชิกที่มีทั้งปฏิทินและสารบรรณยังเข้าปฏิทินก่อนเหมือนเดิม', () => {
+    expect(FEATURES.at(-1)).toBe('saraban');
+    expect(firstAllowedPath({ isManager: false, features: ['calendar', 'saraban'] })).toBe(
+      '/admin/calendar'
+    );
+  });
+
+  it('มีป้ายภาษาไทยในหน้าจัดการผู้ใช้', () => {
+    expect(FEATURE_LABELS.find((f) => f.key === 'saraban')?.label).toBe('ระบบสารบรรณ');
+  });
+});
