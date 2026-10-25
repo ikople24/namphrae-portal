@@ -1,0 +1,16 @@
+[
+  { "id": "mayor", "name": "นายกเทศมนตรี", "dept": "ผู้บริหาร", "refCode": "", "order": 10, "isActive": true, "memberClerkIds": [] },
+  { "id": "palad", "name": "ปลัดเทศบาล", "dept": "ผู้บริหาร", "refCode": "", "order": 20, "isActive": true, "memberClerkIds": [] },
+  { "id": "head-office", "name": "หัวหน้าสำนักปลัด", "dept": "สำนักปลัด", "refCode": "", "order": 30, "isActive": true, "memberClerkIds": [] },
+  { "id": "dir-finance", "name": "ผอ.กองคลัง", "dept": "กองคลัง", "refCode": "", "order": 40, "isActive": true, "memberClerkIds": [] },
+  { "id": "dir-works", "name": "ผอ.กองช่าง", "dept": "กองช่าง", "refCode": "", "order": 50, "isActive": true, "memberClerkIds": [] },
+  { "id": "dir-education", "name": "ผอ.กองการศึกษา", "dept": "กองการศึกษา", "refCode": "", "order": 60, "isActive": true, "memberClerkIds": [] },
+  { "id": "dir-health", "name": "ผอ.กองสาธารณสุขฯ", "dept": "กองสาธารณสุข", "refCode": "", "order": 70, "isActive": true, "memberClerkIds": [] },
+  { "id": "legal", "name": "นิติกร", "dept": "สำนักปลัด", "refCode": "", "order": 80, "isActive": true, "memberClerkIds": [] },
+  { "id": "head-disaster", "name": "หัวหน้าฝ่ายป้องกันฯ", "dept": "สำนักปลัด", "refCode": "", "order": 90, "isActive": true, "memberClerkIds": [] },
+  { "id": "office", "name": "สำนักปลัด", "dept": "สำนักปลัด", "refCode": "ชม 55201", "order": 100, "isActive": true, "memberClerkIds": [] },
+  { "id": "finance", "name": "กองคลัง", "dept": "กองคลัง", "refCode": "", "order": 110, "isActive": true, "memberClerkIds": [] },
+  { "id": "works", "name": "กองช่าง", "dept": "กองช่าง", "refCode": "", "order": 120, "isActive": true, "memberClerkIds": [] },
+  { "id": "education", "name": "กองการศึกษา", "dept": "กองการศึกษา", "refCode": "", "order": 130, "isActive": true, "memberClerkIds": [] },
+  { "id": "health", "name": "กองสาธารณสุข", "dept": "กองสาธารณสุข", "refCode": "", "order": 140, "isActive": true, "memberClerkIds": [] }
+]
