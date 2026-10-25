@@ -5,6 +5,7 @@
 // id และเวลาทุกตัวรับเป็นพารามิเตอร์ ไม่สร้างเองข้างใน — id ของหนังสือมาจาก client (เป็น
 // idempotency key) ส่วน eventId กับเวลา store เป็นคนสร้าง และเทสต์ส่งค่าคงที่ได้
 
+import { SEND_METHOD_LABELS } from '@/lib/saraban-labels';
 import {
   DISPLAY_STATUSES,
   type DisplayStatus,
@@ -15,6 +16,7 @@ import {
   type SarabanFile,
   type SarabanRegister,
   type SarabanStatus,
+  type SendMethod,
 } from '@/types/saraban';
 
 export type Actor = { id: string; name: string };
@@ -194,4 +196,107 @@ export function toMongoQuery(f: DocFilter, today: string): Record<string, unknow
   if (f.statusIn) and.push({ status: { $in: [...f.statusIn] } });
   if (f.view && f.view !== 'all') and.push(viewQuery(f.view, today));
   return and.length === 1 ? and[0] : { $and: and };
+}
+
+// ---- กฎแก้ไข ยกเลิก ส่งแล้ว ไฟล์แนบ (สเปกข้อ 6) -----------------------------
+
+// ช่องที่ฟอร์มแก้ไขส่งมาได้ — เลขทะเบียน ทะเบียน ปีงบ แก้ไม่ได้ทุกกรณี จึงไม่อยู่ในรายการเลย
+export const EDITABLE_FIELDS = [
+  'ref',
+  'docDate',
+  'party',
+  'subject',
+  'level',
+  'dueDate',
+  'holderUnitId',
+] as const;
+export type EditableField = (typeof EDITABLE_FIELDS)[number];
+export type DocEdit = Partial<Pick<SarabanDoc, EditableField>>;
+
+/**
+ * ช่องที่แก้ได้ของหนังสือเรื่องนี้ในสถานะนี้
+ * - ยกเลิกแล้วแก้อะไรไม่ได้
+ * - ส่ง/เวียน: "ที่" ประกอบจากรหัสส่วนราชการกับเลข และอาจถูกพิมพ์ลงหนังสือจริงไปแล้ว
+ *   เจ้าของเรื่องเป็นคนกำหนดรหัสใน "ที่" · ไม่มีกำหนดแล้วเสร็จ → ถ้าผิดให้ยกเลิกแล้วออกเลขใหม่
+ * - รับ: เปลี่ยน "เสนอถึง" ได้เฉพาะตอนรอเกษียน — หลังจากนั้นหนังสือเดินตามการเกษียน (รอบ 2)
+ *   ถ้าแก้ตรงนี้ได้ จะเป็นทางลัดข้ามการเกษียนที่ไม่ทิ้งร่องรอยว่าใครส่งต่อ
+ */
+export function editableFieldsOf(
+  doc: Pick<SarabanDoc, 'register' | 'status'>
+): readonly EditableField[] {
+  if (doc.status === 'void') return [];
+  if (doc.register !== 'in') return ['docDate', 'party', 'subject', 'level'];
+  const base: EditableField[] = ['ref', 'docDate', 'party', 'subject', 'level', 'dueDate'];
+  return doc.status === 'pending' ? [...base, 'holderUnitId'] : base;
+}
+
+export type EditResult =
+  | { ok: true; set: DocEdit; changes: SarabanFieldChange[] }
+  | { ok: false; field: EditableField };
+
+/**
+ * เทียบของที่ส่งมากับของเดิม เก็บเฉพาะช่องที่เปลี่ยนจริง — ฟอร์มส่งค่าปัจจุบันมาครบทุกช่อง
+ * ช่องที่ส่งค่าเดิมมาจึงต้องไม่นับ (ทั้งเป็นการแก้และเป็นการชนช่องที่ล็อก)
+ * ช่องที่ล็อกแต่ส่งค่าใหม่มา → ปฏิเสธทั้งคำขอ ไม่แก้ครึ่ง ๆ แล้วเงียบ
+ *
+ * set เป็น Record<string, string> ระหว่างประกอบ: TypeScript ตรวจ `set[field] = next`
+ * ในลูปไม่ผ่าน เพราะ field เป็น union ของคีย์ต่างชนิด (level เป็น SarabanLevel) — เหตุผล
+ * เดียวกับคอมเมนต์บน buildJobPatch ใน jobs-store.ts
+ */
+export function buildEdit(doc: SarabanDoc, edit: DocEdit): EditResult {
+  const allowed = new Set<EditableField>(editableFieldsOf(doc));
+  const set: Record<string, string> = {};
+  const changes: SarabanFieldChange[] = [];
+  for (const field of EDITABLE_FIELDS) {
+    const next = edit[field];
+    if (next === undefined || next === doc[field]) continue;
+    if (!allowed.has(field)) return { ok: false, field };
+    set[field] = next;
+    changes.push({ field, from: doc[field], to: next });
+  }
+  return { ok: true, set: set as DocEdit, changes };
+}
+
+export function canVoid(doc: Pick<SarabanDoc, 'status'>): boolean {
+  return isOpen(doc.status);
+}
+
+export function canMarkSent(doc: Pick<SarabanDoc, 'register' | 'status'>): boolean {
+  return doc.register !== 'in' && doc.status === 'in-progress';
+}
+
+// ไฟล์สแกนมักตามมาทีหลัง จึงเพิ่มได้แม้เรื่องเสร็จแล้ว — แต่ลบได้เฉพาะเรื่องที่ยังเปิดอยู่
+// (รอบ 4 ต้องห้ามลบไฟล์ที่มีตรา/ลายมือ/การลงนามอ้างอยู่ด้วย)
+export function canAddFile(doc: Pick<SarabanDoc, 'status'>): boolean {
+  return doc.status !== 'void';
+}
+
+export function canRemoveFile(doc: Pick<SarabanDoc, 'status'>): boolean {
+  return isOpen(doc.status);
+}
+
+/** ผลของการเปลี่ยนสถานะ — route เอา kind/note ไปสร้าง event แล้วเรียก applyPatch */
+export type Transition = {
+  set: Partial<Pick<SarabanDoc, 'status' | 'voidReason' | 'sendMethod'>>;
+  kind: SarabanEventKind;
+  note: string;
+};
+
+/** ยกเลิก — null = สถานะนี้ยกเลิกไม่ได้ (route ตอบ 409 invalid_transition) */
+export function voidTransition(doc: Pick<SarabanDoc, 'status'>, reason: string): Transition | null {
+  if (!canVoid(doc)) return null;
+  return { set: { status: 'void', voidReason: reason }, kind: 'voided', note: reason };
+}
+
+/** บันทึกว่าส่งแล้ว — null = ไม่ใช่ส่ง/เวียนที่รอส่ง */
+export function sentTransition(
+  doc: Pick<SarabanDoc, 'register' | 'status'>,
+  method: SendMethod
+): Transition | null {
+  if (!canMarkSent(doc)) return null;
+  return {
+    set: { status: 'done', sendMethod: method },
+    kind: 'sent',
+    note: SEND_METHOD_LABELS[method],
+  };
 }

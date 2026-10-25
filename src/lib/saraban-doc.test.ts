@@ -1,18 +1,28 @@
 // src/lib/saraban-doc.test.ts
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
+  buildEdit,
   buildNewDoc,
+  canAddFile,
+  canMarkSent,
+  canRemoveFile,
+  canVoid,
   displayStatus,
+  EDITABLE_FIELDS,
+  editableFieldsOf,
   isOpen,
   isOverdue,
   makeEvent,
   matches,
   REGISTER_VIEWS,
+  sentTransition,
   toMongoQuery,
+  voidTransition,
   type DocFilter,
   type NewDocFields,
 } from '@/lib/saraban-doc';
-import type { SarabanDoc } from '@/types/saraban';
+import { fieldLabel } from '@/lib/saraban-labels';
+import { SARABAN_REGISTERS, type SarabanDoc } from '@/types/saraban';
 
 const ACTOR = { id: 'user_clerk_1', name: 'สมหญิง ใจดี' };
 const NOW = '2026-10-02T02:30:00.000Z';
@@ -293,5 +303,146 @@ describe('toMongoQuery — ต้องพูดกฎเดียวกับ m
 
   it('ตัวกรองทะเบียนอย่างเดียวได้ query แบนธรรมดา ไม่ห่อ $and', () => {
     expect(toMongoQuery({ register: 'in' }, TODAY)).toEqual({ register: 'in' });
+  });
+});
+
+// ---- กฎแก้ไข ยกเลิก ส่งแล้ว ไฟล์แนบ ----------------------------------------
+
+describe('editableFieldsOf', () => {
+  it('หนังสือรับที่รอเกษียน: แก้ได้ทุกช่องรวมเสนอถึง', () => {
+    expect(editableFieldsOf({ register: 'in', status: 'pending' })).toEqual([
+      'ref', 'docDate', 'party', 'subject', 'level', 'dueDate', 'holderUnitId',
+    ]);
+  });
+
+  it('หนังสือรับที่เดินไปแล้ว: เปลี่ยนเสนอถึงไม่ได้ — หลังจากนี้หนังสือเดินตามการเกษียน', () => {
+    for (const status of ['in-progress', 'done'] as const) {
+      expect(editableFieldsOf({ register: 'in', status })).not.toContain('holderUnitId');
+      expect(editableFieldsOf({ register: 'in', status })).toContain('subject');
+    }
+  });
+
+  it('ส่ง/เวียน: "ที่" กับเจ้าของเรื่องล็อก (อาจพิมพ์ลงหนังสือจริงแล้ว) และไม่มีกำหนดแล้วเสร็จ', () => {
+    for (const register of ['out', 'circular'] as const) {
+      expect(editableFieldsOf({ register, status: 'in-progress' })).toEqual([
+        'docDate', 'party', 'subject', 'level',
+      ]);
+    }
+  });
+
+  it('ยกเลิกแล้วแก้อะไรไม่ได้เลย', () => {
+    expect(editableFieldsOf({ register: 'in', status: 'void' })).toEqual([]);
+  });
+
+  it('เลขทะเบียน ทะเบียน ปีงบ สถานะ และ audit ไม่มีทางอยู่ในรายการช่องที่แก้ได้', () => {
+    const forbidden = ['id', 'no', 'register', 'fiscalYear', 'status', 'files', 'events',
+      'registeredAt', 'registeredBy', 'updatedAt', 'sendMethod', 'voidReason'];
+    for (const key of forbidden) {
+      expect((EDITABLE_FIELDS as readonly string[]).includes(key), key).toBe(false);
+    }
+  });
+});
+
+describe('buildEdit', () => {
+  const doc = makeDoc({ status: 'pending' });
+
+  it('เก็บเฉพาะช่องที่เปลี่ยนจริง — ช่องที่ส่งค่าเดิมมาไม่นับ (ฟอร์มส่งมาครบทุกช่อง)', () => {
+    const result = buildEdit(doc, { subject: 'เรื่องใหม่', party: doc.party });
+    expect(result).toEqual({
+      ok: true,
+      set: { subject: 'เรื่องใหม่' },
+      changes: [{ field: 'subject', from: doc.subject, to: 'เรื่องใหม่' }],
+    });
+  });
+
+  it('ไม่มีอะไรเปลี่ยน → ผ่านโดยไม่มีอะไรให้เขียน', () => {
+    expect(buildEdit(doc, { subject: doc.subject })).toEqual({ ok: true, set: {}, changes: [] });
+  });
+
+  it('ช่องที่ล็อกแต่ส่งค่าใหม่มา → ปฏิเสธทั้งคำขอ ไม่แก้ครึ่ง ๆ', () => {
+    const moving = makeDoc({ status: 'in-progress' });
+    expect(buildEdit(moving, { subject: 'ใหม่', holderUnitId: 'mayor' })).toEqual({
+      ok: false,
+      field: 'holderUnitId',
+    });
+  });
+
+  it('ช่องที่ล็อกแต่ส่งค่าเดิมมา → ผ่าน', () => {
+    const moving = makeDoc({ status: 'in-progress' });
+    expect(buildEdit(moving, { holderUnitId: moving.holderUnitId }).ok).toBe(true);
+  });
+
+  it('หนังสือส่ง: แก้ "ที่" หรือกำหนดแล้วเสร็จไม่ได้', () => {
+    const out = makeDoc({ register: 'out', status: 'in-progress', ref: 'ชม 55201/1', dueDate: '' });
+    expect(buildEdit(out, { ref: 'ชม 55201/2' })).toEqual({ ok: false, field: 'ref' });
+    expect(buildEdit(out, { dueDate: '2026-11-01' })).toEqual({ ok: false, field: 'dueDate' });
+  });
+
+  it('หลายช่องพร้อมกัน — changes เรียงตามลำดับของ EDITABLE_FIELDS', () => {
+    const result = buildEdit(doc, { level: 'normal', ref: 'ชม 1/2' });
+    expect(result.ok && result.changes.map((c) => c.field)).toEqual(['ref', 'level']);
+  });
+});
+
+describe('canVoid / canMarkSent / canAddFile / canRemoveFile', () => {
+  it('ยกเลิกได้เฉพาะเรื่องที่ยังเปิดอยู่', () => {
+    expect(canVoid({ status: 'pending' })).toBe(true);
+    expect(canVoid({ status: 'in-progress' })).toBe(true);
+    expect(canVoid({ status: 'done' })).toBe(false);
+    expect(canVoid({ status: 'void' })).toBe(false);
+  });
+
+  it('บันทึกว่าส่งแล้วได้เฉพาะส่ง/เวียนที่รอส่ง', () => {
+    expect(canMarkSent({ register: 'out', status: 'in-progress' })).toBe(true);
+    expect(canMarkSent({ register: 'circular', status: 'in-progress' })).toBe(true);
+    expect(canMarkSent({ register: 'out', status: 'done' })).toBe(false);
+    expect(canMarkSent({ register: 'in', status: 'in-progress' })).toBe(false);
+  });
+
+  it('เพิ่มไฟล์ได้ทุกสถานะยกเว้นยกเลิก · ลบไฟล์ได้เฉพาะเรื่องที่ยังเปิดอยู่', () => {
+    expect(canAddFile({ status: 'done' })).toBe(true);
+    expect(canAddFile({ status: 'void' })).toBe(false);
+    expect(canRemoveFile({ status: 'pending' })).toBe(true);
+    expect(canRemoveFile({ status: 'in-progress' })).toBe(true);
+    expect(canRemoveFile({ status: 'done' })).toBe(false);
+    expect(canRemoveFile({ status: 'void' })).toBe(false);
+  });
+});
+
+describe('voidTransition / sentTransition', () => {
+  it('ยกเลิก: สถานะ void + เหตุผล และเหตุผลเป็นข้อความของ event', () => {
+    expect(voidTransition({ status: 'pending' }, 'ลงรับซ้ำ')).toEqual({
+      set: { status: 'void', voidReason: 'ลงรับซ้ำ' },
+      kind: 'voided',
+      note: 'ลงรับซ้ำ',
+    });
+  });
+
+  it('ยกเลิกเรื่องที่เสร็จแล้วไม่ได้ → null (route ตอบ 409)', () => {
+    expect(voidTransition({ status: 'done' }, 'x')).toBeNull();
+  });
+
+  it('ส่งแล้ว: สถานะ done + วิธีส่ง และป้ายวิธีส่งเป็นข้อความของ event', () => {
+    expect(sentTransition({ register: 'out', status: 'in-progress' }, 'post')).toEqual({
+      set: { status: 'done', sendMethod: 'post' },
+      kind: 'sent',
+      note: 'ส่งทางไปรษณีย์',
+    });
+  });
+
+  it('หนังสือรับบันทึกว่าส่งแล้วไม่ได้ → null', () => {
+    expect(sentTransition({ register: 'in', status: 'in-progress' }, 'post')).toBeNull();
+  });
+});
+
+// fieldLabel ใช้ map แบบ string key (ต้องแปลชื่อช่องของ event เก่าได้แม้ช่องนั้นเลิกใช้แล้ว)
+// คอมไพเลอร์จึงไม่เช็คให้ — เทสต์นี้กันเพิ่มช่องใน EDITABLE_FIELDS แล้วลืมตั้งชื่อไทย
+describe('EDITABLE_FIELDS มีชื่อไทยครบ', () => {
+  it('ทุกช่องที่แก้ได้มีชื่อไทยในประวัติการแก้ไข ทุกทะเบียน', () => {
+    for (const register of SARABAN_REGISTERS) {
+      for (const field of EDITABLE_FIELDS) {
+        expect(fieldLabel(register, field), `${register}.${field}`).not.toBe(field);
+      }
+    }
   });
 });
