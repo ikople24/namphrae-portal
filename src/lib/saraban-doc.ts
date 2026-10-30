@@ -300,3 +300,31 @@ export function sentTransition(
     note: SEND_METHOD_LABELS[method],
   };
 }
+
+// ---- ผู้ทำและประวัติ -------------------------------------------------------
+
+/**
+ * ชื่อที่ประทับใน event (สเปกข้อ 3 "ประวัติเก็บชื่อ ณ เวลาที่ทำ") — ชื่อจริงจากทะเบียนสมาชิกก่อน
+ * เพราะชื่อในบัญชี Clerk มักว่างหรือเป็นอีเมล แล้วอีเมล แล้ว clerkId (ลำดับเดียวกับ /api/admin/me)
+ */
+export function pickActorName(
+  registryName: unknown,
+  email: string | undefined,
+  userId: string
+): string {
+  if (typeof registryName === 'string' && registryName.trim()) return registryName.trim();
+  return email || userId;
+}
+
+/**
+ * buildEdit() คืน from/to ของ "เสนอถึง" เป็น id ของหน่วย — แปลงเป็นชื่อ ณ ขณะนี้ก่อนเก็บลง event
+ * ไม่งั้นวันที่หน่วยเปลี่ยนชื่อ ประวัติที่แสดงจะเปลี่ยนตาม (audit trail ต้องไม่ถูกแก้ย้อนหลัง สเปกข้อ 3)
+ */
+export function nameUnitChanges(
+  changes: SarabanFieldChange[],
+  nameOf: (unitId: string) => string
+): SarabanFieldChange[] {
+  return changes.map((c) =>
+    c.field === 'holderUnitId' ? { ...c, from: nameOf(c.from), to: nameOf(c.to) } : c
+  );
+}

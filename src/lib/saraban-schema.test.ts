@@ -1,12 +1,14 @@
 // src/lib/saraban-schema.test.ts
 import { describe, expect, it } from 'vitest';
 import {
+  docKindSchema,
   docListQuerySchema,
   docPatchSchema,
   receiveInputSchema,
   sendInputSchema,
   unitInputSchema,
   unitPatchSchema,
+  yearQuerySchema,
   yearStartSchema,
 } from '@/lib/saraban-schema';
 
@@ -171,5 +173,19 @@ describe('docListQuerySchema — ค่าจาก query string เป็นส
 
   it('ทะเบียนที่ไม่รู้จักไม่ผ่าน', () => {
     expect(docListQuerySchema.safeParse({ register: 'secret' }).success).toBe(false);
+  });
+});
+
+describe('yearQuerySchema / docKindSchema', () => {
+  it('ปีจาก query string แปลงเป็นตัวเลข เว้นได้', () => {
+    expect(yearQuerySchema.parse({ register: 'in', year: '2570' })).toEqual({ register: 'in', year: 2570 });
+    expect(yearQuerySchema.parse({ register: 'out' })).toEqual({ register: 'out' });
+    expect(yearQuerySchema.safeParse({ register: 'x' }).success).toBe(false);
+  });
+
+  it('kind ของ POST /docs มีแค่ลงรับกับออกเลข', () => {
+    expect(docKindSchema.parse('receive')).toBe('receive');
+    expect(docKindSchema.parse('send')).toBe('send');
+    expect(docKindSchema.safeParse('delete').success).toBe(false);
   });
 });

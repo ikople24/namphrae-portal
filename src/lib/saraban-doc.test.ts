@@ -14,6 +14,8 @@ import {
   isOverdue,
   makeEvent,
   matches,
+  nameUnitChanges,
+  pickActorName,
   REGISTER_VIEWS,
   sentTransition,
   toMongoQuery,
@@ -444,5 +446,34 @@ describe('EDITABLE_FIELDS มีชื่อไทยครบ', () => {
         expect(fieldLabel(register, field), `${register}.${field}`).not.toBe(field);
       }
     }
+  });
+});
+
+describe('pickActorName — ชื่อที่ประทับใน event', () => {
+  it('ชื่อจากทะเบียนสมาชิกก่อน (ตัดช่องว่าง)', () => {
+    expect(pickActorName('  สมหญิง ใจดี ', 'a@b.c', 'user_1')).toBe('สมหญิง ใจดี');
+  });
+
+  it('ไม่มีชื่อ → อีเมล → clerkId แบบ /api/admin/me', () => {
+    expect(pickActorName(undefined, 'a@b.c', 'user_1')).toBe('a@b.c');
+    expect(pickActorName('   ', undefined, 'user_1')).toBe('user_1');
+    expect(pickActorName(42, undefined, 'user_1')).toBe('user_1');
+  });
+});
+
+describe('nameUnitChanges — ประวัติเก็บชื่อหน่วย ณ ขณะนั้น ไม่ใช่ id', () => {
+  it('แปลงเฉพาะ holderUnitId ช่องอื่นคงเดิม', () => {
+    const names: Record<string, string> = { palad: 'ปลัดเทศบาล', mayor: 'นายกเทศมนตรี' };
+    const result = nameUnitChanges(
+      [
+        { field: 'subject', from: 'ก', to: 'ข' },
+        { field: 'holderUnitId', from: 'palad', to: 'mayor' },
+      ],
+      (id) => names[id] ?? id
+    );
+    expect(result).toEqual([
+      { field: 'subject', from: 'ก', to: 'ข' },
+      { field: 'holderUnitId', from: 'ปลัดเทศบาล', to: 'นายกเทศมนตรี' },
+    ]);
   });
 });

@@ -148,3 +148,13 @@ export const docListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
 });
 export type DocListQuery = z.infer<typeof docListQuerySchema>;
+
+// GET /api/admin/saraban/years — ไม่ใส่ปี = ปีงบปัจจุบัน (route คำนวณ)
+export const yearQuerySchema = z.object({
+  register: z.enum(SARABAN_REGISTERS),
+  year: z.coerce.number().int().min(2500).max(2700).optional(),
+});
+
+// POST /api/admin/saraban/docs?kind=… — ลงรับกับออกเลขใช้ schema คนละตัว
+export const docKindSchema = z.enum(['receive', 'send']);
+export type DocKind = z.infer<typeof docKindSchema>;
