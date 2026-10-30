@@ -419,7 +419,7 @@ export function precheckFile(file: { name: string; size: number }): string | nul
 - [ ] **Step 4: รันเทสต์ ต้องผ่าน**
 
 Run: `npx vitest run src/lib/saraban-view.test.ts`
-Expected: PASS — 13 tests
+Expected: PASS — 12 tests
 
 - [ ] **Step 5: Commit**
 
