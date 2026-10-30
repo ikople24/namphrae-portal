@@ -1297,7 +1297,6 @@ import {
   nameUnitChanges,
   sentTransition,
   voidTransition,
-  type DocEdit,
 } from '@/lib/saraban-doc';
 import { docPatchSchema } from '@/lib/saraban-schema';
 import { applyPatch, getDoc, type DocSet } from '@/lib/saraban-store';
@@ -1347,7 +1346,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let changes: SarabanFieldChange[] | undefined;
 
     if (patch.action === 'edit') {
-      const result = buildEdit(current, patch.edit as DocEdit);
+      const result = buildEdit(current, patch.edit);
       if (!result.ok) return res.status(409).json({ error: 'field_locked', field: result.field });
       // ไม่มีอะไรเปลี่ยน → คืนเรื่องเดิม ไม่ต่อ event "แก้ไขข้อมูล" เปล่า ๆ (handoff ของแผน 1A)
       if (result.changes.length === 0) return res.status(200).json(current);
