@@ -1571,6 +1571,7 @@ git commit -m "feat(saraban): API เพิ่ม เปิดดู และ�
 
 ```ts
 // scripts/smoke-saraban-api.mts
+/* eslint-disable @typescript-eslint/no-explicit-any -- smoke อ่าน JSON ของ API แบบหลวม ๆ ประกาศชนิดซ้ำทุก route ไม่คุ้ม */
 // smoke ของ API สารบรรณผ่าน dev server จริง — ครอบทางที่เทสต์หน่วยแตะไม่ถึง: ลำดับของ route
 // การกวาดไฟล์ ลิงก์ชั่วคราว และรหัสข้อผิดพลาดของสเปกข้อ 8
 //
