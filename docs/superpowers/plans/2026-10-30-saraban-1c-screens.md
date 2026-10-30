@@ -575,7 +575,7 @@ export function messageOf(err: unknown): string {
 // toast ของระบบสารบรรณ (handoff: ล่างกลาง หายใน 2.6 วินาที)
 // flashToast(): ข้อความที่ต้องโชว์ "หลังเปลี่ยนหน้า" (ลงรับเสร็จ → ไปทะเบียน) — Pages Router remount
 // layout ทุกหน้า state ใน component จึงหาย ตัวแปรระดับโมดูลอยู่รอดการเปลี่ยนหน้าฝั่งเบราว์เซอร์
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
 let pendingFlash: string | null = null;
 
@@ -590,22 +590,21 @@ export function useToast(): (message: string) => void {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [message, setMessage] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  const show = useCallback((next: string) => {
-    setMessage(next);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setMessage(null), 2600);
+  // ข้อความค้างจากหน้าก่อนอ่านตอนสร้าง state ไม่ใช่ใน effect (setState ใน effect ทำให้ render ซ้อน)
+  // ไม่ล้างใน initializer เพราะ StrictMode เรียก initializer สองครั้ง — ล้างใน effect แทน
+  const [message, setMessage] = useState<string | null>(() => pendingFlash);
+  useEffect(() => {
+    pendingFlash = null;
   }, []);
 
+  // หายเองใน 2.6 วินาที — setState อยู่ใน callback ของ timer ไม่ใช่ตัว effect
   useEffect(() => {
-    if (pendingFlash) {
-      show(pendingFlash);
-      pendingFlash = null;
-    }
-    return () => clearTimeout(timer.current);
-  }, [show]);
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(null), 2600);
+    return () => clearTimeout(timer);
+  }, [message]);
+
+  const show = useCallback((next: string) => setMessage(next), []);
 
   return (
     <ToastContext.Provider value={show}>
@@ -627,11 +626,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 ```tsx
 // ชิ้นส่วนร่วมของหน้าจอสารบรรณ — ค่าสี/ขนาดตาม handoff § Design Tokens
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import Icon from '@/components/Icon';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { LEVEL_LABELS, statusLabel } from '@/lib/saraban-labels';
-import { dateHint, fileSizeLabel, precheckFile } from '@/lib/saraban-view';
+import { dateHint, fileSizeLabel, precheckFile, thaiDateTime } from '@/lib/saraban-view';
 import type { DisplayStatus, SarabanLevel, SarabanRegister } from '@/types/saraban';
 
 const STATUS_TONE: Record<DisplayStatus, string> = {
@@ -812,6 +811,19 @@ export function FilePicker({
   );
 }
 
+// นาฬิกาเป็น external store: ตอน SSR ได้ '' (ไม่ให้เซิร์ฟเวอร์กับเบราว์เซอร์วาดเวลาต่างกัน) แล้วเดินทุก 30 วินาที
+function subscribeClock(onChange: () => void) {
+  const timer = setInterval(onChange, 30_000);
+  return () => clearInterval(timer);
+}
+const clockLabel = () => thaiDateTime(new Date().toISOString());
+const serverClockLabel = () => '';
+
+/** วันเวลาปัจจุบันแบบ '13 ก.ย. 2569 09:42' — ใช้บนตราลงรับตัวอย่าง */
+export function useNowLabel(): string {
+  return useSyncExternalStore(subscribeClock, clockLabel, serverClockLabel);
+}
+
 export function ErrorBox({ children }: { children: ReactNode }) {
   return <div className="rounded-[10px] bg-sb-danger-bg px-3.5 py-2.5 text-[13px] text-sb-danger">{children}</div>;
 }
@@ -843,7 +855,7 @@ git commit -m "feat(saraban): ตัวเรียก API toast และชิ
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import { ToastProvider } from '@/components/saraban/toast';
@@ -861,7 +873,36 @@ const NAV = [
   { href: '/saraban/units', label: 'สมุดผู้รับ', icon: 'apartment', badge: false },
 ] as const;
 
+// สถานะย่อเมนูจำใน localStorage (สเปกข้อ 6) — อ่านผ่าน useSyncExternalStore: ตอน SSR ได้ "ไม่ย่อ"
+// แล้วค่อยเป็นค่าจริงหลัง hydrate · localStorage โยนได้ในโหมดส่วนตัว จึงมีค่าในหน่วยความจำสำรอง
 const COLLAPSE_KEY = 'saraban.navCollapsed';
+const collapseListeners = new Set<() => void>();
+let collapsedInMemory = false;
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === '1';
+  } catch {
+    return collapsedInMemory;
+  }
+}
+
+function writeCollapsed(value: boolean) {
+  collapsedInMemory = value;
+  try {
+    localStorage.setItem(COLLAPSE_KEY, value ? '1' : '0');
+  } catch {
+    // จำข้ามการเปิดหน้าไม่ได้ ใช้ค่าในหน่วยความจำไปก่อน
+  }
+  collapseListeners.forEach((listener) => listener());
+}
+
+function subscribeCollapsed(listener: () => void) {
+  collapseListeners.add(listener);
+  return () => {
+    collapseListeners.delete(listener);
+  };
+}
 
 export default function SarabanLayout({
   title,
@@ -874,27 +915,8 @@ export default function SarabanLayout({
 }) {
   const router = useRouter();
   const clerkOn = isClerkPublicConfigured();
-  const [collapsed, setCollapsed] = useState(false);
-
-  // อ่านค่าที่จำไว้หลัง mount (localStorage ไม่มีตอน SSR) · เปิดในโหมดส่วนตัวแล้วโยนได้ จึง try
-  useEffect(() => {
-    try {
-      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === '1');
-    } catch {
-      // ใช้ค่าเริ่มต้น
-    }
-  }, []);
-
-  function toggle() {
-    setCollapsed((prev) => {
-      try {
-        localStorage.setItem(COLLAPSE_KEY, prev ? '0' : '1');
-      } catch {
-        // จำไม่ได้ก็ไม่เป็นไร
-      }
-      return !prev;
-    });
-  }
+  const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
+  const toggle = () => writeCollapsed(!collapsed);
 
   const { data: summary } = useSWR<SummaryResponse>(SUMMARY_KEY, sarabanFetcher, {
     refreshInterval: 60_000,
@@ -1308,11 +1330,11 @@ git commit -m "feat(saraban): หน้าทะเบียนหนังส�
 // ลงรับหนังสือ (สเปกข้อ 6 "/saraban/receive") — ฟอร์มถือไฟล์ไว้จนกดบันทึก แล้วอัปทีละไฟล์ก่อนส่งข้อมูล
 // id สร้างครั้งเดียวต่อฟอร์ม (idempotency key): เน็ตหลุดแล้วกดซ้ำได้หนังสือเดิม ไม่ได้เลขที่สอง
 import { useRouter } from 'next/router';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
-import { DateField, ErrorBox, Field, FilePicker, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
+import { DateField, ErrorBox, Field, FilePicker, card, inputClass, outlineButton, primaryButton, useNowLabel } from '@/components/saraban/bits';
 import { flashToast, useToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
@@ -1330,7 +1352,6 @@ import {
 } from '@/lib/saraban-api';
 import { LEVEL_LABELS } from '@/lib/saraban-labels';
 import { formatNo } from '@/lib/saraban-number';
-import { thaiDateTime } from '@/lib/saraban-view';
 import { SARABAN_LEVELS, type SarabanLevel, type SarabanUnit } from '@/types/saraban';
 
 const EMPTY = { ref: '', docDate: '', party: '', subject: '', level: 'normal' as SarabanLevel, holderUnitId: '', dueDate: '' };
@@ -1342,30 +1363,18 @@ function ReceivePage() {
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
-  const [now, setNow] = useState('');
   const [startNo, setStart] = useState('');
+  const now = useNowLabel();
   const id = useRef<string | null>(null);
 
   const { data: units } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
   const { data: year, mutate: reloadYear } = useSWR<YearInfo>(yearKey('in'), sarabanFetcher);
   const { data: summary } = useSWR<SummaryResponse>(SUMMARY_KEY, sarabanFetcher);
   const active = (units ?? []).filter((u) => u.isActive);
-  const holder = active.find((u) => u.id === form.holderUnitId);
-
-  // เสนอถึงปลัดเป็นค่าเริ่มต้น (สเปกข้อ 6) — ถ้าปลัดถูกปิดใช้หน่วยแรกที่เปิดอยู่
-  useEffect(() => {
-    if (!form.holderUnitId && active.length > 0) {
-      setForm((f) => ({ ...f, holderUnitId: (active.find((u) => u.id === 'palad') ?? active[0]).id }));
-    }
-  }, [active, form.holderUnitId]);
-
-  // เวลาบนตราตัวอย่าง — ตั้งหลัง mount (ไม่ให้ SSR กับเบราว์เซอร์วาดเวลาต่างกัน)
-  useEffect(() => {
-    const tick = () => setNow(thaiDateTime(new Date().toISOString()));
-    tick();
-    const t = setInterval(tick, 30_000);
-    return () => clearInterval(t);
-  }, []);
+  // เสนอถึงปลัดเป็นค่าเริ่มต้น (สเปกข้อ 6) — ถ้าปลัดถูกปิดใช้หน่วยแรกที่เปิดอยู่ · คำนวณจากข้อมูล
+  // ไม่ตั้งใน effect (ผู้ใช้ยังไม่เลือก = form.holderUnitId ว่าง)
+  const holderUnitId = form.holderUnitId || ((active.find((u) => u.id === 'palad') ?? active[0])?.id ?? '');
+  const holder = active.find((u) => u.id === holderUnitId);
 
   const set = (key: keyof typeof EMPTY) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -1376,7 +1385,7 @@ function ReceivePage() {
       !form.docDate && 'ลงวันที่',
       !form.party.trim() && 'จาก',
       !form.subject.trim() && 'เรื่อง',
-      !form.holderUnitId && 'เสนอถึง',
+      !holderUnitId && 'เสนอถึง',
     ].filter(Boolean);
     if (missing.length > 0) return setError(`กรุณากรอก ${missing.join(' · ')}`);
     setError('');
@@ -1385,7 +1394,7 @@ function ReceivePage() {
       setBusy(files.length > 0 ? `กำลังอัปไฟล์ 0/${files.length}` : 'กำลังบันทึก…');
       const refs = await uploadAll(files, (done) => setBusy(`กำลังอัปไฟล์ ${done}/${files.length}`));
       setBusy('กำลังบันทึก…');
-      const doc = await createDoc('receive', { id: id.current, ...form, files: refs });
+      const doc = await createDoc('receive', { id: id.current, ...form, holderUnitId, files: refs });
       flashToast(`ลงรับที่ ${formatNo('in', doc.no)} แล้ว · เสนอ${holder?.name ?? ''}`);
       await router.push('/saraban/inbox');
     } catch (err) {
@@ -1439,7 +1448,7 @@ function ReceivePage() {
               </select>
             </Field>
             <Field label="เสนอถึง" required>
-              <select className={inputClass} value={form.holderUnitId} onChange={(e) => set('holderUnitId')(e.target.value)}>
+              <select className={inputClass} value={holderUnitId} onChange={(e) => set('holderUnitId')(e.target.value)}>
                 {active.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -1536,7 +1545,7 @@ git commit -m "feat(saraban): หน้าลงรับหนังสือ"
 // ออกเลขหนังสือส่ง/เวียน (สเปกข้อ 6 "/saraban/send" — handoff ไม่มีจอนี้) — จบที่ "ที่ …" ตัวใหญ่
 // เพราะเจ้าหน้าที่ต้องได้เลขก่อนถึงจะพิมพ์ลงหนังสือได้ ไม่ใช่จบที่ทะเบียน
 import Link from 'next/link';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
@@ -1549,7 +1558,15 @@ import { LEVEL_LABELS } from '@/lib/saraban-labels';
 import { formatNo } from '@/lib/saraban-number';
 import { SARABAN_LEVELS, type SarabanDoc, type SarabanLevel, type SarabanUnit } from '@/types/saraban';
 
-const EMPTY = { ownerUnitId: '', circular: false, docDate: '', party: '', subject: '', level: 'normal' as SarabanLevel };
+// docDate: null = ผู้ใช้ยังไม่แตะ → ใช้วันนี้ (today ของเซิร์ฟเวอร์) · '' = ผู้ใช้ลบเอง
+const EMPTY = {
+  ownerUnitId: '',
+  circular: false,
+  docDate: null as string | null,
+  party: '',
+  subject: '',
+  level: 'normal' as SarabanLevel,
+};
 
 function SendPage() {
   const toast = useToast();
@@ -1564,21 +1581,16 @@ function SendPage() {
   const { data: summary } = useSWR<SummaryResponse>(SUMMARY_KEY, sarabanFetcher);
   // ออกเลขได้เฉพาะหน่วยที่มีรหัสส่วนราชการ — ระบบประกอบ "ที่" จากรหัสนี้ (composeRef)
   const owners = (units ?? []).filter((u) => u.isActive && u.refCode);
-
-  useEffect(() => {
-    if (!form.ownerUnitId && owners.length > 0) setForm((f) => ({ ...f, ownerUnitId: owners[0].id }));
-  }, [owners, form.ownerUnitId]);
-
-  // ลงวันที่ = วันนี้เป็นค่าเริ่มต้น (หนังสือส่งลงวันที่วันที่ออกเลข) · ตั้งหลัง mount จาก today ของเซิร์ฟเวอร์
-  useEffect(() => {
-    if (summary && !form.docDate) setForm((f) => ({ ...f, docDate: summary.today }));
-  }, [summary, form.docDate]);
+  // ค่าเริ่มต้นคำนวณจากข้อมูล ไม่ตั้งใน effect — เจ้าของเรื่อง = หน่วยแรกที่มีรหัส · ลงวันที่ = วันนี้
+  // (หนังสือส่งลงวันที่วันที่ออกเลข)
+  const ownerUnitId = form.ownerUnitId || (owners[0]?.id ?? '');
+  const docDate = form.docDate ?? summary?.today ?? '';
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const missing = [
-      !form.ownerUnitId && 'ส่วนราชการเจ้าของเรื่อง',
-      !form.docDate && 'ลงวันที่',
+      !ownerUnitId && 'ส่วนราชการเจ้าของเรื่อง',
+      !docDate && 'ลงวันที่',
       !form.party.trim() && 'ถึง',
       !form.subject.trim() && 'เรื่อง',
     ].filter(Boolean);
@@ -1589,7 +1601,7 @@ function SendPage() {
       setBusy(files.length > 0 ? `กำลังอัปไฟล์ 0/${files.length}` : 'กำลังออกเลข…');
       const refs = await uploadAll(files, (done) => setBusy(`กำลังอัปไฟล์ ${done}/${files.length}`));
       setBusy('กำลังออกเลข…');
-      setIssued(await createDoc('send', { id: id.current, ...form, files: refs }));
+      setIssued(await createDoc('send', { id: id.current, ...form, ownerUnitId, docDate, files: refs }));
     } catch (err) {
       setError(messageOf(err));
     } finally {
@@ -1601,7 +1613,7 @@ function SendPage() {
     id.current = null;
     setIssued(null);
     setFiles([]);
-    setForm({ ...EMPTY, ownerUnitId: form.ownerUnitId, circular: form.circular, docDate: summary?.today ?? '' });
+    setForm({ ...EMPTY, ownerUnitId: form.ownerUnitId, circular: form.circular });
   }
 
   if (issued) {
@@ -1650,7 +1662,7 @@ function SendPage() {
         ) : null}
         <div className="grid gap-3.5 sm:grid-cols-2">
           <Field label="ส่วนราชการเจ้าของเรื่อง" required>
-            <select className={inputClass} value={form.ownerUnitId} onChange={(e) => setForm({ ...form, ownerUnitId: e.target.value })}>
+            <select className={inputClass} value={ownerUnitId} onChange={(e) => setForm({ ...form, ownerUnitId: e.target.value })}>
               {owners.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name} ({u.refCode})
@@ -1658,7 +1670,7 @@ function SendPage() {
               ))}
             </select>
           </Field>
-          <DateField label="ลงวันที่" required value={form.docDate} onChange={(docDate) => setForm({ ...form, docDate })} />
+          <DateField label="ลงวันที่" required value={docDate} onChange={(value) => setForm({ ...form, docDate: value })} />
           <label className="flex items-center gap-2 text-[13px] font-medium sm:col-span-2">
             <input type="checkbox" checked={form.circular} onChange={(e) => setForm({ ...form, circular: e.target.checked })} />
             หนังสือเวียน (ใช้ชุดเลข “ว” แยกจากหนังสือส่ง)
