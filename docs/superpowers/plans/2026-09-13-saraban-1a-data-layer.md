@@ -3233,9 +3233,394 @@ Expected: ไม่มี output — ไม่มี `data/saraban-*.json` ค�
 
 ---
 
+## Task 14: ไฟล์แนบจาก Cloudinary เป็น Railway Bucket (สเปกข้อ 5 ฉบับ 2026-10-30)
+
+สเปกเปลี่ยนที่เก็บไฟล์แนบหลัง Task 7 ทำเสร็จ (ดู "บันทึกการเปลี่ยนแปลง" ท้ายสเปก) — task นี้ปรับของ 1A
+ที่ยังเป็นรูปของ Cloudinary ให้ตรงสเปกใหม่ ก่อนรอบ 1B เรียกใช้ ยังไม่มีข้อมูลจริง จึงเปลี่ยนชื่อฟิลด์ได้
+โดยไม่ต้องย้ายข้อมูล
+
+- `SarabanFile.publicId` → `key` · ตัด `resourceType` และ `SARABAN_RESOURCE_TYPES` ทิ้ง
+- `saraban-attachment.ts` เขียนใหม่: `sniffFormat()` ดูชนิดจาก magic bytes · `checkAttachment()` ตรวจผล
+  `HeadObject` แทน resource ของ Cloudinary · `keyFor()` ประกอบ key
+- `fileRefSchema` เหลือ `{ key, name }`
+- store: `attachedKeys()` + index บน `files.key` (สเปกข้อ 5 ข้อ 4 และ "บันทึกล้มแล้วลบ")
+
+**Files:**
+- Modify: `src/types/saraban.ts:28-56`
+- Rewrite: `src/lib/saraban-attachment.ts` · `src/lib/saraban-attachment.test.ts`
+- Modify: `src/lib/saraban-schema.ts:1-41` · `src/lib/saraban-schema.test.ts:24`
+- Modify: `src/lib/saraban-store.ts` (ensureIndexes + ฟังก์ชันใหม่ท้ายไฟล์ + คอมเมนต์ removeFile)
+
+- [ ] **Step 1: เขียนเทสต์ใหม่ของ `saraban-attachment.test.ts` ทับไฟล์เดิมทั้งไฟล์**
+
+```ts
+// src/lib/saraban-attachment.test.ts
+import { describe, expect, it } from 'vitest';
+import {
+  checkAttachment,
+  CONTENT_TYPES,
+  keyFor,
+  MAX_FILE_BYTES,
+  SARABAN_PREFIX,
+  sniffFormat,
+  type StoredObject,
+} from '@/lib/saraban-attachment';
+import { SARABAN_FILE_FORMATS } from '@/types/saraban';
+
+const bytes = (...values: number[]) => new Uint8Array(values);
+const ascii = (s: string) => new TextEncoder().encode(s);
+
+describe('sniffFormat — ดูชนิดจากเนื้อไฟล์ ไม่เชื่อนามสกุล', () => {
+  it('PDF ขึ้นต้นด้วย %PDF-', () => {
+    expect(sniffFormat(ascii('%PDF-1.7\n...'))).toBe('pdf');
+  });
+
+  it('PDF ที่มีขยะนำหน้าไม่เกิน 1024 ไบต์ยังนับเป็น PDF — เครื่องสแกนบางรุ่นเขียนแบบนี้', () => {
+    const junk = new Uint8Array(200).fill(0x20);
+    expect(sniffFormat(new Uint8Array([...junk, ...ascii('%PDF-1.4')]))).toBe('pdf');
+  });
+
+  it('%PDF- ที่อยู่ลึกเกิน 1024 ไบต์ไม่นับ', () => {
+    const junk = new Uint8Array(1100).fill(0x20);
+    expect(sniffFormat(new Uint8Array([...junk, ...ascii('%PDF-1.4')]))).toBeNull();
+  });
+
+  it('JPEG และ PNG', () => {
+    expect(sniffFormat(bytes(0xff, 0xd8, 0xff, 0xe0, 0, 0))).toBe('jpg');
+    expect(sniffFormat(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0))).toBe('png');
+  });
+
+  it('ชนิดอื่น ไฟล์ว่าง และไฟล์สั้นกว่าลายเซ็นไม่ผ่าน', () => {
+    expect(sniffFormat(ascii('GIF89a'))).toBeNull();
+    expect(sniffFormat(ascii('<html><script>'))).toBeNull();
+    expect(sniffFormat(new Uint8Array())).toBeNull();
+    expect(sniffFormat(ascii('%PDF'))).toBeNull();
+    expect(sniffFormat(bytes(0x89, 0x50, 0x4e, 0x47))).toBeNull();
+  });
+});
+
+describe('keyFor', () => {
+  it('ประกอบ key ใต้ prefix ของสารบรรณ', () => {
+    expect(keyFor('abc', 'pdf')).toBe(`${SARABAN_PREFIX}abc.pdf`);
+    expect(SARABAN_PREFIX).toBe('saraban/');
+  });
+});
+
+function stored(overrides: Partial<StoredObject> = {}): StoredObject {
+  return {
+    key: `${SARABAN_PREFIX}abc.pdf`,
+    bytes: 1_200_000,
+    contentType: 'application/pdf',
+    pages: '2',
+    ...overrides,
+  };
+}
+
+describe('checkAttachment — เชื่อ object ที่เซิร์ฟเวอร์เขียนเอง ไม่เชื่อ client', () => {
+  it('PDF ผ่าน และขนาด/จำนวนหน้า/ชนิดมาจาก object', () => {
+    expect(checkAttachment(stored())).toEqual({
+      ok: true,
+      file: { key: `${SARABAN_PREFIX}abc.pdf`, format: 'pdf', bytes: 1_200_000, pages: 2 },
+    });
+  });
+
+  it('key นอก prefix ไม่รับ — รวมชื่อที่ขึ้นต้นเหมือนกันแต่ไม่มี "/"', () => {
+    expect(checkAttachment(stored({ key: 'other/abc.pdf' }))).toEqual({ ok: false, error: 'wrong_prefix' });
+    expect(checkAttachment(stored({ key: 'saraban-evil/abc.pdf' }))).toEqual({
+      ok: false,
+      error: 'wrong_prefix',
+    });
+  });
+
+  it('ContentType นอกรายการหรือไม่มีเลยไม่รับ — รวมชื่อที่ชนกับ property ของ Object', () => {
+    expect(checkAttachment(stored({ contentType: 'image/gif' }))).toEqual({ ok: false, error: 'bad_format' });
+    expect(checkAttachment(stored({ contentType: undefined }))).toEqual({ ok: false, error: 'bad_format' });
+    expect(checkAttachment(stored({ contentType: 'constructor' }))).toEqual({
+      ok: false,
+      error: 'bad_format',
+    });
+  });
+
+  it('เพดาน 10MB พอดีผ่าน เกินหนึ่งไบต์ไม่ผ่าน', () => {
+    expect(checkAttachment(stored({ bytes: MAX_FILE_BYTES })).ok).toBe(true);
+    expect(checkAttachment(stored({ bytes: MAX_FILE_BYTES + 1 }))).toEqual({ ok: false, error: 'too_large' });
+  });
+
+  it('ไม่มี metadata pages หรือค่าไม่ใช่ตัวเลข = object นี้ไม่ได้มาจาก uploads.ts', () => {
+    expect(checkAttachment(stored({ pages: undefined }))).toEqual({ ok: false, error: 'not_ours' });
+    expect(checkAttachment(stored({ pages: 'abc' }))).toEqual({ ok: false, error: 'not_ours' });
+    expect(checkAttachment(stored({ pages: '-1' }))).toEqual({ ok: false, error: 'not_ours' });
+  });
+
+  it('pages 0 = อ่าน PDF ไม่ได้ ยังรับไฟล์', () => {
+    const result = checkAttachment(stored({ pages: '0' }));
+    expect(result.ok && result.file.pages).toBe(0);
+  });
+
+  it('ทุกชนิดใน SARABAN_FILE_FORMATS ผ่านด้วย ContentType ของมัน — CONTENT_TYPES ต้องครบรายการกลาง', () => {
+    for (const format of SARABAN_FILE_FORMATS) {
+      const result = checkAttachment(
+        stored({ key: keyFor('x', format), contentType: CONTENT_TYPES[format], pages: '1' })
+      );
+      expect(result.ok && result.file.format, format).toBe(format);
+    }
+  });
+});
+```
+
+- [ ] **Step 2: รันเทสต์ ต้องไม่ผ่าน**
+
+Run: `npx vitest run src/lib/saraban-attachment.test.ts`
+Expected: FAIL — `sniffFormat is not a function` (และตัวอื่นที่ยังไม่มี)
+
+- [ ] **Step 3: แก้ `src/types/saraban.ts` — ตัดชนิด resource ของ Cloudinary แล้วเปลี่ยน `SarabanFile`**
+
+ลบสี่บรรทัดนี้ (คอมเมนต์สองบรรทัด + `SARABAN_RESOURCE_TYPES` + `SarabanResourceType`):
+
+```ts
+// ชนิด resource ของ Cloudinary ที่รับ — PDF อัปเป็น image (ได้จำนวนหน้า) ถอยไป raw ได้
+// ถ้าบัญชีส่ง PDF แบบ image ไม่ได้ (สเปกข้อ 12)
+export const SARABAN_RESOURCE_TYPES = ['image', 'raw'] as const;
+export type SarabanResourceType = (typeof SARABAN_RESOURCE_TYPES)[number];
+```
+
+แล้วแทน `SarabanFile` ทั้งก้อนด้วย:
+
+```ts
+export type SarabanFile = {
+  id: string; // uuid — ใช้ใน URL แทน key ที่มี '/'
+  key: string; // object key ใน Railway bucket: 'saraban/<uuid>.<ext>'
+  name: string; // ชื่อไฟล์เดิมจากเครื่องผู้ใช้
+  format: SarabanFileFormat; // จากเนื้อไฟล์ (magic bytes) ไม่ใช่จากนามสกุล
+  bytes: number; // จาก HeadObject ไม่ใช่จาก client
+  pages: number; // เซิร์ฟเวอร์นับตอนอัป · รูปภาพ = 1 · 0 = อ่าน PDF ไม่ได้
+  uploadedAt: string; // ISO
+  uploadedBy: string; // clerkId หรือ 'dev-open'
+};
+```
+
+- [ ] **Step 4: เขียน `src/lib/saraban-attachment.ts` ใหม่ทั้งไฟล์**
+
+```ts
+// src/lib/saraban-attachment.ts
+// ตรวจไฟล์แนบของสารบรรณ (สเปกข้อ 5) — client-safe ไม่ import SDK: saraban-storage.ts เป็นคน
+// คุยกับ bucket แล้วส่งผลมาให้ที่นี่ตัดสิน จึงเทสต์ได้ตรง ๆ
+//
+// เซิร์ฟเวอร์ (uploads.ts) เป็นผู้เดียวที่เขียนลง bucket — ContentType และ metadata `pages` บน object
+// จึงเชื่อได้ ส่วนสิ่งที่ client ส่งมากับคำขอบันทึกหนังสือ ({ key, name }) เชื่อไม่ได้ทั้งหมด
+
+import type { SarabanFile, SarabanFileFormat } from '@/types/saraban';
+
+// prefix ต้องมี '/' ปิดท้าย — 'saraban-evil/x' ขึ้นต้นด้วยคำเดียวกัน
+export const SARABAN_PREFIX = 'saraban/';
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_FILES_PER_DOC = 10;
+
+/** ContentType ที่ uploads.ts ตั้งบน object ตามชนิดที่ sniff ได้ — ลิงก์ชั่วคราวส่งค่านี้ให้เบราว์เซอร์ */
+export const CONTENT_TYPES: Record<SarabanFileFormat, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+};
+
+// Map ไม่ใช่ object literal — FORMAT_OF['constructor'] ของ object literal คืนฟังก์ชันของ
+// Object.prototype ซึ่ง truthy แล้วหลุดด่านไป
+const FORMAT_OF = new Map<string, SarabanFileFormat>(
+  Object.entries(CONTENT_TYPES).map(([format, type]) => [type, format as SarabanFileFormat])
+);
+
+const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d]; // '%PDF-'
+const JPEG_MAGIC = [0xff, 0xd8, 0xff];
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+// ข้อกำหนด PDF ยอมให้มีขยะนำหน้า '%PDF-' และ Acrobat เปิดได้ถ้าอยู่ใน 1024 ไบต์แรก —
+// เครื่องสแกนบางรุ่นเขียนแบบนั้นจริง ตรวจเฉพาะไบต์แรกจะปฏิเสธไฟล์ที่ผู้ใช้เปิดดูได้ปกติ
+const PDF_SEARCH_BYTES = 1024;
+
+function startsWithAt(data: Uint8Array, magic: number[], at: number): boolean {
+  if (data.length < at + magic.length) return false;
+  return magic.every((byte, i) => data[at + i] === byte);
+}
+
+/**
+ * ชนิดไฟล์จากเนื้อไฟล์ — ไม่เชื่อนามสกุลหรือ Content-Type ที่เบราว์เซอร์ส่งมา (เปลี่ยนชื่อ .html
+ * เป็น .pdf ได้ง่าย ๆ แล้วไฟล์นั้นจะถูกเปิดในแท็บของผู้ใช้คนอื่น) · null = ไม่ใช่ชนิดที่รับ
+ */
+export function sniffFormat(data: Uint8Array): SarabanFileFormat | null {
+  if (startsWithAt(data, JPEG_MAGIC, 0)) return 'jpg';
+  if (startsWithAt(data, PNG_MAGIC, 0)) return 'png';
+  const limit = Math.min(data.length, PDF_SEARCH_BYTES);
+  for (let at = 0; at < limit; at += 1) {
+    if (startsWithAt(data, PDF_MAGIC, at)) return 'pdf';
+  }
+  return null;
+}
+
+/** key ของไฟล์ใหม่ — id เป็น uuid ที่ uploads.ts สุ่ม ไม่ใช้ชื่อไฟล์ของผู้ใช้ (ภาษาไทย ช่องว่าง ชื่อซ้ำ) */
+export function keyFor(id: string, format: SarabanFileFormat): string {
+  return `${SARABAN_PREFIX}${id}.${format}`;
+}
+
+/** ส่วนที่ใช้ของผล HeadObject — saraban-storage.ts แปลงจาก ContentLength/ContentType/Metadata */
+export type StoredObject = {
+  key: string;
+  bytes: number;
+  contentType?: string;
+  pages?: string; // metadata เป็นสตริงเสมอ
+};
+
+export type CheckedAttachment = Pick<SarabanFile, 'key' | 'format' | 'bytes' | 'pages'>;
+
+export type AttachmentError = 'wrong_prefix' | 'bad_format' | 'too_large' | 'not_ours';
+
+export type AttachmentCheck =
+  | { ok: true; file: CheckedAttachment }
+  | { ok: false; error: AttachmentError };
+
+/**
+ * ตรวจ object ที่ client อ้างถึงก่อนผูกเข้าหนังสือ — ส่วน "มีอยู่จริงไหม" และ "แนบกับเรื่องอื่น
+ * แล้วหรือยัง" เป็นงานของ route (HeadObject ได้ 404 · attachedKeys()) เพราะต้องคุยกับ bucket/DB
+ */
+export function checkAttachment(o: StoredObject): AttachmentCheck {
+  if (!o.key.startsWith(SARABAN_PREFIX)) return { ok: false, error: 'wrong_prefix' };
+  const format = o.contentType === undefined ? undefined : FORMAT_OF.get(o.contentType);
+  if (!format) return { ok: false, error: 'bad_format' };
+  if (o.bytes > MAX_FILE_BYTES) return { ok: false, error: 'too_large' };
+  // metadata pages มีเฉพาะ object ที่ uploads.ts เขียน — ไม่มี = ใครเอาอะไรมาวางใน bucket เอง
+  if (o.pages === undefined || !/^\d+$/.test(o.pages)) return { ok: false, error: 'not_ours' };
+  return { ok: true, file: { key: o.key, format, bytes: o.bytes, pages: Number(o.pages) } };
+}
+```
+
+- [ ] **Step 5: รันเทสต์ ต้องผ่าน**
+
+Run: `npx vitest run src/lib/saraban-attachment.test.ts`
+Expected: PASS — 13 tests
+
+- [ ] **Step 6: แก้ schema — เทสต์ก่อน**
+
+ใน `src/lib/saraban-schema.test.ts` แทนบรรทัด `const FILE = …` ด้วย:
+
+```ts
+const FILE = { key: 'saraban/3f1c2a9e.pdf', name: 'scan.pdf' };
+```
+
+แล้วเพิ่มท้าย `describe('receiveInputSchema', …)` (ก่อน `});` ปิด describe นั้น):
+
+```ts
+  it('ไฟล์แนบเป็นตัวชี้ { key, name } อย่างเดียว — ช่องอื่นที่ client ส่งมาถูกทิ้ง', () => {
+    const parsed = receiveInputSchema.parse({
+      ...RECEIVE,
+      files: [{ ...FILE, bytes: 1, pages: 999, format: 'pdf' }],
+    });
+    expect(parsed.files).toEqual([FILE]);
+  });
+```
+
+Run: `npx vitest run src/lib/saraban-schema.test.ts`
+Expected: FAIL — fileRefSchema ยังต้องการ `publicId`/`resourceType` (เทสต์ "แนบได้ไม่เกิน 10 ไฟล์" และเทสต์ใหม่ล้ม)
+
+- [ ] **Step 7: แก้ `src/lib/saraban-schema.ts`**
+
+แทน import จาก `@/types/saraban` ด้วย (ตัด `SARABAN_RESOURCE_TYPES`):
+
+```ts
+import { SARABAN_LEVELS, SARABAN_REGISTERS, SEND_METHODS } from '@/types/saraban';
+```
+
+แล้วแทนคอมเมนต์ + `fileRefSchema` เดิมด้วย:
+
+```ts
+// สิ่งที่เบราว์เซอร์ส่งมาหลังอัปผ่าน uploads.ts — ตัวชี้อย่างเดียว ชนิด ขนาด และจำนวนหน้า
+// เซิร์ฟเวอร์อ่านจาก object เอง (checkAttachment) ไม่รับจากตรงนี้ · zod ทิ้งคีย์ที่ไม่ได้ประกาศ
+export const fileRefSchema = z.object({
+  key: z.string().min(1).max(300),
+  name: z.string().trim().min(1).max(200),
+});
+```
+
+Run: `npx vitest run src/lib/saraban-schema.test.ts`
+Expected: PASS — 22 tests
+
+- [ ] **Step 8: store — `attachedKeys()` และ index บน `files.key`**
+
+ใน `ensureIndexes()` ของ `src/lib/saraban-store.ts` เพิ่มรายการที่สี่ใน `createIndexes([...])`:
+
+```ts
+        // ไม่ unique: index แบบ multikey ที่ unique จะนับหนังสือที่ไม่มีไฟล์เลยว่าชนกันเอง —
+        // กันแนบซ้ำด้วย attachedKeys() ที่ route แทน (สเปกข้อ 5)
+        { key: { 'files.key': 1 } },
+```
+
+แทนคอมเมนต์บน `removeFile` บรรทัด "การลบไฟล์บน Cloudinary … ไฟล์กำพร้า หนึ่งไฟล์ ซึ่งเสียหายน้อยกว่า)" ด้วย:
+
+```ts
+ * การลบ object ใน bucket เป็นหน้าที่ของ route **หลัง** คำสั่งนี้สำเร็จเท่านั้น: ถ้าลบใน bucket
+ * ก่อนแล้วตรงนี้ล้ม DB จะชี้ไปหาไฟล์ที่ไม่มีแล้ว (ลบทีหลังแล้วพลาด = ไฟล์กำพร้าหนึ่งไฟล์ ซึ่ง
+ * เสียหายน้อยกว่า)
+```
+
+แล้วเพิ่มท้ายไฟล์:
+
+```ts
+/**
+ * key ไหนในรายการนี้ถูกแนบกับหนังสือเรื่องใดเรื่องหนึ่งแล้ว — route ใช้สองที่ (สเปกข้อ 5):
+ * ปฏิเสธการแนบ key ซ้ำ และกรองก่อนลบไฟล์ของคำขอที่บันทึกล้ม (ห้ามลบไฟล์ของหนังสือคนอื่น)
+ */
+export async function attachedKeys(keys: readonly string[]): Promise<Set<string>> {
+  if (keys.length === 0) return new Set();
+  const wanted = new Set(keys);
+  const docs = isMongoConfigured()
+    ? await (await docsCollection())
+        .find({ 'files.key': { $in: [...wanted] } }, { projection: { files: 1, _id: 0 } })
+        .toArray()
+    : (await readDocs()).filter((doc) => doc.files.some((f) => wanted.has(f.key)));
+  return new Set(docs.flatMap((doc) => doc.files.map((f) => f.key)).filter((k) => wanted.has(k)));
+}
+```
+
+- [ ] **Step 9: ตรวจทั้งโปรเจกต์ + smoke `attachedKeys` บนแบ็กเอนด์ไฟล์**
+
+Run:
+```bash
+npx tsc --noEmit -p . && npm test && npm run lint
+rm -f data/saraban-docs.json
+MONGODB_URI= npx tsx -e "
+import { randomUUID } from 'node:crypto';
+import { attachedKeys, createDoc } from '@/lib/saraban-store';
+(async () => {
+  const actor = { id: 'user_a', name: 'ทดสอบ' };
+  const file = { id: randomUUID(), key: 'saraban/a.pdf', name: 'a.pdf', format: 'pdf' as const,
+    bytes: 10, pages: 1, uploadedAt: new Date().toISOString(), uploadedBy: 'user_a' };
+  await createDoc({ id: randomUUID(), actor, eventNote: 'ลงรับ', files: [file],
+    fields: { register: 'in', ref: 'ชม 1/1', docDate: '2026-09-01', party: 'อำเภอ', subject: 'ทดสอบ',
+      level: 'normal', dueDate: '', holderUnitId: 'palad' } });
+  console.log('attached', [...(await attachedKeys(['saraban/a.pdf', 'saraban/b.pdf']))].join(','));
+  console.log('empty', (await attachedKeys([])).size);
+})();
+"; rm -f data/saraban-docs.json data/saraban-years.json data/saraban-units.json
+```
+Expected: tsc ไม่มี output · `Test Files  34 passed` · eslint สะอาด · smoke:
+```
+attached saraban/a.pdf
+empty 0
+```
+
+ตรวจว่าไม่เหลือชื่อเดิม: `grep -rnE "publicId|resourceType|SARABAN_RESOURCE_TYPES|SARABAN_FOLDER|CloudinaryResource" src/types/saraban.ts src/lib/saraban-*.ts`
+Expected: ไม่มี output
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/types/saraban.ts src/lib/saraban-attachment.ts src/lib/saraban-attachment.test.ts \
+  src/lib/saraban-schema.ts src/lib/saraban-schema.test.ts src/lib/saraban-store.ts
+git commit -m "feat(saraban): ไฟล์แนบตรวจจาก object ใน Railway bucket แทน Cloudinary"
+```
+
+---
+
 ## ส่งต่อรอบ 1B
 
-รอบ 1B (API + Cloudinary + proxy) ใช้ของจากรอบนี้ตามตาราง — ชื่อฟังก์ชันและชนิดข้างล่างคือสัญญา
+รอบ 1B (API + Railway bucket + proxy) ใช้ของจากรอบนี้ตามตาราง — ชื่อฟังก์ชันและชนิดข้างล่างคือสัญญา
 ถ้ารอบนี้ต้องเปลี่ยนตอนรีวิว ให้แก้ตารางนี้ด้วย
 
 | ใช้ทำอะไรใน 1B | จากรอบนี้ |
@@ -3244,19 +3629,15 @@ Expected: ไม่มี output — ไม่มี `data/saraban-*.json` ค�
 | ทะเบียน + ปุ่มกรอง + badge + แถบค้างข้ามปี | `listDocs` · `registerCounts` · `listFiscalYears` · `PAGE_SIZE` · badge = `countDocs({ register: 'in', statusIn: ['pending'] })` · แถบค้างข้ามปี = `countDocs({ register, beforeFiscalYear: fy, statusIn: OPEN_STATUSES })` (ใช้ `OPEN_STATUSES` ไม่พิมพ์รายการเอง) |
 | ลงรับ / ออกเลข | `createDoc` (+ `composeRef` สำหรับ `refFor`) → `CreateDocResult` แปลงเป็น 201 / 200 (ส่งซ้ำ) / 409 `id_conflict` / 503 `number_busy` |
 | แก้ไข / ยกเลิก / ส่งแล้ว | `buildEdit` · `voidTransition` · `sentTransition` · `makeEvent` · `applyPatch` (null + `getDoc` เจอ = 409 `stale` · ไม่เจอ = 404) |
-| ไฟล์แนบ | `checkAttachment` · `SARABAN_FOLDER` · `MAX_FILES_PER_DOC` · `addFile` · `removeFile` · `canAddFile` · `canRemoveFile` |
+| ไฟล์แนบ | `sniffFormat` · `keyFor` · `checkAttachment` · `CONTENT_TYPES` · `SARABAN_PREFIX` · `MAX_FILE_BYTES` · `MAX_FILES_PER_DOC` · `attachedKeys` · `addFile` · `removeFile` · `canAddFile` · `canRemoveFile` |
 | เลขเริ่มต้น | `getYearInfo` · `setStartNo` |
 | สมุดผู้รับ | `listUnits` · `getUnit` · `createUnit` · `updateUnit` |
 
 **สิ่งที่ 1B ต้องทำเองเพราะรอบนี้ตั้งใจไม่ทำ**
 - ชื่อผู้ทำ (`Actor.name`) — อ่านจากทะเบียนผู้ใช้แบบ `/api/admin/me` (ไม่มี → อีเมล → clerkId)
 - ตรวจหน่วย: `holderUnitId` ต้องมีและ active · ออกเลขส่งต้องใช้หน่วยที่มี `refCode` → `400 invalid_unit`
-- ถาม Cloudinary ก่อน `checkAttachment` และลบไฟล์ของ request ที่ล้ม · ลบไฟล์บน Cloudinary หลัง
-  `removeFile` สำเร็จเท่านั้น
-- **เรียก `cloudinary.api.resource()` ต้องส่ง `pages: true`** — Admin API คืนจำนวนหน้าเฉพาะเมื่อขอ
-  (ตัวเลือก `pages?: boolean` ใน `node_modules/cloudinary/types/index.d.ts`) ถ้าลืม PDF ทุกไฟล์จะถูก
-  บันทึกเป็น `pages: 0` (ไม่รู้) แยกไม่ออกจากไฟล์ raw และสถิติกระดาษรอบ 6 ไม่มีข้อมูลย้อนหลัง
-  (พบตอนรีวิว Task 1)
+- HeadObject ก่อน `checkAttachment` และลบไฟล์ของ request ที่ล้ม (เฉพาะ key ที่ `attachedKeys` บอกว่ายังไม่ผูก)
+  · ลบ object ใน bucket หลัง `removeFile` สำเร็จเท่านั้น
 - **แก้ "เสนอถึง" ต้องเก็บชื่อหน่วยใน `changes` ไม่ใช่ id** — `buildEdit()` คืน `from/to` เป็นค่าดิบ
   (id ของหน่วย) route ต้องแปลงเป็นชื่อหน่วย ณ ขณะนั้นก่อนสร้าง event ไม่งั้นเปลี่ยนชื่อหน่วยทีหลังแล้ว
   ประวัติที่แสดงจะเปลี่ยนตาม ขัดกับสเปกข้อ 3 (audit trail ต้องไม่ถูกแก้ย้อนหลัง) — ค่าอื่นเก็บดิบได้:
@@ -3269,7 +3650,7 @@ Expected: ไม่มี output — ไม่มี `data/saraban-*.json` ค�
 - ฟิลด์ที่รอบหลังจะเพิ่มบน `SarabanDoc` (การรับทราบของรอบ 2, `folder` ของรอบ 5) จะไม่มีในหนังสือเก่า
   ทั้งที่กติกาคือ "เขียนทุกคีย์เสมอ" — รอบที่เพิ่มต้องมีขั้น normalise ตอนอ่านแบบ `normalise()` ของ
   `config-store.ts`
-- ตรวจสองเรื่องที่สเปกข้อ 12 ให้เป็นงานแรกของแผน: Cloudinary ส่ง PDF ได้ไหม · URL ชั่วคราวหมดอายุจริงไหม
+- ตรวจสามเรื่องที่สเปกข้อ 12 ให้เป็นงานแรกของแผน: smoke บน bucket ทดสอบ · ลิงก์ชั่วคราวหมดอายุจริง · ที่สำรองไฟล์
 - เพิ่ม `/saraban` ใน `src/proxy.ts`
 
 **บันทึกไว้ให้รอบ 1C (หน้าจอ)**
