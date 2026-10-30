@@ -52,10 +52,11 @@ signed URL · หน้าตาทำตามแบบ hi-fi แต่ใช�
 src/types/saraban.ts                    SarabanDoc · SarabanFile · SarabanEvent · SarabanUnit · SarabanYear
 src/lib/saraban-number.ts               bangkokDateOf · fiscalYearOf · nextNo · formatNo · composeRef (บริสุทธิ์)
 src/lib/saraban-doc.ts                  buildNewDoc · isOverdue · matches · canVoid · canMarkSent (บริสุทธิ์)
-src/lib/saraban-attachment.ts           checkAttachment                                     (บริสุทธิ์)
+src/lib/saraban-attachment.ts           sniffFormat · checkAttachment                       (บริสุทธิ์)
 src/lib/saraban-schema.ts               zod: ลงรับ · ออกเลขส่ง · PATCH · สมุดผู้รับ · เลขเริ่มต้น
 src/lib/saraban-store.ts                Mongo | ไฟล์ — sarabanDocs · sarabanYears
 src/lib/saraban-units-store.ts          Mongo | ไฟล์ — sarabanUnits (+ auto-seed)
+src/lib/saraban-storage.ts              Railway Bucket (S3): เขียน · HeadObject · ลิงก์ชั่วคราว · ลบ · นับหน้า PDF
 src/lib/saraban-api.ts                  ตัวเรียก API ฝั่งเบราว์เซอร์ (แบบ forest-api.ts)
 src/lib/saraban-font.ts                 IBM Plex Sans Thai — แยกจาก fonts.ts (ดูข้อ 7)
 src/components/saraban/SarabanLayout.tsx  shell: sidebar 236 · header 60 · toast
@@ -70,8 +71,8 @@ src/pages/saraban/units.tsx             สมุดผู้รับ
 src/pages/api/admin/saraban/docs/index.ts            GET ทะเบียน · POST ลงรับ/ออกเลข
 src/pages/api/admin/saraban/docs/[id]/index.ts       GET · PATCH (แก้ไข / ยกเลิก / ส่งแล้ว)
 src/pages/api/admin/saraban/docs/[id]/files/index.ts        POST เพิ่มไฟล์แนบ
-src/pages/api/admin/saraban/docs/[id]/files/[fileId].ts     GET → signed URL · DELETE
-src/pages/api/admin/saraban/upload-signature.ts      POST ลายเซ็นอัปโหลด
+src/pages/api/admin/saraban/docs/[id]/files/[fileId].ts     GET → ลิงก์ชั่วคราว · DELETE
+src/pages/api/admin/saraban/uploads.ts               POST อัปไฟล์หนึ่งไฟล์ผ่านแอปเข้า bucket
 src/pages/api/admin/saraban/units/index.ts           GET · POST
 src/pages/api/admin/saraban/units/[id].ts            PATCH
 src/pages/api/admin/saraban/years.ts                 GET สถานะปี + เลขถัดไป · PUT เลขเริ่มต้น
@@ -91,7 +92,9 @@ public/saraban/logo.jpeg                ตราเทศบาล (จาก h
 | `user-access.test.ts` | เพิ่มคีย์ในรายการที่ตรึงไว้ — **เป็นเทสต์เดิมไฟล์เดียวที่ยอมให้แก้** |
 | [`proxy.ts`](../../../src/proxy.ts) | `isProtected` + `matcher` เพิ่ม `/saraban` — ไม่งั้นคนยังไม่ล็อกอินเห็นการ์ด AccessDenied แทนที่จะถูกพาไป `/sign-in` |
 | [`AdminLayout.tsx`](../../../src/components/admin/AdminLayout.tsx) | เมนู "ระบบสารบรรณ" → `/saraban` (feature `saraban`) |
-| [`cloudinary.ts`](../../../src/lib/cloudinary.ts) | `SARABAN_FOLDER` · ลายเซ็นอัป (+ `allowed_formats`) · อ่าน resource · URL ชั่วคราว · ลบไฟล์ |
+| `next.config.ts` | `experimental.proxyClientMaxBodySize: '11mb'` — ค่าเริ่มต้น 10MB เท่าเพดานไฟล์พอดี (ข้อ 5) |
+| `package.json` | `@aws-sdk/client-s3` · `@aws-sdk/s3-request-presigner` · `pdf-lib` |
+| `.env.example` | `BUCKET_NAME` · `BUCKET_ENDPOINT` · `BUCKET_REGION` · `BUCKET_ACCESS_KEY_ID` · `BUCKET_SECRET_ACCESS_KEY` |
 | [`icons.ts`](../../../src/lib/icons.ts) | เพิ่มชื่อไอคอนที่สารบรรณใช้ใน `ICON_NAMES` — ไม่งั้นแสดงเป็นตัวหนังสือ ligature |
 | [`globals.css`](../../../src/styles/globals.css) | โทเคน `--color-sb-*` (ข้อ 7) + สี focus ring ภายใน `.saraban` |
 | `.gitignore` | `/data/saraban-docs.json` · `/data/saraban-units.json` · `/data/saraban-years.json` |
@@ -140,13 +143,12 @@ type SarabanDoc = {
 };
 
 type SarabanFile = {
-  id: string;                 // uuid — ใช้ใน URL แทน publicId ที่มี '/'
-  publicId: string;
-  resourceType: 'image' | 'raw';
+  id: string;                 // uuid — ใช้ใน URL แทน key ที่มี '/'
+  key: string;                // object key ใน bucket: 'saraban/<uuid>.<ext>'
   name: string;               // ชื่อไฟล์เดิม
-  format: 'pdf' | 'jpg' | 'png';
-  bytes: number;              // อ่านจาก Cloudinary ไม่ใช่จาก client
-  pages: number;              // อ่านจาก Cloudinary · รูปภาพ = 1
+  format: 'pdf' | 'jpg' | 'png';  // จากเนื้อไฟล์ (magic bytes) ไม่ใช่จากนามสกุล
+  bytes: number;              // จาก HeadObject ไม่ใช่จาก client
+  pages: number;              // เซิร์ฟเวอร์นับตอนอัป · รูปภาพ = 1 · 0 = อ่าน PDF ไม่ได้
   uploadedAt: string;
   uploadedBy: string;
 };
@@ -305,46 +307,81 @@ client สร้าง `id` (uuid) ครั้งเดียวต่อกา
 
 ---
 
-## 5. ไฟล์แนบ
+## 5. ไฟล์แนบ — Railway Storage Bucket
 
-- **Cloudinary `type: 'authenticated'`** ใต้ `namphrae-portal/saraban/` แยกจากโดเมนอื่น — บทเรียน
-  จากป่าไม้ที่ใช้โฟลเดอร์ร่วมกับแผนที่แล้วไฟล์ถูกเขียนทับ (ดูคอมเมนต์ `FOREST_FOLDER_FULL`)
-- เบราว์เซอร์อัปตรงด้วยลายเซ็นจากเซิร์ฟเวอร์ ข้ามเพดาน body 1MB ของ API route · ลายเซ็นใส่
-  `allowed_formats: pdf,jpg,jpeg,png` ให้ Cloudinary ปฏิเสธตั้งแต่ต้นทาง
+สารบรรณ **ไม่ใช้ Cloudinary** (เปลี่ยนเมื่อ 2026-10-30 ดูบันทึกท้ายเอกสาร) ไฟล์อยู่ใน Railway Storage
+Bucket ซึ่งเป็น S3-compatible และ private เสมอ — ไม่มี URL สาธารณะ เปิดได้ผ่านลิงก์ชั่วคราวเท่านั้น
+ซึ่งตรงกับธรรมชาติของหนังสือราชการ · แผนที่ ป่าไม้ และรูปหน้าเว็บยังใช้ Cloudinary ตามเดิม ไม่แตะ
+
 - PDF/JPG/PNG · ไม่เกิน 10MB ต่อไฟล์ · ไม่เกิน 10 ไฟล์ต่อเรื่อง
-- **PDF อัปเป็น resource_type `image`** → Cloudinary คืน `pages` (จำนวนหน้าจริง) และเรนเดอร์ทีละหน้า
-  ได้ — เก็บตั้งแต่วันแรกเพื่อให้สถิติกระดาษรอบ 6 มีข้อมูลย้อนหลัง และรอบ 4 วางตรา/ลายมือบนหน้าได้
+- key ของทุกไฟล์ขึ้นต้นด้วย `saraban/` — bucket ใช้กับสารบรรณอย่างเดียวก็จริง แต่ prefix ทำให้
+  `checkAttachment` ปฏิเสธ key ที่ไม่ได้มาจากเส้นทางของเราได้ และเผื่อวันที่ bucket ถูกใช้ร่วม
+- **เซิร์ฟเวอร์ของเราเป็นผู้เดียวที่เขียนลง bucket** (เบราว์เซอร์ไม่ได้ลายเซ็นอัปตรง) — metadata ที่
+  อยู่บน object จึงเชื่อได้ เป็นฐานของการตรวจทั้งหมดข้างล่าง
 
-### เซิร์ฟเวอร์ไม่เชื่อข้อมูลไฟล์จาก client
+### อัปผ่านแอป ไม่อัปตรงจากเบราว์เซอร์
 
-client ส่งมาแค่ `{ publicId, resourceType, name }` เซิร์ฟเวอร์ถาม Cloudinary Admin API เองแล้ว
-`checkAttachment()` ตรวจ:
+สเปกฉบับแรกให้เบราว์เซอร์อัปตรงเพื่อเลี่ยงเพดาน body/response ของ Vercel — พอร์ทัล deploy บน
+Railway ซึ่งไม่มีเพดานนั้น การอัปผ่านแอปจึงคุ้มกว่า: เซิร์ฟเวอร์เห็นเนื้อไฟล์จริง ตรวจชนิดจากเนื้อไฟล์และ
+นับหน้า PDF ได้ทันที ไม่ต้องตั้ง CORS และไม่ต้องดาวน์โหลดไฟล์กลับมาอ่านอีกรอบ · ผู้ใช้หลักสิบคน
+ไฟล์ไม่เกิน 10MB ไม่เป็นภาระของแอป
 
-1. `public_id` ขึ้นต้นด้วย `namphrae-portal/saraban/` — **ไม่งั้นคนแนบ publicId ของไฟล์แผนที่
-   ฉบับเต็ม (มีข้อมูลส่วนบุคคล) เข้ามาเป็นไฟล์แนบ แล้วเปิดผ่าน signed URL ของสารบรรณได้**
-2. `type === 'authenticated'`
-3. `format` อยู่ใน pdf/jpg/jpeg/png · `bytes` ≤ 10MB
-4. `bytes`, `pages`, `format` ที่บันทึกมาจาก Cloudinary ไม่ใช่จาก client
+`POST /api/admin/saraban/uploads` — หนึ่งไฟล์ต่อหนึ่งคำขอ body เป็นเนื้อไฟล์ดิบ (ไม่ใช่ form-data)
 
-### อัปตอนกดบันทึก ล้มแล้วลบ
+1. `bodyParser: false` แล้วอ่าน stream เองพร้อมนับไบต์ เกิน 10MB หยุดอ่านแล้วตอบ `413 file_too_large`
+   — Railway ไม่มีตัวกั้นขนาดที่ขอบแบบ Vercel ถ้าไม่กันตรงนี้ก็ไม่มีใครกัน (หลักเดียวกับ LINE webhook)
+2. `sniffFormat(bytes)` ดูชนิดจาก magic bytes (`%PDF-` · `FF D8 FF` · `89 50 4E 47`) — **ไม่เชื่อ
+   นามสกุลหรือ Content-Type ที่เบราว์เซอร์ส่งมา** ไม่ตรงชนิดที่รับ → `400 bad_format`
+3. นับหน้า: PDF ใช้ `pdf-lib` (เปิดไม่ได้ เช่นเข้ารหัสหรือไฟล์เสีย → `0` = ไม่รู้ ยังรับไฟล์) · รูปภาพ = 1
+4. `PutObject` ที่ key `saraban/<uuid>.<ext>` ตั้ง `ContentType` ตามชนิดที่ sniff ได้ และ metadata
+   `pages` → ตอบ `{ key }`
 
-ฟอร์มถือไฟล์ไว้ในเบราว์เซอร์ อัปเมื่อกด "ลงรับ" เท่านั้น ถ้าบันทึกไม่ผ่าน (validation, ออกเลขไม่ได้)
-เซิร์ฟเวอร์ลบไฟล์ที่ request นั้นอ้างถึงทิ้งทันที — หลักเดียวกับ `versions.ts` ของแผนที่
-ความเสี่ยงที่เหลือ: ผู้ใช้ปิดแท็บระหว่างอัป → ไฟล์กำพร้าบน Cloudinary (ยอมรับในรอบ 1)
+### บันทึกหนังสือ — เซิร์ฟเวอร์ไม่เชื่อข้อมูลไฟล์จาก client
+
+ฟอร์มถือไฟล์ไว้ในเบราว์เซอร์ กด "ลงรับ" แล้วจึงอัปทีละไฟล์ จากนั้นส่ง `files: [{ key, name }]` มากับ
+`POST /docs` เซิร์ฟเวอร์ `HeadObject` ทุก key แล้ว `checkAttachment()` ตรวจ:
+
+1. key ขึ้นต้นด้วย `saraban/` และ object มีอยู่จริง
+2. `ContentType` อยู่ใน pdf/jpeg/png · ขนาด ≤ 10MB
+3. มี metadata `pages` — ไม่มี = object นี้ไม่ได้มาจาก `uploads.ts` → ปฏิเสธ
+4. **key นี้ยังไม่ถูกแนบกับหนังสือเรื่องใด** (index บน `files.key`) — ไม่งั้นคนแนบ key เดียวกันซ้ำสองเรื่อง
+   ได้ แล้ววันที่เรื่องหนึ่งลบไฟล์ อีกเรื่องเสียไฟล์ไปด้วย
+5. `bytes` · `pages` · `format` ที่บันทึกมาจาก object ไม่ใช่จาก client
+
+### บันทึกล้มแล้วลบ
+
+ถ้าบันทึกไม่ผ่าน (validation, ออกเลขไม่ได้) เซิร์ฟเวอร์ลบไฟล์ที่ request นั้นอ้างถึงทันที — **เฉพาะ key
+ใต้ `saraban/` ที่ยังไม่ผูกกับหนังสือเรื่องใด** ไม่งั้นคนส่ง key ของหนังสือคนอื่นมาใน request ที่ตั้งใจ
+ให้ล้ม แล้วไฟล์ราชการถูกลบ · ความเสี่ยงที่เหลือ: ปิดแท็บหลังอัปก่อนบันทึก → ไฟล์กำพร้าใน bucket
+(ยอมรับในรอบ 1 สคริปต์กวาดไฟล์กำพร้าทำพร้อมสคริปต์สำรองได้)
 
 ### เปิดดู
 
-`GET /api/admin/saraban/docs/[id]/files/[fileId]` ตรวจสิทธิ์แล้ว redirect ไป URL ชั่วคราว 5 นาที
-ไม่ stream ผ่าน API เพราะ Vercel จำกัด response ไว้ราว 4.5MB
-
-### ไม่มี Cloudinary
-
-ลงรับได้ตามปกติ ช่องแนบไฟล์แสดง "ยังไม่ได้ตั้งค่า Cloudinary — แนบไฟล์ไม่ได้" (หลัก zero-config)
+`GET /api/admin/saraban/docs/[id]/files/[fileId]` ตรวจสิทธิ์แล้ว redirect 302 ไปลิงก์ชั่วคราว
+(presigned GET) อายุ 5 นาที ตั้ง `ResponseContentDisposition: inline; filename*=UTF-8''<ชื่อเดิม>` ให้
+PDF เปิดในแท็บพร้อมชื่อไทยที่ถูกต้อง · เป็นการเปิดหน้าใหม่ ไม่ใช่ fetch จากสคริปต์ จึงไม่ต้องตั้ง CORS
 
 ### ลบไฟล์แนบ
 
-ได้เฉพาะตอน `pending` / `in-progress` ลบบน Cloudinary + event `file-removed` (เก็บชื่อไฟล์)
-**รอบ 4 ต้องห้ามลบไฟล์ที่มีตรา/ลายมือ/การลงนามอ้างอยู่**
+ได้เฉพาะตอน `pending` / `in-progress` — `removeFile` ใน DB ก่อน แล้วค่อย `DeleteObject` + event
+`file-removed` (เก็บชื่อไฟล์) ลบใน DB สำเร็จแต่ลบใน bucket พลาด = ไฟล์กำพร้าหนึ่งไฟล์ ซึ่งเสียหาย
+น้อยกว่ากลับลำดับ **รอบ 4 ต้องห้ามลบไฟล์ที่มีตรา/ลายมือ/การลงนามอ้างอยู่**
+
+### ไม่มี bucket
+
+ตัวแปร `BUCKET_*` ไม่ครบ → ลงรับได้ตามปกติ ช่องแนบไฟล์แสดง "ยังไม่ได้ตั้งค่าที่เก็บไฟล์ — แนบไฟล์
+ไม่ได้" (หลัก zero-config) API ไฟล์ตอบ `503 storage_not_configured`
+
+### ตั้งค่า bucket (ครั้งเดียว ในหน้า Railway)
+
+1. project → **Create → Bucket** · **region เดียวกับ service แอป** (เปลี่ยนทีหลังไม่ได้)
+2. bucket แยกสำหรับทดสอบ (bucket ที่สอง หรือ environment `staging`) — ห้ามทดสอบบน bucket จริง
+   เพราะไม่มี backup ลบผิดกู้ไม่ได้
+3. service แอป → Variables → reference ค่าของ bucket: `BUCKET_NAME`←`BUCKET` ·
+   `BUCKET_ENDPOINT`←`ENDPOINT` · `BUCKET_REGION`←`REGION` · `BUCKET_ACCESS_KEY_ID`←`ACCESS_KEY_ID` ·
+   `BUCKET_SECRET_ACCESS_KEY`←`SECRET_ACCESS_KEY` (ไม่ใช้ preset "AWS SDK" ที่ตั้งชื่อเป็น `AWS_*`)
+4. localhost: คัดลอกค่าจากแท็บ Credentials ของ **bucket ทดสอบ** ลง `.env.local`
+5. ไม่ต้องตั้ง CORS ในรอบ 1 — รอบ 4 ต้องเปิด `GET` ให้โดเมนเว็บเพื่อ pdf.js
 
 ---
 
@@ -498,10 +535,12 @@ CSS ของฟอนต์จะติดไปทุกหน้าของ�
 | action ไม่ได้ในสถานะนี้ (ยกเลิกหนังสือที่เสร็จแล้ว ฯลฯ) | `409 invalid_transition` |
 | ตั้งเลขเริ่มต้นในปีที่มีหนังสือแล้ว | `409 year_in_use` |
 | `holderUnitId` ไม่มี / ปิดอยู่ · หน่วยไม่มี `refCode` ตอนออกเลขส่ง | `400 invalid_unit` |
-| ไฟล์ไม่ผ่าน `checkAttachment` | `400 invalid_file` (+ ลบไฟล์ที่อัปใน request นั้น) |
+| อัปไฟล์เกิน 10MB | `413 file_too_large` |
+| เนื้อไฟล์ไม่ใช่ PDF/JPG/PNG | `400 bad_format` |
+| ไฟล์ไม่ผ่าน `checkAttachment` (รวม key ที่แนบกับเรื่องอื่นแล้ว) | `400 invalid_file` (+ ลบไฟล์ของ request นั้นที่ยังไม่ผูกกับเรื่องใด) |
 | ออกเลขชนครบ 5 ครั้ง | `503 number_busy` — UI: "มีคนลงรับพร้อมกัน กดอีกครั้ง" |
 | `id` ของ POST ซ้ำกับหนังสือของคนอื่น | `409 id_conflict` |
-| ไม่ได้ตั้งค่า Cloudinary | `503 cloudinary_not_configured` — UI ซ่อนช่องแนบไฟล์ |
+| ไม่ได้ตั้งค่า bucket | `503 storage_not_configured` — UI ซ่อนช่องแนบไฟล์ |
 | สร้าง index ไม่สำเร็จ / Mongo ล่ม | `500 server_error` — **ไม่ออกเลขต่อ** |
 
 ### เทสต์ (vitest ตรรกะบริสุทธิ์ ไม่แตะ DB/network)
@@ -533,7 +572,7 @@ CSS ของฟอนต์จะติดไปทุกหน้าของ�
 
 รอบ 5 พึ่งแค่รอบ 1 ทำก่อนหรือขนานกับรอบ 2–4 ได้
 
-รอบ 1 ใหญ่พอจะแตกแผนเป็น 1a (ชั้นข้อมูล + ตรรกะบริสุทธิ์ + สิทธิ์) · 1b (API + Cloudinary) ·
+รอบ 1 ใหญ่พอจะแตกแผนเป็น 1a (ชั้นข้อมูล + ตรรกะบริสุทธิ์ + สิทธิ์) · 1b (API + Railway Bucket) ·
 1c (หน้าจอ) แบบที่ป่าไม้ทำ — ตัดสินตอนเขียนแผน
 
 ---
@@ -561,7 +600,8 @@ CSS ของฟอนต์จะติดไปทุกหน้าของ�
 
 ### รอบ 4 — เอกสาร
 
-- เรนเดอร์หน้า PDF เป็นภาพผ่าน Cloudinary (`pg_N`) ซึ่งเป็นเหตุผลที่รอบ 1 อัปเป็น `image`
+- เรนเดอร์หน้า PDF ในเบราว์เซอร์ด้วย pdf.js จากลิงก์ชั่วคราว (ไม่มี Cloudinary ช่วยแล้ว) — ต้องตั้ง CORS
+  ของ bucket ให้ `GET` จากโดเมนเว็บ · จำนวนหน้าที่รอบ 1 บันทึกไว้ใช้วางตรา/ลายมือรายหน้า
 - ลายมือเก็บเป็นเส้นเวกเตอร์ต่อหน้า (ไม่ใช่ภาพ) · ตราเก็บ `{label, color, x%, y%, rot, page}`
 - **การลงนามในรอบนี้คือบันทึก ผู้ลงนาม · เวลา · IP · sha256 ของไฟล์ ลงใน event** ป้ายต้องเขียนว่า
   **"ลงนามในระบบ"** ไม่ใช่ "ลงนามดิจิทัล · ตรวจสอบแล้ว" แบบในต้นแบบ — ยังไม่ได้ผูกใบรับรอง
@@ -608,14 +648,19 @@ CSS ของฟอนต์จะติดไปทุกหน้าของ�
 2. **หนังสือเวียนแยกชุดเลขตามที่เข้าใจหรือไม่** (ระเบียบงานสารบรรณ ข้อ 17)
 3. **วันเริ่มใช้งานจริง** — 1 ต.ค. 2569 ไม่ต้องตั้งเลขเริ่มต้น · กลางปีต้องได้เลขล่าสุดของทะเบียนกระดาษ
 
-### ต้องตรวจเป็นงานแรกของแผนรอบ 1
+### ต้องตรวจเป็นงานแรกของแผนรอบ 1B
 
-1. **บัญชี Cloudinary ส่ง PDF ได้ไหม** — บางแผนปิด "PDF and ZIP delivery" ไว้เป็นค่าเริ่มต้น ถ้าเปิดไม่ได้
-   ถอยไปอัปเป็น `raw` (เสียจำนวนหน้าและการเรนเดอร์รายหน้าของรอบ 4) และเพดานขนาดไฟล์ของแผน
-2. **URL ชั่วคราวหมดอายุจริงไหม** — `signedRawUrl()` ที่มีอยู่ส่ง `expires_at` ให้ `cloudinary.url()`
-  ต้องยืนยันว่า Cloudinary บังคับเวลาหมดอายุบน delivery URL จริง (บางกรณีต้องใช้ token-based auth
-  หรือ `private_download_url` แทน) ถ้าไม่หมดอายุ ไฟล์แนบที่ถูกแชร์ลิงก์ออกไปจะเปิดได้ตลอด —
-  **และแปลว่าไฟล์เต็มของแผนที่/ป่าไม้ก็เป็นแบบนั้นมาตลอด ต้องแจ้งแยกเป็นงานของมันเอง**
+1. **bucket ตั้งครบตามข้อ 5** (ตัวจริง + ตัวทดสอบ · region · ตัวแปร) แล้ว smoke บน bucket ทดสอบ:
+   อัป → HeadObject เห็น `ContentType` และ metadata `pages` → ลิงก์ชั่วคราวเปิด PDF ในแท็บด้วยชื่อไทย
+2. **ลิงก์ชั่วคราวหมดอายุจริง** — สร้างลิงก์อายุสั้นแล้วเปิดหลังหมดเวลา ต้องได้ 403
+3. **ที่สำรองไฟล์ก่อนเปิดใช้จริง** — Railway Bucket ไม่มี backup อัตโนมัติและไม่มี versioning ทะเบียน
+   ราชการที่ไฟล์หายกู้ไม่ได้ ต้องมีสคริปต์คัดลอกทั้ง bucket ไปปลายทางอื่นเป็นระยะ (ปลายทางให้เทศบาลเลือก)
+
+### แยกจากสารบรรณ — แจ้งเป็นงานของแผนที่/ป่าไม้
+
+ไฟล์เต็มของแผนที่/ป่าไม้เปิดผ่าน `signedRawUrl()` ของ Cloudinary ที่ส่ง `expires_at` ให้ `cloudinary.url()`
+ยังไม่เคยยืนยันว่า Cloudinary บังคับเวลาหมดอายุบน delivery URL จริง (บางกรณีต้องใช้ token-based auth
+หรือ `private_download_url`) ถ้าไม่หมดอายุ ลิงก์ที่ถูกแชร์ออกไปเปิดได้ตลอด
 
 ### สมุดตั้งต้น (`data/saraban-units.seed.json`)
 
@@ -638,3 +683,15 @@ CSS ของฟอนต์จะติดไปทุกหน้าของ�
 
 auto-seed เมื่อ collection ว่างเท่านั้น — เหมือน `portal-config.seed.json` ครั้งแรกที่อ่าน หลังจากนั้น
 ฐานข้อมูลคือความจริง (บทเรียนเดียวกับ `forest-registry.ts` ที่ไม่ใช่แหล่งความจริง)
+
+---
+
+## บันทึกการเปลี่ยนแปลง
+
+- **2026-10-30 — ไฟล์แนบย้ายจาก Cloudinary ไป Railway Storage Bucket (ข้อ 5)** พอร์ทัล deploy บน
+  Railway ไม่ใช่ Vercel เหตุผลเดิมที่ต้องให้เบราว์เซอร์อัปตรงเข้า Cloudinary (เพดาน body/response ของ
+  Vercel) จึงไม่มีแล้ว และต้องการลดการพึ่ง Cloudinary ของโมดูลสารบรรณ · ได้: ไฟล์ private โดยธรรมชาติ
+  ตรวจชนิดจากเนื้อไฟล์จริง ไม่ต้องรอยืนยันแผน "PDF delivery" ของ Cloudinary · เสีย: การเรนเดอร์หน้า PDF
+  ของ Cloudinary (รอบ 4 ใช้ pdf.js แทน) และต้องจัดการ backup เอง · กระทบงาน 1A ที่ทำแล้ว:
+  `SarabanFile` เปลี่ยน `publicId` → `key` ตัด `resourceType` · `saraban-attachment.ts` ตรวจผล
+  `HeadObject` + `sniffFormat` · `fileRefSchema` เหลือ `{ key, name }` (แผน 1A Task 14)
