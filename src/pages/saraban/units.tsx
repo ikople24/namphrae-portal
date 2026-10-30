@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { ErrorBox, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
-import { useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { createUnit, messageOf, sarabanFetcher, UNITS_KEY, updateUnit } from '@/lib/saraban-api';
@@ -26,7 +26,6 @@ function toInput(d: Draft) {
 }
 
 function UnitsPage() {
-  const toast = useToast();
   const { data: units, error, mutate } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
   const [draft, setDraft] = useState<Draft>(BLANK);
   const [problem, setProblem] = useState('');
@@ -42,7 +41,7 @@ function UnitsPage() {
       await createUnit({ ...toInput(draft), isActive: true });
       await mutate();
       setDraft(BLANK);
-      toast('เพิ่มในสมุดผู้รับแล้ว');
+      showToast('เพิ่มในสมุดผู้รับแล้ว');
     } catch (err) {
       setProblem(messageOf(err));
     } finally {
@@ -94,7 +93,6 @@ function UnitsPage() {
 }
 
 function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) {
-  const toast = useToast();
   const initial: Draft = { name: unit.name, dept: unit.dept, refCode: unit.refCode, order: String(unit.order) };
   const [d, setD] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
@@ -105,9 +103,9 @@ function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) 
     try {
       await updateUnit(unit.id, patch);
       onSaved();
-      toast(done);
+      showToast(done);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
     } finally {
       setBusy(false);
     }
@@ -141,7 +139,7 @@ function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) 
             disabled={busy}
             onClick={() => {
               const p = draftProblem(d);
-              if (p) return toast(p);
+              if (p) return showToast(p);
               void save(toInput(d), 'บันทึกแล้ว');
             }}
           >

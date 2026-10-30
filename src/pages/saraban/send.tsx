@@ -6,7 +6,7 @@ import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, FilePicker, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
-import { useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { createDoc, messageOf, sarabanFetcher, SUMMARY_KEY, UNITS_KEY, uploadAll, type SummaryResponse } from '@/lib/saraban-api';
@@ -25,7 +25,6 @@ const EMPTY = {
 };
 
 function SendPage() {
-  const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
@@ -88,9 +87,9 @@ function SendPage() {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(issued.ref);
-                  toast('คัดลอกเลขที่หนังสือแล้ว');
+                  showToast('คัดลอกเลขที่หนังสือแล้ว');
                 } catch {
-                  toast('คัดลอกไม่ได้ — เลือกข้อความแล้วคัดลอกเอง');
+                  showToast('คัดลอกไม่ได้ — เลือกข้อความแล้วคัดลอกเอง');
                 }
               }}
             >

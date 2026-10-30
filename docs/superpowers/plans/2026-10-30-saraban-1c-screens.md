@@ -28,7 +28,7 @@ IBM Plex Sans Thai · Material Symbols (ชุดเดียวกับพอ�
 | `src/components/admin/AdminLayout.tsx` | **แก้** — เมนู "ระบบสารบรรณ" |
 | `src/lib/saraban-view.ts` (+test) | ตรรกะหน้าจอบริสุทธิ์: ปุ่มกรอง · วันที่ไทย · ข้อความผิดพลาด · key ของ SWR · ตรวจไฟล์ก่อนอัป |
 | `src/lib/saraban-api.ts` | ตัวเรียก API ฝั่งเบราว์เซอร์ + ชนิดของคำตอบ |
-| `src/components/saraban/toast.tsx` | toast + ส่งข้อความข้ามหน้า (`flashToast`) |
+| `src/components/saraban/toast.tsx` | toast เป็น store ระดับโมดูล (`showToast` · `<Toaster />`) — อยู่รอดการเปลี่ยนหน้า |
 | `src/components/saraban/SarabanLayout.tsx` | shell: sidebar · header · toast |
 | `src/components/saraban/bits.tsx` | StatusPill · LevelText · DateField · FilePicker · ปุ่ม/ช่องกรอกมาตรฐาน |
 | `src/components/saraban/RegisterPage.tsx` | ทะเบียน (ใช้ร่วม inbox/outbox) |
@@ -573,51 +573,51 @@ export function messageOf(err: unknown): string {
 
 ```tsx
 // toast ของระบบสารบรรณ (handoff: ล่างกลาง หายใน 2.6 วินาที)
-// flashToast(): ข้อความที่ต้องโชว์ "หลังเปลี่ยนหน้า" (ลงรับเสร็จ → ไปทะเบียน) — Pages Router remount
-// layout ทุกหน้า state ใน component จึงหาย ตัวแปรระดับโมดูลอยู่รอดการเปลี่ยนหน้าฝั่งเบราว์เซอร์
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+// store ระดับโมดูล ไม่ใช่ context — หน้าเป็นคน render SarabanLayout เอง ตัวหน้าจึงอยู่นอก provider
+// ใด ๆ ที่ layout ถือ (context จะได้ค่าเริ่มต้นที่ไม่ทำอะไรเลยแบบเงียบ ๆ) และข้อความอยู่รอดการเปลี่ยนหน้า
+// (ลงรับเสร็จ → ไปทะเบียน) เพราะ Pages Router remount layout ทุกหน้าแต่โมดูลยังอยู่
+import { useSyncExternalStore } from 'react';
 
-let pendingFlash: string | null = null;
+let current: string | null = null;
+let timer: ReturnType<typeof setTimeout> | undefined;
+const listeners = new Set<() => void>();
 
-export function flashToast(message: string): void {
-  pendingFlash = message;
+function emit() {
+  listeners.forEach((listener) => listener());
 }
 
-const ToastContext = createContext<(message: string) => void>(() => {});
-
-export function useToast(): (message: string) => void {
-  return useContext(ToastContext);
+export function showToast(message: string): void {
+  current = message;
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    current = null;
+    emit();
+  }, 2600);
+  emit();
 }
 
-export function ToastProvider({ children }: { children: ReactNode }) {
-  // ข้อความค้างจากหน้าก่อนอ่านตอนสร้าง state ไม่ใช่ใน effect (setState ใน effect ทำให้ render ซ้อน)
-  // ไม่ล้างใน initializer เพราะ StrictMode เรียก initializer สองครั้ง — ล้างใน effect แทน
-  const [message, setMessage] = useState<string | null>(() => pendingFlash);
-  useEffect(() => {
-    pendingFlash = null;
-  }, []);
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
-  // หายเองใน 2.6 วินาที — setState อยู่ใน callback ของ timer ไม่ใช่ตัว effect
-  useEffect(() => {
-    if (!message) return;
-    const timer = setTimeout(() => setMessage(null), 2600);
-    return () => clearTimeout(timer);
-  }, [message]);
-
-  const show = useCallback((next: string) => setMessage(next), []);
-
+/** วางครั้งเดียวใน SarabanLayout · ตอน SSR ไม่มี toast เสมอ */
+export function Toaster() {
+  const message = useSyncExternalStore(
+    subscribe,
+    () => current,
+    () => null
+  );
+  if (!message) return null;
   return (
-    <ToastContext.Provider value={show}>
-      {children}
-      {message ? (
-        <div
-          role="status"
-          className="fixed bottom-7 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-sb-ink px-[18px] py-3 text-sm text-white shadow-[0_8px_24px_rgba(0,0,0,.2)]"
-        >
-          {message}
-        </div>
-      ) : null}
-    </ToastContext.Provider>
+    <div
+      role="status"
+      className="fixed bottom-7 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-sb-ink px-[18px] py-3 text-sm text-white shadow-[0_8px_24px_rgba(0,0,0,.2)]"
+    >
+      {message}
+    </div>
   );
 }
 ```
@@ -858,7 +858,7 @@ import { useRouter } from 'next/router';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import useSWR from 'swr';
 import Icon from '@/components/Icon';
-import { ToastProvider } from '@/components/saraban/toast';
+import { Toaster } from '@/components/saraban/toast';
 import { adminFetcher } from '@/lib/admin-api';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
 import { SUMMARY_KEY, sarabanFetcher, type SummaryResponse } from '@/lib/saraban-api';
@@ -935,7 +935,7 @@ export default function SarabanLayout({
   const displayName = me?.name ?? me?.email ?? (clerkOn ? 'ผู้ใช้งาน' : 'โหมดทดสอบ (dev-open)');
 
   return (
-    <ToastProvider>
+    <>
       <Head>
         <title>{`${title} · ระบบสารบรรณ`}</title>
         <meta name="robots" content="noindex" />
@@ -1040,7 +1040,8 @@ export default function SarabanLayout({
           </div>
         </main>
       </div>
-    </ToastProvider>
+      <Toaster />
+    </>
   );
 }
 ```
@@ -1248,7 +1249,7 @@ export default function RegisterPage({ registers, title }: { registers: SarabanR
           <p className="border-t border-sb-page px-4 py-6 text-center text-[13px] text-sb-muted">ยังไม่มีหนังสือในมุมมองนี้</p>
         ) : null}
         {data && data.total > 0 ? (
-          <div className="flex items-center justify-between border-t border-sb-page px-4 py-3 text-[13px] text-sb-muted">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-sb-page px-4 py-3 text-[13px] text-sb-muted">
             <span>
               แสดง {(data.page - 1) * data.pageSize + 1}–{(data.page - 1) * data.pageSize + data.docs.length} จาก {data.total} รายการ
             </span>
@@ -1335,7 +1336,7 @@ import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, FilePicker, card, inputClass, outlineButton, primaryButton, useNowLabel } from '@/components/saraban/bits';
-import { flashToast, useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
@@ -1358,7 +1359,6 @@ const EMPTY = { ref: '', docDate: '', party: '', subject: '', level: 'normal' as
 
 function ReceivePage() {
   const router = useRouter();
-  const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
@@ -1395,7 +1395,7 @@ function ReceivePage() {
       const refs = await uploadAll(files, (done) => setBusy(`กำลังอัปไฟล์ ${done}/${files.length}`));
       setBusy('กำลังบันทึก…');
       const doc = await createDoc('receive', { id: id.current, ...form, holderUnitId, files: refs });
-      flashToast(`ลงรับที่ ${formatNo('in', doc.no)} แล้ว · เสนอ${holder?.name ?? ''}`);
+      showToast(`ลงรับที่ ${formatNo('in', doc.no)} แล้ว · เสนอ${holder?.name ?? ''}`);
       await router.push('/saraban/inbox');
     } catch (err) {
       setError(messageOf(err));
@@ -1409,9 +1409,9 @@ function ReceivePage() {
       await setStartNo({ register: 'in', fiscalYear: year.fiscalYear, startNo: Number(startNo) });
       await reloadYear();
       setStart('');
-      toast(`ตั้งเลขเริ่มต้นปีงบ ${year.fiscalYear} แล้ว`);
+      showToast(`ตั้งเลขเริ่มต้นปีงบ ${year.fiscalYear} แล้ว`);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
     }
   }
 
@@ -1550,7 +1550,7 @@ import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, FilePicker, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
-import { useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { createDoc, messageOf, sarabanFetcher, SUMMARY_KEY, UNITS_KEY, uploadAll, type SummaryResponse } from '@/lib/saraban-api';
@@ -1569,7 +1569,6 @@ const EMPTY = {
 };
 
 function SendPage() {
-  const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
@@ -1632,9 +1631,9 @@ function SendPage() {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(issued.ref);
-                  toast('คัดลอกเลขที่หนังสือแล้ว');
+                  showToast('คัดลอกเลขที่หนังสือแล้ว');
                 } catch {
-                  toast('คัดลอกไม่ได้ — เลือกข้อความแล้วคัดลอกเอง');
+                  showToast('คัดลอกไม่ได้ — เลือกข้อความแล้วคัดลอกเอง');
                 }
               }}
             >
@@ -1737,7 +1736,7 @@ import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, LevelText, StatusPill, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
-import { useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
@@ -1766,7 +1765,6 @@ type Panel = 'none' | 'edit' | 'void' | 'sent';
 
 function TrackPage() {
   const router = useRouter();
-  const toast = useToast();
   const id = typeof router.query.id === 'string' ? router.query.id : '';
   const { data: doc, error, mutate } = useSWR<SarabanDoc>(id ? docKey(id) : null, sarabanFetcher);
   const { data: units } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
@@ -1782,9 +1780,9 @@ function TrackPage() {
     try {
       await mutate(await action(), { revalidate: false });
       setPanel('none');
-      toast(done);
+      showToast(done);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
       if (err instanceof SarabanApiError && err.code === 'stale') await mutate();
     } finally {
       setBusy(false);
@@ -1795,16 +1793,16 @@ function TrackPage() {
     if (!doc || !list) return;
     const picked = Array.from(list).slice(0, MAX_FILES_PER_DOC - doc.files.length);
     const bad = picked.map(precheckFile).find((p) => p !== null);
-    if (bad) return toast(bad);
+    if (bad) return showToast(bad);
     setBusy(true);
     try {
       for (const file of picked) {
         const { key } = await uploadFile(file);
         await mutate(await addDocFile(doc.id, { key, name: file.name }), { revalidate: false });
       }
-      toast(`แนบไฟล์แล้ว ${picked.length} ไฟล์`);
+      showToast(`แนบไฟล์แล้ว ${picked.length} ไฟล์`);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
       await mutate();
     } finally {
       setBusy(false);
@@ -2196,7 +2194,7 @@ import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { ErrorBox, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
-import { useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { createUnit, messageOf, sarabanFetcher, UNITS_KEY, updateUnit } from '@/lib/saraban-api';
@@ -2218,7 +2216,6 @@ function toInput(d: Draft) {
 }
 
 function UnitsPage() {
-  const toast = useToast();
   const { data: units, error, mutate } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
   const [draft, setDraft] = useState<Draft>(BLANK);
   const [problem, setProblem] = useState('');
@@ -2234,7 +2231,7 @@ function UnitsPage() {
       await createUnit({ ...toInput(draft), isActive: true });
       await mutate();
       setDraft(BLANK);
-      toast('เพิ่มในสมุดผู้รับแล้ว');
+      showToast('เพิ่มในสมุดผู้รับแล้ว');
     } catch (err) {
       setProblem(messageOf(err));
     } finally {
@@ -2286,7 +2283,6 @@ function UnitsPage() {
 }
 
 function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) {
-  const toast = useToast();
   const initial: Draft = { name: unit.name, dept: unit.dept, refCode: unit.refCode, order: String(unit.order) };
   const [d, setD] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
@@ -2297,9 +2293,9 @@ function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) 
     try {
       await updateUnit(unit.id, patch);
       onSaved();
-      toast(done);
+      showToast(done);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
     } finally {
       setBusy(false);
     }
@@ -2333,7 +2329,7 @@ function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) 
             disabled={busy}
             onClick={() => {
               const p = draftProblem(d);
-              if (p) return toast(p);
+              if (p) return showToast(p);
               void save(toInput(d), 'บันทึกแล้ว');
             }}
           >

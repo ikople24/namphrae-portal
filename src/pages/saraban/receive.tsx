@@ -6,7 +6,7 @@ import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, FilePicker, card, inputClass, outlineButton, primaryButton, useNowLabel } from '@/components/saraban/bits';
-import { flashToast, useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
@@ -29,7 +29,6 @@ const EMPTY = { ref: '', docDate: '', party: '', subject: '', level: 'normal' as
 
 function ReceivePage() {
   const router = useRouter();
-  const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState('');
@@ -66,7 +65,7 @@ function ReceivePage() {
       const refs = await uploadAll(files, (done) => setBusy(`กำลังอัปไฟล์ ${done}/${files.length}`));
       setBusy('กำลังบันทึก…');
       const doc = await createDoc('receive', { id: id.current, ...form, holderUnitId, files: refs });
-      flashToast(`ลงรับที่ ${formatNo('in', doc.no)} แล้ว · เสนอ${holder?.name ?? ''}`);
+      showToast(`ลงรับที่ ${formatNo('in', doc.no)} แล้ว · เสนอ${holder?.name ?? ''}`);
       await router.push('/saraban/inbox');
     } catch (err) {
       setError(messageOf(err));
@@ -80,9 +79,9 @@ function ReceivePage() {
       await setStartNo({ register: 'in', fiscalYear: year.fiscalYear, startNo: Number(startNo) });
       await reloadYear();
       setStart('');
-      toast(`ตั้งเลขเริ่มต้นปีงบ ${year.fiscalYear} แล้ว`);
+      showToast(`ตั้งเลขเริ่มต้นปีงบ ${year.fiscalYear} แล้ว`);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
     }
   }
 

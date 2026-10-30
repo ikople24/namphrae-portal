@@ -31,7 +31,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'GET') {
       // ลิงก์มีอายุ — ห้าม cache การ redirect ไม่งั้นเบราว์เซอร์พาไปลิงก์ที่หมดอายุแล้ว
       res.setHeader('Cache-Control', 'no-store');
-      return res.redirect(302, await viewUrl(file.key, file.name, CONTENT_TYPES[file.format]));
+      // ไม่ return ค่าของ res.redirect — Next เตือน "API handler should not return a value"
+      res.redirect(302, await viewUrl(file.key, file.name, CONTENT_TYPES[file.format]));
+      return;
     }
 
     if (!canRemoveFile(doc)) {

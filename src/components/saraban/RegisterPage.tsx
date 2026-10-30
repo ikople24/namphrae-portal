@@ -168,7 +168,7 @@ export default function RegisterPage({ registers, title }: { registers: SarabanR
           <p className="border-t border-sb-page px-4 py-6 text-center text-[13px] text-sb-muted">ยังไม่มีหนังสือในมุมมองนี้</p>
         ) : null}
         {data && data.total > 0 ? (
-          <div className="flex items-center justify-between border-t border-sb-page px-4 py-3 text-[13px] text-sb-muted">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-sb-page px-4 py-3 text-[13px] text-sb-muted">
             <span>
               แสดง {(data.page - 1) * data.pageSize + 1}–{(data.page - 1) * data.pageSize + data.docs.length} จาก {data.total} รายการ
             </span>

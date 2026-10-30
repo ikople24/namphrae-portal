@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import useSWR from 'swr';
 import Icon from '@/components/Icon';
-import { ToastProvider } from '@/components/saraban/toast';
+import { Toaster } from '@/components/saraban/toast';
 import { adminFetcher } from '@/lib/admin-api';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
 import { SUMMARY_KEY, sarabanFetcher, type SummaryResponse } from '@/lib/saraban-api';
@@ -83,7 +83,7 @@ export default function SarabanLayout({
   const displayName = me?.name ?? me?.email ?? (clerkOn ? 'ผู้ใช้งาน' : 'โหมดทดสอบ (dev-open)');
 
   return (
-    <ToastProvider>
+    <>
       <Head>
         <title>{`${title} · ระบบสารบรรณ`}</title>
         <meta name="robots" content="noindex" />
@@ -188,6 +188,7 @@ export default function SarabanLayout({
           </div>
         </main>
       </div>
-    </ToastProvider>
+      <Toaster />
+    </>
   );
 }

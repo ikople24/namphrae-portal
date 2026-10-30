@@ -8,7 +8,7 @@ import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, LevelText, StatusPill, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
-import { useToast } from '@/components/saraban/toast';
+import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
@@ -37,7 +37,6 @@ type Panel = 'none' | 'edit' | 'void' | 'sent';
 
 function TrackPage() {
   const router = useRouter();
-  const toast = useToast();
   const id = typeof router.query.id === 'string' ? router.query.id : '';
   const { data: doc, error, mutate } = useSWR<SarabanDoc>(id ? docKey(id) : null, sarabanFetcher);
   const { data: units } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
@@ -53,9 +52,9 @@ function TrackPage() {
     try {
       await mutate(await action(), { revalidate: false });
       setPanel('none');
-      toast(done);
+      showToast(done);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
       if (err instanceof SarabanApiError && err.code === 'stale') await mutate();
     } finally {
       setBusy(false);
@@ -66,16 +65,16 @@ function TrackPage() {
     if (!doc || !list) return;
     const picked = Array.from(list).slice(0, MAX_FILES_PER_DOC - doc.files.length);
     const bad = picked.map(precheckFile).find((p) => p !== null);
-    if (bad) return toast(bad);
+    if (bad) return showToast(bad);
     setBusy(true);
     try {
       for (const file of picked) {
         const { key } = await uploadFile(file);
         await mutate(await addDocFile(doc.id, { key, name: file.name }), { revalidate: false });
       }
-      toast(`แนบไฟล์แล้ว ${picked.length} ไฟล์`);
+      showToast(`แนบไฟล์แล้ว ${picked.length} ไฟล์`);
     } catch (err) {
-      toast(messageOf(err));
+      showToast(messageOf(err));
       await mutate();
     } finally {
       setBusy(false);
