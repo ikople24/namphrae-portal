@@ -85,3 +85,31 @@ export function checkAttachment(o: StoredObject): AttachmentCheck {
   if (o.pages === undefined || !/^\d+$/.test(o.pages)) return { ok: false, error: 'not_ours' };
   return { ok: true, file: { key: o.key, format, bytes: o.bytes, pages: Number(o.pages) } };
 }
+
+/**
+ * Content-Disposition ของลิงก์ชั่วคราว — inline ให้ PDF เปิดในแท็บ · filename* (RFC 5987) เก็บชื่อไทย
+ * · filename สำรองเป็น ASCII ล้วนสำหรับเบราว์เซอร์ที่ไม่รู้จัก filename* (ตัวนอก ASCII และ " \ เป็น _)
+ */
+export function inlineDisposition(name: string): string {
+  const fallback = name.replace(/[^\x20-\x7e]|["\\]/g, '_');
+  // encodeURIComponent ไม่เข้ารหัส ' ( ) * แต่ RFC 5987 ต้องการ — ' ปิด value ของ filename* ได้
+  const encoded = encodeURIComponent(name).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `inline; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+/**
+ * key ของไฟล์ใน body ที่ยังไม่ผ่าน zod — route ใช้กวาดไฟล์ทิ้งเมื่อบันทึกล้มตั้งแต่ด่าน validation
+ * (สเปกข้อ 5 "บันทึกล้มแล้วลบ") · ผู้เรียกต้องกรองด้วย attachedKeys() ก่อนลบเสมอ
+ * ตัดที่ MAX_FILES_PER_DOC: body ปลอมที่ใส่ key เป็นพันต้องไม่ทำให้เราไล่ลบเป็นพัน
+ */
+export function looseKeysOf(body: unknown): string[] {
+  const files = (body as { files?: unknown } | null)?.files;
+  if (!Array.isArray(files)) return [];
+  const keys = files
+    .map((f) => (f as { key?: unknown } | null)?.key)
+    .filter((k): k is string => typeof k === 'string' && k.startsWith(SARABAN_PREFIX));
+  return [...new Set(keys)].slice(0, MAX_FILES_PER_DOC);
+}

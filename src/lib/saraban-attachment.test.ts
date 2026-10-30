@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   checkAttachment,
   CONTENT_TYPES,
+  inlineDisposition,
   keyFor,
+  looseKeysOf,
   MAX_FILE_BYTES,
+  MAX_FILES_PER_DOC,
   SARABAN_PREFIX,
   sniffFormat,
   type StoredObject,
@@ -108,5 +111,51 @@ describe('checkAttachment — เชื่อ object ที่เซิร์ฟ
       );
       expect(result.ok && result.file.format, format).toBe(format);
     }
+  });
+});
+
+describe('inlineDisposition — ลิงก์ชั่วคราวเปิด PDF ในแท็บพร้อมชื่อเดิม', () => {
+  it('ชื่อ ASCII: filename ตรงตัว และ filename* เข้ารหัส', () => {
+    expect(inlineDisposition("it's a.pdf")).toBe(
+      `inline; filename="it's a.pdf"; filename*=UTF-8''it%27s%20a.pdf`
+    );
+  });
+
+  it('ชื่อไทย: filename สำรองเป็น ASCII ล้วน ส่วน filename* เก็บชื่อจริง', () => {
+    const header = inlineDisposition('หนังสือ.pdf');
+    expect(header).toBe(
+      `inline; filename="_______.pdf"; filename*=UTF-8''${encodeURIComponent('หนังสือ.pdf')}`
+    );
+  });
+
+  it('" และ \\ ในชื่อไม่หลุดออกนอกเครื่องหมายคำพูด', () => {
+    expect(inlineDisposition('a"b\\c.pdf')).toContain('filename="a_b_c.pdf"');
+  });
+});
+
+describe('looseKeysOf — key ของไฟล์จาก body ที่ยังไม่ผ่าน zod (ใช้กวาดไฟล์เมื่อบันทึกล้ม)', () => {
+  it('ดึงเฉพาะ key ใต้ prefix ตัดซ้ำ', () => {
+    const body = {
+      files: [
+        { key: `${SARABAN_PREFIX}a.pdf` },
+        { key: `${SARABAN_PREFIX}a.pdf` },
+        { key: 'other/b.pdf' },
+        { key: 42 },
+        null,
+        'x',
+      ],
+    };
+    expect(looseKeysOf(body)).toEqual([`${SARABAN_PREFIX}a.pdf`]);
+  });
+
+  it('body ผิดรูปทุกแบบ → []', () => {
+    expect(looseKeysOf(null)).toEqual([]);
+    expect(looseKeysOf('x')).toEqual([]);
+    expect(looseKeysOf({ files: 'x' })).toEqual([]);
+  });
+
+  it('ไม่เกิน MAX_FILES_PER_DOC — body ปลอมที่ใส่ key เป็นพันไม่ทำให้เราไล่ลบเป็นพัน', () => {
+    const files = Array.from({ length: 50 }, (_, i) => ({ key: `${SARABAN_PREFIX}${i}.pdf` }));
+    expect(looseKeysOf({ files })).toHaveLength(MAX_FILES_PER_DOC);
   });
 });
