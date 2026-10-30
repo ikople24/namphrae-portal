@@ -4,12 +4,7 @@
 import { z } from 'zod';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { REGISTER_VIEWS } from '@/lib/saraban-doc';
-import {
-  SARABAN_LEVELS,
-  SARABAN_REGISTERS,
-  SARABAN_RESOURCE_TYPES,
-  SEND_METHODS,
-} from '@/types/saraban';
+import { SARABAN_LEVELS, SARABAN_REGISTERS, SEND_METHODS } from '@/types/saraban';
 
 /**
  * วันที่ในฟอร์ม — round-trip จับวันที่ไม่มีจริง (2026-02-30) แบบ jobInputSchema บวกช่วงปี
@@ -31,11 +26,10 @@ export const realDateSchema = z
 const requiredText = (max: number, message: string) =>
   z.string().trim().min(1, message).max(max);
 
-// สิ่งที่เบราว์เซอร์ส่งมาหลังอัปตรงเข้า Cloudinary — ตัวชี้อย่างเดียว ขนาด/จำนวนหน้า
-// เซิร์ฟเวอร์อ่านจาก Cloudinary เอง (checkAttachment) ไม่รับจากตรงนี้
+// สิ่งที่เบราว์เซอร์ส่งมาหลังอัปผ่าน uploads.ts — ตัวชี้อย่างเดียว ชนิด ขนาด และจำนวนหน้า
+// เซิร์ฟเวอร์อ่านจาก object เอง (checkAttachment) ไม่รับจากตรงนี้ · zod ทิ้งคีย์ที่ไม่ได้ประกาศ
 export const fileRefSchema = z.object({
-  publicId: z.string().min(1).max(300),
-  resourceType: z.enum(SARABAN_RESOURCE_TYPES),
+  key: z.string().min(1).max(300),
   name: z.string().trim().min(1).max(200),
 });
 export type FileRef = z.infer<typeof fileRefSchema>;

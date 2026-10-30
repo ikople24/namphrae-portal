@@ -29,11 +29,6 @@ export type SendMethod = (typeof SEND_METHODS)[number];
 export const SARABAN_FILE_FORMATS = ['pdf', 'jpg', 'png'] as const;
 export type SarabanFileFormat = (typeof SARABAN_FILE_FORMATS)[number];
 
-// ชนิด resource ของ Cloudinary ที่รับ — PDF อัปเป็น image (ได้จำนวนหน้า) ถอยไป raw ได้
-// ถ้าบัญชีส่ง PDF แบบ image ไม่ได้ (สเปกข้อ 12)
-export const SARABAN_RESOURCE_TYPES = ['image', 'raw'] as const;
-export type SarabanResourceType = (typeof SARABAN_RESOURCE_TYPES)[number];
-
 export const SARABAN_EVENT_KINDS = [
   'received', // ลงรับ
   'issued', // ออกเลขส่ง/เวียน
@@ -46,13 +41,12 @@ export const SARABAN_EVENT_KINDS = [
 export type SarabanEventKind = (typeof SARABAN_EVENT_KINDS)[number];
 
 export type SarabanFile = {
-  id: string; // uuid — ใช้ใน URL แทน publicId ที่มี '/'
-  publicId: string;
-  resourceType: SarabanResourceType;
+  id: string; // uuid — ใช้ใน URL แทน key ที่มี '/'
+  key: string; // object key ใน Railway bucket: 'saraban/<uuid>.<ext>'
   name: string; // ชื่อไฟล์เดิมจากเครื่องผู้ใช้
-  format: SarabanFileFormat;
-  bytes: number; // อ่านจาก Cloudinary ไม่ใช่จาก client
-  pages: number; // อ่านจาก Cloudinary · รูปภาพ = 1 · 0 = ไม่รู้ (PDF ที่อัปแบบ raw)
+  format: SarabanFileFormat; // จากเนื้อไฟล์ (magic bytes) ไม่ใช่จากนามสกุล
+  bytes: number; // จาก HeadObject ไม่ใช่จาก client
+  pages: number; // เซิร์ฟเวอร์นับตอนอัป · รูปภาพ = 1 · 0 = อ่าน PDF ไม่ได้
   uploadedAt: string; // ISO
   uploadedBy: string; // clerkId หรือ 'dev-open'
 };

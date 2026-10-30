@@ -133,6 +133,9 @@ function ensureIndexes(): Promise<void> {
         { key: { register: 1, fiscalYear: 1, no: 1 }, unique: true, name: 'register_year_no_unique' },
         { key: { id: 1 }, unique: true, name: 'id_unique' },
         { key: { register: 1, fiscalYear: 1, status: 1, dueDate: 1 } },
+        // ไม่ unique: index แบบ multikey ที่ unique จะนับหนังสือที่ไม่มีไฟล์เลยว่าชนกันเอง —
+        // กันแนบซ้ำด้วย attachedKeys() ที่ route แทน (สเปกข้อ 5)
+        { key: { 'files.key': 1 } },
       ]);
     }
   );
@@ -453,9 +456,9 @@ export async function addFile(
 
 /**
  * เอาไฟล์แนบออกจากหนังสือ — เฉพาะหนังสือที่ยังเปิดอยู่ (canRemoveFile)
- * การลบไฟล์บน Cloudinary เป็นหน้าที่ของ route **หลัง** คำสั่งนี้สำเร็จเท่านั้น: ถ้าลบบน
- * Cloudinary ก่อนแล้วตรงนี้ล้ม DB จะชี้ไปหาไฟล์ที่ไม่มีแล้ว (ลบทีหลังแล้วพลาด = ไฟล์กำพร้า
- * หนึ่งไฟล์ ซึ่งเสียหายน้อยกว่า)
+ * การลบ object ใน bucket เป็นหน้าที่ของ route **หลัง** คำสั่งนี้สำเร็จเท่านั้น: ถ้าลบใน bucket
+ * ก่อนแล้วตรงนี้ล้ม DB จะชี้ไปหาไฟล์ที่ไม่มีแล้ว (ลบทีหลังแล้วพลาด = ไฟล์กำพร้าหนึ่งไฟล์ ซึ่ง
+ * เสียหายน้อยกว่า)
  */
 export async function removeFile(
   id: string,
@@ -482,4 +485,19 @@ export async function removeFile(
   };
   await writeJsonArray(DOCS_FILE, docs);
   return docs[index];
+}
+
+/**
+ * key ไหนในรายการนี้ถูกแนบกับหนังสือเรื่องใดเรื่องหนึ่งแล้ว — route ใช้สองที่ (สเปกข้อ 5):
+ * ปฏิเสธการแนบ key ซ้ำ และกรองก่อนลบไฟล์ของคำขอที่บันทึกล้ม (ห้ามลบไฟล์ของหนังสือคนอื่น)
+ */
+export async function attachedKeys(keys: readonly string[]): Promise<Set<string>> {
+  if (keys.length === 0) return new Set();
+  const wanted = new Set(keys);
+  const docs = isMongoConfigured()
+    ? await (await docsCollection())
+        .find({ 'files.key': { $in: [...wanted] } }, { projection: { files: 1, _id: 0 } })
+        .toArray()
+    : (await readDocs()).filter((doc) => doc.files.some((f) => wanted.has(f.key)));
+  return new Set(docs.flatMap((doc) => doc.files.map((f) => f.key)).filter((k) => wanted.has(k)));
 }

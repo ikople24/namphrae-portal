@@ -21,7 +21,7 @@ const RECEIVE = {
   holderUnitId: 'palad',
 };
 
-const FILE = { publicId: 'namphrae-portal/saraban/2570/a', resourceType: 'image', name: 'scan.pdf' };
+const FILE = { key: 'saraban/3f1c2a9e.pdf', name: 'scan.pdf' };
 
 function messages(result: { success: boolean; error?: { issues: { message: string }[] } }) {
   return result.error?.issues.map((i) => i.message) ?? [];
@@ -71,6 +71,13 @@ describe('receiveInputSchema', () => {
   it('แนบได้ไม่เกิน 10 ไฟล์', () => {
     expect(receiveInputSchema.safeParse({ ...RECEIVE, files: Array(10).fill(FILE) }).success).toBe(true);
     expect(receiveInputSchema.safeParse({ ...RECEIVE, files: Array(11).fill(FILE) }).success).toBe(false);
+  });
+  it('ไฟล์แนบเป็นตัวชี้ { key, name } อย่างเดียว — ช่องอื่นที่ client ส่งมาถูกทิ้ง', () => {
+    const parsed = receiveInputSchema.parse({
+      ...RECEIVE,
+      files: [{ ...FILE, bytes: 1, pages: 999, format: 'pdf' }],
+    });
+    expect(parsed.files).toEqual([FILE]);
   });
 });
 
