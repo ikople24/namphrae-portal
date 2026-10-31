@@ -184,3 +184,9 @@ export function getFeatureSsrProps(
 
 export const getManagerSsrProps: GetServerSideProps<AdminPageProps> =
   buildSsrGuard((identity) => identity.isManager);
+
+/**
+ * หน้าที่สมาชิกทุกคนเข้าได้ (คลังไฟล์ — สเปก 2026-10-31 ข้อ 3) · มาถึง allowed ได้แปลว่าผ่าน
+ * ทะเบียนแล้ว จึงคืน true เสมอ ส่วนคนนอกทะเบียนยังถูก buildSsrGuard เด้งไป /apply เหมือนหน้าอื่น
+ */
+export const getMemberSsrProps: GetServerSideProps<AdminPageProps> = buildSsrGuard(() => true);

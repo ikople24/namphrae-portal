@@ -118,8 +118,8 @@ describe('สิทธิ์ saraban', () => {
     expect(firstAllowedPath({ isManager: false, features: ['saraban'] })).toBe('/saraban');
   });
 
-  it('ต่อท้ายสุด — สมาชิกที่มีทั้งปฏิทินและสารบรรณยังเข้าปฏิทินก่อนเหมือนเดิม', () => {
-    expect(FEATURES.at(-1)).toBe('saraban');
+  it('ต่อท้ายฟีเจอร์เดิม — สมาชิกที่มีทั้งปฏิทินและสารบรรณยังเข้าปฏิทินก่อนเหมือนเดิม', () => {
+    expect(FEATURES.slice(-2)).toEqual(['saraban', 'files']);
     expect(firstAllowedPath({ isManager: false, features: ['calendar', 'saraban'] })).toBe(
       '/admin/calendar'
     );
@@ -127,5 +127,28 @@ describe('สิทธิ์ saraban', () => {
 
   it('มีป้ายภาษาไทยในหน้าจัดการผู้ใช้', () => {
     expect(FEATURE_LABELS.find((f) => f.key === 'saraban')?.label).toBe('ระบบสารบรรณ');
+  });
+});
+
+describe('สิทธิ์ files (คลังไฟล์)', () => {
+  it('อยู่ท้ายสุดของ FEATURES แต่ไม่อยู่ในชุดเริ่มต้น — ผู้จัดการต้องติ๊กเปิดเอง', () => {
+    expect(FEATURES.at(-1)).toBe('files');
+    expect(DEFAULT_FEATURES).not.toContain('files');
+  });
+
+  it('สมาชิกเดิมที่ยังไม่เคยถูกตั้งค่า ไม่ได้สิทธิ์อัปโหลด/ลบติดมาเงียบ ๆ', () => {
+    const r = resolveAccess({ doc: null, clerkId: 'user_a', managerEnvId: undefined });
+    expect(hasFeature({ features: r.features, isManager: false }, 'files')).toBe(false);
+  });
+
+  it('ผู้จัดการได้สิทธิ์ files', () => {
+    const r = resolveAccess({ doc: null, clerkId: 'mgr', managerEnvId: 'mgr' });
+    expect(hasFeature(r, 'files')).toBe(true);
+  });
+
+  it('มีหน้าแรกและป้ายภาษาไทยในหน้าจัดการผู้ใช้', () => {
+    expect(FEATURE_HOME.files).toBe('/admin/files');
+    expect(firstAllowedPath({ isManager: false, features: ['files'] })).toBe('/admin/files');
+    expect(FEATURE_LABELS.find((f) => f.key === 'files')?.label).toBe('คลังไฟล์ (อัปโหลด/ลบ)');
   });
 });

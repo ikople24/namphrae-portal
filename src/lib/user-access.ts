@@ -13,6 +13,7 @@ export const FEATURES = [
   'data',
   'settings',
   'saraban',
+  'files',
 ] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
@@ -31,6 +32,9 @@ export const FEATURE_HOME: Record<FeatureKey, string> = {
   settings: '/admin/settings',
   // นอก /admin — ระบบสารบรรณมี shell ของตัวเอง (สเปก 2026-09-13 ข้อ 1.3)
   saraban: '/saraban',
+  // สิทธิ์ files คือสิทธิ์ "จัดการ" (อัปโหลด/แก้ชื่อ/ลบ) — การดูคลังไฟล์เปิดให้สมาชิกทุกคน
+  // (สเปก 2026-10-31 ข้อ 3) แต่หน้าแรกของคนที่มีสิทธิ์นี้อย่างเดียวก็คือคลังไฟล์
+  files: '/admin/files',
 };
 
 export const FEATURE_LABELS: { key: FeatureKey; label: string }[] = [
@@ -42,6 +46,7 @@ export const FEATURE_LABELS: { key: FeatureKey; label: string }[] = [
   { key: 'data', label: 'นำเข้า/ส่งออก' },
   { key: 'settings', label: 'ตั้งค่าเว็บ' },
   { key: 'saraban', label: 'ระบบสารบรรณ' },
+  { key: 'files', label: 'คลังไฟล์ (อัปโหลด/ลบ)' },
 ];
 
 export type ResolvedAccess = { features: FeatureKey[]; isManager: boolean };
