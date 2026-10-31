@@ -18,7 +18,9 @@ async function noopProxy() {
 function buildClerkProxy() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { clerkMiddleware, createRouteMatcher } = require('@clerk/nextjs/server');
-  const isProtected = createRouteMatcher(['/admin(.*)', '/api/admin(.*)']);
+  // /saraban มี shell ของตัวเองนอก /admin (สเปกข้อ 1.3) แต่ต้องล็อกอินเหมือนกัน — ไม่งั้นคน
+  // ยังไม่ล็อกอินเห็นการ์ด AccessDenied แทนที่จะถูกพาไป /sign-in
+  const isProtected = createRouteMatcher(['/admin(.*)', '/api/admin(.*)', '/saraban(.*)']);
   return clerkMiddleware(
     async (auth: { protect: () => Promise<unknown> }, req: NextRequest) => {
       if (isProtected(req)) await auth.protect();
@@ -38,6 +40,7 @@ export const config = {
     // Everything else (static assets, the public site) is skipped.
     '/admin/:path*',
     '/api/admin/:path*',
+    '/saraban/:path*',
     '/apply',
     '/api/apply',
   ],

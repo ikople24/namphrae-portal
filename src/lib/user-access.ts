@@ -2,7 +2,18 @@
 // ห้าม import mongo/clerk. กฎทั้งหมดตรึงด้วย user-access.test.ts
 // (แพทเทิร์นเดียวกับ admin-registry-gate.ts)
 
-export const FEATURES = ['links', 'categories', 'calendar', 'map', 'forest', 'data', 'settings'] as const;
+// ต่อท้ายสุดโดยตั้งใจ — firstAllowedPath() เลือกหน้าแรกตามลำดับนี้ ฟีเจอร์ใหม่ต่อท้ายไว้
+// สมาชิกเดิมที่ได้สิทธิ์เพิ่มจะยังเข้าหน้าเดิมก่อนเหมือนเคย
+export const FEATURES = [
+  'links',
+  'categories',
+  'calendar',
+  'map',
+  'forest',
+  'data',
+  'settings',
+  'saraban',
+] as const;
 export type FeatureKey = (typeof FEATURES)[number];
 
 // สมาชิกที่ผู้จัดการยังไม่เคยตั้งค่า (รวมสมาชิกเก่าทุกคน ณ วันเปิดใช้ระบบสิทธิ์)
@@ -18,6 +29,8 @@ export const FEATURE_HOME: Record<FeatureKey, string> = {
   forest: '/admin/forest',
   data: '/admin/data',
   settings: '/admin/settings',
+  // นอก /admin — ระบบสารบรรณมี shell ของตัวเอง (สเปก 2026-09-13 ข้อ 1.3)
+  saraban: '/saraban',
 };
 
 export const FEATURE_LABELS: { key: FeatureKey; label: string }[] = [
@@ -28,6 +41,7 @@ export const FEATURE_LABELS: { key: FeatureKey; label: string }[] = [
   { key: 'forest', label: 'ข้อมูลป่าไม้' },
   { key: 'data', label: 'นำเข้า/ส่งออก' },
   { key: 'settings', label: 'ตั้งค่าเว็บ' },
+  { key: 'saraban', label: 'ระบบสารบรรณ' },
 ];
 
 export type ResolvedAccess = { features: FeatureKey[]; isManager: boolean };

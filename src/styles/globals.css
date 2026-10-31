@@ -41,6 +41,32 @@
 
   --radius-card: 18px;
 
+  /* ── ระบบสารบรรณ (/saraban) — สเปก saraban ข้อ 7 · ใช้เฉพาะใต้ .saraban ── */
+  --color-sb-accent: #1e4d8c;
+  --color-sb-accent-hover: #173d70;
+  --color-sb-accent-light: #e8eff8;
+  --color-sb-bar-2: #9db7da;
+  --color-sb-ink: #1b2430;
+  --color-sb-ink-2: #3a4555;
+  --color-sb-muted: #66758a;
+  --color-sb-page: #eef2f6;
+  --color-sb-panel: #f8fafc;
+  --color-sb-line: #e3e8ef;
+  --color-sb-line-input: #d5dce5;
+  --color-sb-subtle: #f1f5fa;
+  --color-sb-hover: #f5f7fa;
+  --color-sb-success: #1c7c54;
+  --color-sb-success-bg: #e6f4ee;
+  --color-sb-success-ink: #14532d;
+  --color-sb-warning: #b7791f;
+  --color-sb-warning-ink: #8a5a00;
+  --color-sb-warning-bg: #fdf3e1;
+  --color-sb-danger: #b3261e;
+  --color-sb-danger-bg: #fdecea;
+  --color-sb-purple: #5b3a8c;
+  --color-sb-brown: #7a5c1e;
+  --color-sb-urgent-row: #fffbf2;
+
   /* ── Smart-city animation layer (handoff §Animations) ──
      Durations here are the defaults; per-use overrides go through
      [animation-duration:2.4s]-style arbitrary utilities. */
@@ -195,4 +221,14 @@ button:focus-visible {
   margin: 0;
   font-size: 12px;
   color: var(--color-ink-mute);
+}
+
+/* ระบบสารบรรณ: focus ring ตามแบบ (accent 2px ชิดขอบ) แทนวงเขียว 3px ของพอร์ทัล — สเปก saraban ข้อ 7 */
+.saraban a:focus-visible,
+.saraban button:focus-visible,
+.saraban input:focus-visible,
+.saraban select:focus-visible,
+.saraban textarea:focus-visible {
+  outline: 2px solid var(--color-sb-accent);
+  outline-offset: -1px;
 }

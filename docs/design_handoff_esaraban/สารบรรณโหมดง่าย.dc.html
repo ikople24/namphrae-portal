@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#EEF2F6;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1B2430;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#1E4D8C;text-decoration:none}a:hover{color:#163a6a;text-decoration:underline}
+input,select,textarea,button{font-family:inherit}
+input:focus,textarea:focus{outline:2px solid #1E4D8C;outline-offset:-1px}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;justify-content:center;background:#EEF2F6">
+<div style="width:100%;max-width:720px;min-height:100vh;background:#F7F9FB;display:flex;flex-direction:column;box-shadow:0 0 0 1px #E3E8EF">
+
+  <!-- top bar -->
+  <div style="display:flex;align-items:center;gap:12px;padding:16px 20px 12px;background:#fff;border-bottom:1px solid #E3E8EF;position:sticky;top:0;z-index:5">
+    <sc-if value="{{ isInbox }}" hint-placeholder-val="{{ true }}">
+      <img src="assets/logo.jpeg" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover">
+      <div style="flex:1;line-height:1.25"><div style="font-weight:700;font-size:16px">งานของฉัน</div><div style="font-size:12px;color:#66758A">ประเสริฐ วงศ์ดี · ปลัดเทศบาล</div></div>
+      <div style="text-align:right;line-height:1.2"><div style="font-size:11px;color:#66758A">ประหยัดกระดาษเดือนนี้</div><div style="font-weight:700;color:#1C7C54">{{ paperSaved }} แผ่น</div></div>
+      <button onClick="{{ goFull }}" title="สลับไปโหมดกองฝ่าย / เต็ม" style="border:1px solid #E3E8EF;background:#fff;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:600;color:#1E4D8C;cursor:pointer;white-space:nowrap;min-height:40px" style-hover="background:#F1F5FA">โหมดเต็ม</button>
+    </sc-if>
+    <sc-if value="{{ notInbox }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ goInbox }}" style="border:0;background:#F1F5FA;border-radius:10px;width:40px;height:40px;font-size:18px;cursor:pointer;color:#1E4D8C">‹</button>
+      <div style="flex:1;font-weight:700;font-size:16px">{{ title }}</div>
+    </sc-if>
+  </div>
+
+  <div style="flex:1;padding:16px 20px 110px;display:flex;flex-direction:column;gap:14px">
+
+  <!-- ===== INBOX ===== -->
+  <sc-if value="{{ isInbox }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;gap:8px">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.go }}" style="flex:1;border:0;border-radius:12px;padding:12px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;background:{{ t.bg }};color:{{ t.fg }}"><span style="font-size:22px;font-weight:700;line-height:1">{{ t.count }}</span><span style="font-size:12px">{{ t.label }}</span></button>
+      </sc-for>
+    </div>
+    <sc-if value="{{ emptyList }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3E8EF;border-radius:16px;padding:40px 20px;text-align:center;color:#66758A;font-size:14px"><div style="font-size:18px;font-weight:600;color:#1B2430">ไม่มีรายการ</div>งานทั้งหมดในหมวดนี้ดำเนินการแล้ว</div>
+    </sc-if>
+    <sc-for list="{{ list }}" as="d" hint-placeholder-count="5">
+      <div style="background:#fff;border:1px solid #E3E8EF;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <button onClick="{{ d.open }}" style="border:0;background:transparent;text-align:left;padding:0;cursor:pointer;display:flex;flex-direction:column;gap:4px;width:100%">
+          <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#66758A;flex-wrap:wrap"><span style="font-weight:700;color:#1E4D8C">รับที่ {{ d.no }}</span><span>{{ d.date }}</span><span style="font-weight:600;color:{{ d.levelFg }}">{{ d.level }}</span><span style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;background:{{ d.statusBg }};color:{{ d.statusFg }}">{{ d.status }}</span></div>
+          <div style="font-size:15px;font-weight:600;line-height:1.4">{{ d.subject }}</div>
+          <div style="font-size:13px;color:#66758A">จาก {{ d.party }}</div>
+        </button>
+        <sc-if value="{{ d.actionable }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:8px">
+          <button onClick="{{ d.ack }}" style="flex:1;border:1.5px solid #1C7C54;color:#1C7C54;background:#fff;border-radius:10px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px" style-hover="background:#E6F4EE">ทราบ · จบเรื่อง</button>
+          <button onClick="{{ d.open }}" style="flex:1;border:0;background:#1E4D8C;color:#fff;border-radius:10px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px" style-hover="background:#173d70">สั่งการ / ส่งต่อ</button>
+        </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </sc-if>
+
+  <!-- ===== DOC ===== -->
+  <sc-if value="{{ isDoc }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#fff;border:1px solid #E3E8EF;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;font-size:12px;color:#66758A;flex-wrap:wrap"><span style="font-weight:700;color:#1E4D8C">รับที่ {{ doc.no }}</span><span>{{ doc.ref }}</span><span>{{ doc.date }}</span><span style="font-weight:600;color:{{ doc.levelFg }}">{{ doc.level }}</span></div>
+      <div style="font-size:17px;font-weight:700;line-height:1.4">{{ doc.subject }}</div>
+      <div style="font-size:13px;color:#66758A">จาก {{ doc.party }}</div>
+      <button onClick="{{ togglePreview }}" style="margin-top:4px;border:1px solid #E3E8EF;background:#F8FAFC;border-radius:12px;padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer;text-align:left;width:100%">
+        <div style="width:40px;height:52px;border-radius:4px;background:repeating-linear-gradient(0deg,#E3E8EF 0 3px,#fff 3px 7px);border:1px solid #D5DCE5;flex:0 0 auto"></div>
+        <div style="flex:1;font-size:13px"><div style="font-weight:600">หนังสือ_สแกน.pdf · 2 หน้า</div><div style="color:#66758A">{{ previewHint }}</div></div>
+      </button>
+      <sc-if value="{{ showPreview }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#E9EDF2;border-radius:12px;padding:14px;display:flex;justify-content:center"><div style="width:100%;max-width:420px;aspect-ratio:1/1.3;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:34px 30px;font-size:10px;color:#3A4555;line-height:1.7;position:relative">
+          <div style="text-align:center;font-weight:700;font-size:12px;margin-bottom:12px">บันทึกข้อความ</div>
+          <div><b>ที่</b> {{ doc.ref }} · <b>วันที่</b> {{ doc.date }}</div><div><b>เรื่อง</b> {{ doc.subject }}</div><div><b>เรียน</b> นายกเทศมนตรีตำบลน้ำแพร่พัฒนา</div>
+          <div style="margin-top:12px;height:8px;background:#DCE2EA;border-radius:2px;width:94%"></div><div style="margin-top:7px;height:8px;background:#DCE2EA;border-radius:2px;width:88%"></div><div style="margin-top:7px;height:8px;background:#DCE2EA;border-radius:2px;width:96%"></div><div style="margin-top:7px;height:8px;background:#DCE2EA;border-radius:2px;width:60%"></div>
+          <div style="position:absolute;left:24px;top:18px;border:1.5px solid #1E4D8C;color:#1E4D8C;border-radius:4px;padding:3px 7px;font-size:8px;line-height:1.5;transform:rotate(-3deg)"><b>เทศบาลตำบลน้ำแพร่พัฒนา</b><br>เลขรับ {{ doc.no }} · {{ doc.date }}</div>
+        </div></div>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ hasHistory }}" hint-placeholder-val="{{ true }}">
+    <div style="background:#fff;border:1px solid #E3E8EF;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:13px;font-weight:600;color:#66758A">ที่ผ่านมา</div>
+      <sc-for list="{{ history }}" as="h" hint-placeholder-count="2">
+        <div style="display:flex;gap:10px;font-size:13px;line-height:1.5"><div style="width:8px;height:8px;border-radius:50%;background:#1C7C54;margin-top:7px;flex:0 0 auto"></div><div><b>{{ h.who }}</b> <span style="color:#66758A">{{ h.time }}</span><br>{{ h.text }}</div></div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <div style="background:#fff;border:1px solid #E3E8EF;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">1. ต้องการทำอะไร</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+          <sc-for list="{{ actions }}" as="a" hint-placeholder-count="3">
+            <button onClick="{{ a.pick }}" style="border:1.5px solid;border-radius:12px;padding:12px 8px;font-size:14px;font-weight:600;cursor:pointer;min-height:48px;background:{{ a.bg }};color:{{ a.fg }};border-color:{{ a.border }}">{{ a.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <sc-if value="{{ needRecipients }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:13px;font-weight:600">2. ส่งถึงใคร <span style="color:#66758A;font-weight:500">({{ recipCount }})</span></div><a href="#" onClick="{{ toggleAddRecip }}" style="font-size:12px">+ เพิ่มคนใหม่</a></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <sc-for list="{{ recipients }}" as="r" hint-placeholder-count="6">
+            <button onClick="{{ r.toggle }}" style="border:1.5px solid;border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer;min-height:40px;font-weight:500;background:{{ r.bg }};color:{{ r.fg }};border-color:{{ r.border }}">{{ r.name }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ addingRecip }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            <input value="{{ newName }}" onChange="{{ setNewName }}" placeholder="ชื่อ / ตำแหน่ง" style="flex:2;min-width:140px;border:1px solid #D5DCE5;border-radius:10px;padding:10px 12px;font-size:14px">
+            <input value="{{ newId }}" onChange="{{ setNewId }}" placeholder="รหัส เช่น NP-0091" style="flex:1;min-width:120px;border:1px solid #D5DCE5;border-radius:10px;padding:10px 12px;font-size:14px">
+            <button onClick="{{ saveRecip }}" style="border:0;background:#1E4D8C;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer">เพิ่ม</button>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+      <sc-if value="{{ needText }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">{{ textStepLabel }}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <sc-for list="{{ quick }}" as="q" hint-placeholder-count="3"><button onClick="{{ q.use }}" style="border:1px solid #E3E8EF;background:#fff;border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer;color:#3A4555" style-hover="background:#F1F5FA">{{ q.label }}</button></sc-for>
+        </div>
+        <textarea value="{{ draft }}" onChange="{{ setDraft }}" rows="2" placeholder="พิมพ์สั้นๆ หรือแตะข้อความด้านบน" style="width:100%;border:1px solid #D5DCE5;border-radius:12px;padding:12px;font-size:15px;resize:none;line-height:1.5"></textarea>
+      </div>
+      </sc-if>
+      <div style="background:#F8FAFC;border-radius:12px;padding:12px 14px;font-size:13px;color:#66758A;line-height:1.5">{{ summary }}</div>
+    </div>
+  </sc-if>
+
+  <!-- ===== RECEIVE ===== -->
+  <sc-if value="{{ isReceive }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#fff;border:1px solid #E3E8EF;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <button onClick="{{ scan }}" style="border:1.5px dashed #C4CDD8;background:#FAFBFD;border-radius:14px;padding:26px 16px;text-align:center;cursor:pointer;color:#66758A;font-size:13px;min-height:44px">
+        <div style="font-weight:700;font-size:15px;color:#1E4D8C">ถ่ายรูป / สแกนหนังสือ</div>
+        <sc-if value="{{ notScanned }}" hint-placeholder-val="{{ true }}"><div>ระบบอ่านที่หนังสือ หน่วยงาน และเรื่อง ให้อัตโนมัติ</div></sc-if>
+        <sc-if value="{{ scanned }}" hint-placeholder-val="{{ false }}"><div style="color:#1C7C54;font-weight:600">อ่านข้อมูลจากภาพแล้ว · ตรวจสอบและแก้ได้</div></sc-if>
+      </button>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">ที่หนังสือ<input value="{{ form.ref }}" onChange="{{ setRef }}" placeholder="เช่น ชม 0023.1/ว 1245" style="border:1px solid #D5DCE5;border-radius:12px;padding:12px;font-size:15px"></label>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">จาก<input value="{{ form.party }}" onChange="{{ setParty }}" placeholder="หน่วยงานผู้ส่ง" style="border:1px solid #D5DCE5;border-radius:12px;padding:12px;font-size:15px"></label>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500">เรื่อง<input value="{{ form.subject }}" onChange="{{ setSubject }}" placeholder="ชื่อเรื่อง" style="border:1px solid #D5DCE5;border-radius:12px;padding:12px;font-size:15px"></label>
+      <div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:8px">ชั้นความเร็ว</div>
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ levels }}" as="l" hint-placeholder-count="4"><button onClick="{{ l.pick }}" style="flex:1;border:1.5px solid;border-radius:10px;padding:10px 4px;font-size:13px;font-weight:600;cursor:pointer;min-height:44px;background:{{ l.bg }};color:{{ l.fg }};border-color:{{ l.border }}">{{ l.label }}</button></sc-for>
+        </div>
+      </div>
+      <div style="background:#F8FAFC;border-radius:12px;padding:12px 14px;font-size:13px;color:#66758A;line-height:1.5">จะได้เลขรับ <b style="color:#1E4D8C">{{ nextNo }}</b> และส่งถึง <b style="color:#1B2430">ปลัดเทศบาล</b> ทันที · ไม่ต้องพิมพ์สำเนา</div>
+      <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}"><div style="background:#FDECEA;color:#B3261E;border-radius:10px;padding:10px 14px;font-size:13px">{{ formError }}</div></sc-if>
+    </div>
+  </sc-if>
+
+  </div>
+
+  <!-- bottom bar -->
+  <div style="position:sticky;bottom:0;background:rgba(247,249,251,.95);backdrop-filter:blur(8px);border-top:1px solid #E3E8EF;padding:12px 20px 16px;display:flex;gap:10px;z-index:5">
+    <sc-if value="{{ isInbox }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ goReceive }}" style="flex:1;border:0;background:#1E4D8C;color:#fff;border-radius:14px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;min-height:52px" style-hover="background:#173d70">+ ลงรับหนังสือใหม่</button>
+    </sc-if>
+    <sc-if value="{{ isDoc }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ confirm }}" style="flex:1;border:0;background:#1C7C54;color:#fff;border-radius:14px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;min-height:52px;line-height:1.2" style-hover="background:#156343">{{ confirmLabel }}<span style="display:block;font-size:12px;font-weight:500;opacity:.85">ลงนามดิจิทัล + ประทับเวลาอัตโนมัติ</span></button>
+    </sc-if>
+    <sc-if value="{{ isReceive }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ submitReceive }}" style="flex:1;border:0;background:#1E4D8C;color:#fff;border-radius:14px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;min-height:52px" style-hover="background:#173d70">ลงรับและส่งถึงปลัด</button>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#1B2430;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:toastIn .25s ease;z-index:50;max-width:90%;text-align:center">{{ toast }}</div>
+  </sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;720px&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'inbox', tab: 'todo', docId: 1, action: 'forward', draft: '', showPreview: false, toast: '',
+    addingRecip: false, newName: '', newId: '', scanned: false, formError: '',
+    form: { ref: '', party: '', subject: '', level: 'ปกติ' },
+    recipients: [
+      { id: 'NP-0001', name: 'นายกเทศมนตรี', on: false }, { id: 'NP-0002', name: 'หัวหน้าสำนักปลัด', on: false }, { id: 'NP-0003', name: 'กองคลัง', on: false },
+      { id: 'NP-0004', name: 'กองช่าง', on: false }, { id: 'NP-0005', name: 'กองการศึกษา', on: false }, { id: 'NP-0006', name: 'กองสาธารณสุขฯ', on: false },
+    ],
+    docs: [
+      { id: 1, no: '0421', date: '12 ก.ย.', ref: 'ชม 0023.1/ว 1245', party: 'อำเภอหางดง', subject: 'ขอเชิญประชุมหัวหน้าส่วนราชการประจำเดือนกันยายน', level: 'ด่วน', status: 'รอฉัน', history: [{ who: 'สมหญิง (ธุรการ)', time: '12 ก.ย. 09:42', text: 'ลงรับ เสนอปลัดเทศบาล' }] },
+      { id: 2, no: '0420', date: '12 ก.ย.', ref: 'ชม 0023.3/ว 2210', party: 'ท้องถิ่นจังหวัดเชียงใหม่', subject: 'ซักซ้อมแนวทางการจัดทำงบประมาณรายจ่ายประจำปี 2570', level: 'ด่วนที่สุด', status: 'รอฉัน', history: [{ who: 'สมหญิง (ธุรการ)', time: '12 ก.ย. 10:05', text: 'ลงรับ เสนอปลัดเทศบาล' }] },
+      { id: 3, no: '0416', date: '9 ก.ย.', ref: 'ชม 0017.2/ว 3120', party: 'จังหวัดเชียงใหม่', subject: 'มาตรการเตรียมความพร้อมรับสถานการณ์อุทกภัยปลายฤดูฝน', level: 'ด่วนที่สุด', status: 'เกินกำหนด', history: [{ who: 'สมหญิง (ธุรการ)', time: '9 ก.ย. 08:50', text: 'ลงรับ เสนอปลัดเทศบาล' }] },
+      { id: 4, no: '0414', date: '8 ก.ย.', ref: 'ชม 0023.1/ว 1198', party: 'อำเภอหางดง', subject: 'การจัดงานเฉลิมพระเกียรติ ประจำปี 2569', level: 'ด่วนมาก', status: 'รอฉัน', history: [{ who: 'สมหญิง (ธุรการ)', time: '8 ก.ย. 11:20', text: 'ลงรับ เสนอปลัดเทศบาล' }] },
+      { id: 5, no: '0419', date: '11 ก.ย.', ref: 'ชม 0718/1532', party: 'โรงพยาบาลหางดง', subject: 'ขอความอนุเคราะห์ประชาสัมพันธ์การฉีดวัคซีนไข้หวัดใหญ่', level: 'ปกติ', status: 'ส่งต่อแล้ว', history: [{ who: 'สมหญิง (ธุรการ)', time: '11 ก.ย. 09:10', text: 'ลงรับ เสนอปลัดเทศบาล' }, { who: 'ประเสริฐ (ปลัด)', time: '11 ก.ย. 13:30', text: 'มอบสำนักปลัดประชาสัมพันธ์ → หัวหน้าสำนักปลัด' }] },
+      { id: 6, no: '0415', date: '8 ก.ย.', ref: 'กษ 0906/ว 771', party: 'เกษตรอำเภอหางดง', subject: 'ขอเชิญร่วมโครงการส่งเสริมเกษตรอินทรีย์ตำบลน้ำแพร่', level: 'ปกติ', status: 'จบเรื่อง', history: [{ who: 'ประเสริฐ (ปลัด)', time: '8 ก.ย. 15:00', text: 'ทราบ' }] },
+    ],
+  };
+  toast(m) { this.setState({ toast: m }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: '' }), 2600); }
+  statusStyle(st) { return { 'รอฉัน': ['#FDF3E1', '#8A5A00'], 'เกินกำหนด': ['#FDECEA', '#B3261E'], 'ส่งต่อแล้ว': ['#E8EFF8', '#1E4D8C'], 'จบเรื่อง': ['#E6F4EE', '#1C7C54'] }[st]; }
+  levelFg(l) { return l === 'ปกติ' ? '#66758A' : l === 'ด่วน' ? '#B7791F' : '#B3261E'; }
+  finish(id, status, text) {
+    const now = '13 ก.ย. ' + new Date().toTimeString().slice(0, 5);
+    this.setState(s => ({ docs: s.docs.map(d => d.id === id ? { ...d, status, history: [...d.history, { who: 'ประเสริฐ (ปลัด)', time: now, text: text + ' · ลงนามดิจิทัล' }] } : d), screen: 'inbox', draft: '', recipients: s.recipients.map(r => ({ ...r, on: false })), action: 'forward' }));
+  }
+  renderVals() {
+    const s = this.state;
+    const dec = d => { const [statusBg, statusFg] = this.statusStyle(d.status); return { ...d, statusBg, statusFg, levelFg: this.levelFg(d.level), actionable: d.status === 'รอฉัน' || d.status === 'เกินกำหนด', open: () => this.setState({ screen: 'doc', docId: d.id, showPreview: false }), ack: () => { this.finish(d.id, 'จบเรื่อง', 'ทราบ'); this.toast(`รับที่ ${d.no} · ทราบ จบเรื่องแล้ว`); } }; };
+    const todo = s.docs.filter(d => d.status === 'รอฉัน' || d.status === 'เกินกำหนด'), sent = s.docs.filter(d => d.status === 'ส่งต่อแล้ว'), done = s.docs.filter(d => d.status === 'จบเรื่อง');
+    const tabDefs = [['todo', 'รอฉันทำ', todo], ['sent', 'ส่งต่อแล้ว', sent], ['done', 'จบเรื่อง', done]];
+    const tabs = tabDefs.map(([id, label, arr]) => { const a = s.tab === id; return { label, count: arr.length, go: () => this.setState({ tab: id }), bg: a ? '#1B2430' : '#fff', fg: a ? '#fff' : '#3A4555' }; });
+    const list = tabDefs.find(t => t[0] === s.tab)[2].map(dec);
+    const doc = dec(s.docs.find(d => d.id === s.docId) || s.docs[0]);
+    const actDefs = [['ack', 'ทราบ', '#1C7C54'], ['forward', 'ส่งต่อ / สั่งการ', '#1E4D8C'], ['circulate', 'แจ้งเวียน', '#8A5A00']];
+    const actions = actDefs.map(([id, label, c]) => { const a = s.action === id; return { label, pick: () => this.setState({ action: id }), bg: a ? c : '#fff', fg: a ? '#fff' : c, border: a ? c : '#E3E8EF' }; });
+    const chosen = s.recipients.filter(r => r.on);
+    const recipients = s.recipients.map(r => ({ ...r, toggle: () => this.setState(st => ({ recipients: st.recipients.map(x => x.id === r.id ? { ...x, on: !x.on } : x) })), bg: r.on ? '#E8EFF8' : '#fff', fg: r.on ? '#1E4D8C' : '#3A4555', border: r.on ? '#1E4D8C' : '#E3E8EF' }));
+    const needRecipients = s.action !== 'ack';
+    const quick = (s.action === 'circulate' ? ['เพื่อทราบและถือปฏิบัติ', 'เพื่อทราบ', 'แจ้งผู้เกี่ยวข้องทราบ'] : ['พิจารณาดำเนินการ', 'ดำเนินการ รายงานผลใน 7 วัน', 'เห็นชอบตามเสนอ']).map(label => ({ label, use: () => this.setState({ draft: label }) }));
+    const names = chosen.map(r => r.name).join(', ');
+    const summary = s.action === 'ack' ? `จะบันทึก "ทราบ" ปิดเรื่องนี้ ลงนามและประทับเวลาอัตโนมัติ` : !chosen.length ? 'ยังไม่เลือกผู้รับ' : `${s.action === 'circulate' ? 'แจ้งเวียนถึง' : 'ส่งถึง'} ${names}${s.draft ? ` — "${s.draft}"` : ''}`;
+    const confirm = () => {
+      if (s.action === 'ack') { this.finish(doc.id, 'จบเรื่อง', 'ทราบ'); return this.toast(`รับที่ ${doc.no} · ทราบ จบเรื่องแล้ว`); }
+      if (!chosen.length) return this.toast('เลือกผู้รับก่อนครับ');
+      const verb = s.action === 'circulate' ? 'แจ้งเวียน' : 'ส่งต่อ';
+      this.finish(doc.id, 'ส่งต่อแล้ว', `${s.draft || (s.action === 'circulate' ? 'เพื่อทราบ' : 'พิจารณาดำเนินการ')} → ${names}`);
+      this.toast(`${verb}รับที่ ${doc.no} ถึง ${chosen.length} ผู้รับแล้ว`);
+    };
+    const nextNo = String(422 + (s.docs.length - 6)).padStart(4, '0');
+    const levels = ['ปกติ', 'ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'].map(l => { const a = s.form.level === l; return { label: l, pick: () => this.setForm('level', l), bg: a ? '#1B2430' : '#fff', fg: a ? '#fff' : '#3A4555', border: a ? '#1B2430' : '#E3E8EF' }; });
+    const titles = { doc: `รับที่ ${doc.no}`, receive: 'ลงรับหนังสือ' };
+    return {
+      goFull: () => { if (typeof this.props.onFull === 'function') this.props.onFull(); else window.location.href = 'ระบบสารบรรณ.dc.html'; },
+      isInbox: s.screen === 'inbox', notInbox: s.screen !== 'inbox', isDoc: s.screen === 'doc', isReceive: s.screen === 'receive', title: titles[s.screen] || '',
+      goInbox: () => this.setState({ screen: 'inbox' }), goReceive: () => this.setState({ screen: 'receive' }), paperSaved: (1384 + (s.docs.length - 6) * 4).toLocaleString('th-TH'),
+      tabs, list, emptyList: !list.length, doc, hasHistory: doc.history.length > 0, history: doc.history,
+      showPreview: s.showPreview, togglePreview: () => this.setState({ showPreview: !s.showPreview }), previewHint: s.showPreview ? 'แตะเพื่อซ่อน' : 'แตะเพื่อดูเอกสาร',
+      actions, needRecipients, needText: true, textStepLabel: s.action === 'ack' ? '2. หมายเหตุ (ไม่บังคับ)' : '3. ข้อความสั่งการ (ไม่บังคับ)', recipients, recipCount: chosen.length,
+      addingRecip: s.addingRecip, toggleAddRecip: e => { e.preventDefault(); this.setState({ addingRecip: !s.addingRecip }); }, newName: s.newName, newId: s.newId, setNewName: e => this.setState({ newName: e.target.value }), setNewId: e => this.setState({ newId: e.target.value }),
+      saveRecip: () => { if (!s.newName.trim() || !s.newId.trim()) return this.toast('กรอกชื่อและรหัสก่อนครับ'); if (s.recipients.some(r => r.id.toLowerCase() === s.newId.trim().toLowerCase())) return this.toast('รหัสนี้มีอยู่แล้ว'); this.setState({ recipients: [...s.recipients, { id: s.newId.trim().toUpperCase(), name: s.newName.trim(), on: true }], newName: '', newId: '', addingRecip: false }); this.toast(`เพิ่ม ${s.newName.trim()} และเลือกแล้ว`); },
+      quick, draft: s.draft, setDraft: e => this.setState({ draft: e.target.value }), summary, confirm, confirmLabel: s.action === 'ack' ? 'ยืนยัน ทราบ · จบเรื่อง' : s.action === 'circulate' ? 'ยืนยัน แจ้งเวียน' : 'ยืนยัน ส่งต่อ',
+      form: s.form, setRef: e => this.setForm('ref', e.target.value), setParty: e => this.setForm('party', e.target.value), setSubject: e => this.setForm('subject', e.target.value), levels, nextNo, formError: s.formError,
+      scanned: s.scanned, notScanned: !s.scanned, scan: () => this.setState({ scanned: true, formError: '', form: { ref: 'ชม 0023.1/ว 1301', party: 'อำเภอหางดง', subject: 'ขอเชิญร่วมพิธีวันปิยมหาราช ประจำปี 2569', level: 'ด่วน' } }),
+      submitReceive: () => { const f = s.form; if (!f.ref || !f.party || !f.subject) return this.setState({ formError: 'กรอก ที่หนังสือ จาก และ เรื่อง ให้ครบ (หรือแตะสแกน)' }); this.setState({ docs: [{ id: Date.now(), no: nextNo, date: '13 ก.ย.', ref: f.ref, party: f.party, subject: f.subject, level: f.level, status: 'รอฉัน', history: [{ who: 'สมหญิง (ธุรการ)', time: '13 ก.ย. ' + new Date().toTimeString().slice(0, 5), text: 'ลงรับ เสนอปลัดเทศบาล' }] }, ...s.docs], screen: 'inbox', tab: 'todo', scanned: false, formError: '', form: { ref: '', party: '', subject: '', level: 'ปกติ' } }); this.toast(`ลงรับที่ ${nextNo} ส่งถึงปลัดแล้ว · ไม่ใช้กระดาษ`); },
+      toast: s.toast,
+    };
+  }
+  setForm(k, v) { this.setState(st => ({ form: { ...st.form, [k]: v }, formError: '' })); }
+}
+</script>
+</body>
+</html>

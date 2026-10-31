@@ -43,6 +43,11 @@ yarn-error.log*
 # (ตัวไฟล์ GeoJSON อยู่บน Cloudinary ไม่ใช่ในนี้)
 /data/map-layers.json
 /data/map-layer-versions.json
+# ระบบสารบรรณ — dev fallback ของ Mongo · seed ของสมุดผู้รับ commit อยู่ที่
+# data/saraban-units.seed.json
+/data/saraban-docs.json
+/data/saraban-units.json
+/data/saraban-years.json
 
 # vercel
 .vercel

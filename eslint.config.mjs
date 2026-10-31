@@ -28,6 +28,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Design-reference prototypes (not app code).
     "public/design_handoff_namphrae_ui/**",
+    "docs/design_handoff_esaraban/**",
   ]),
 ]);
 
