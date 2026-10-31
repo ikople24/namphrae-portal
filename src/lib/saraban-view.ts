@@ -2,6 +2,7 @@
 // ตรรกะของหน้าจอสารบรรณ (รอบ 1C) — client-safe บริสุทธิ์ แยกจาก component เพื่อเทสต์ได้
 // component วาดอย่างเดียว ทุกการตัดสิน (ปุ่มไหนโชว์ ข้อความไหน วันที่แบบไหน) อยู่ที่นี่
 
+import { arabicDigits } from '@/lib/iso-date';
 import { MAX_FILE_BYTES } from '@/lib/saraban-attachment';
 import { isOpen, type RegisterView } from '@/lib/saraban-doc';
 import { LEVEL_LABELS, statusLabel } from '@/lib/saraban-labels';
@@ -60,20 +61,35 @@ export function thaiDateTime(iso: string): string {
   return `${thaiDate(d.toISOString().slice(0, 10))} ${hh}:${mm}`;
 }
 
+/** ISO ค.ศ. → 'วว/ดด/ปปปป' พ.ศ. ของช่องกรอกวันที่ · ว่างหรือผิดรูป → '' */
+export function isoToThaiInput(iso: string): string {
+  const m = ISO_DATE.exec(iso ?? '');
+  if (!m) return '';
+  return `${m[3]}/${m[2]}/${Number(m[1]) + 543}`;
+}
+
+export type ThaiDateParse = { ok: true; iso: string } | { ok: false; error: string };
+
+const THAI_INPUT = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/;
+
 /**
- * คำอธิบายใต้ช่องวันที่ — ช่อง <input type="date"> รับปี 2569 ได้เงียบ ๆ (เป็นวันที่ที่มีจริงใน ค.ศ.)
- * ป้าย พ.ศ. ใต้ช่องทำให้เห็นความผิดตั้งแต่ก่อนกด (สเปกข้อ 6 หน้า /receive)
+ * วันที่ที่ผู้ใช้พิมพ์แบบไทย 'วว/ดด/ปปปป' (ปี พ.ศ.) → ISO ค.ศ. ที่ API รับ
+ * - คั่นด้วย / - . ได้ · เลขไทยได้ · ปีสองหลักเป็น 25xx ('31/10/69' = 2569) แบบที่เขียนกันในหนังสือ
+ * - ปีที่ดูเป็น ค.ศ. (ต่ำกว่า 2400) ปฏิเสธพร้อมบอกเหตุ — ช่องนี้เป็น พ.ศ. เสมอ ห้ามเดาว่าเป็น ค.ศ.
+ *   เพราะเดาผิดทีเดียวคลาด 543 ปีบนทะเบียนราชการ
+ * - ว่าง = ok + iso '' (ช่องไม่บังคับ เช่น กำหนดแล้วเสร็จ) ช่องบังคับให้ฟอร์มตัดสินเอง
  */
-export function dateHint(value: string): { text: string; warn: boolean } {
-  if (!value) return { text: '', warn: false };
-  const year = Number(value.slice(0, 4));
-  if (year > 2100) {
-    return { text: `ปี ${year} ดูเหมือนเป็น พ.ศ. — ช่องนี้ใช้ ค.ศ. (${year - 543})`, warn: true };
-  }
-  if (!ISO_DATE.test(value) || year < 1900 || !isRealDate(value)) {
-    return { text: 'วันที่ไม่มีอยู่จริง', warn: true };
-  }
-  return { text: `= ${thaiDate(value)}`, warn: false };
+export function parseThaiInput(text: string): ThaiDateParse {
+  const s = arabicDigits(text ?? '').trim();
+  if (!s) return { ok: true, iso: '' };
+  const m = THAI_INPUT.exec(s);
+  if (!m) return { ok: false, error: 'ใช้รูปแบบ วว/ดด/ปปปป เช่น 31/10/2569' };
+  const be = m[3].length === 2 ? 2500 + Number(m[3]) : Number(m[3]);
+  if (be < 2400) return { ok: false, error: 'ใส่ปีเป็น พ.ศ. เช่น 2569' };
+  const iso = `${be - 543}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const year = be - 543;
+  if (year < 1900 || year > 2100 || !isRealDate(iso)) return { ok: false, error: 'วันที่ไม่มีอยู่จริง' };
+  return { ok: true, iso };
 }
 
 export function fileSizeLabel(bytes: number): string {

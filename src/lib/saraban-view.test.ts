@@ -2,11 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   changeValue,
-  dateHint,
   docsKey,
   errorMessage,
   fileSizeLabel,
+  isoToThaiInput,
   isUrgentOpen,
+  parseThaiInput,
   precheckFile,
   thaiDate,
   thaiDateTime,
@@ -57,14 +58,28 @@ describe('วันที่ไทย', () => {
     expect(thaiDateTime('nope')).toBe('');
   });
 
-  it('dateHint: บอกวันที่ พ.ศ. ใต้ช่อง และเตือนปี พ.ศ. ที่พิมพ์ลงช่อง ค.ศ.', () => {
-    expect(dateHint('')).toEqual({ text: '', warn: false });
-    expect(dateHint('2026-09-13')).toEqual({ text: '= 13 ก.ย. 2569', warn: false });
-    expect(dateHint('2569-09-13')).toEqual({
-      text: 'ปี 2569 ดูเหมือนเป็น พ.ศ. — ช่องนี้ใช้ ค.ศ. (2026)',
-      warn: true,
-    });
-    expect(dateHint('2026-02-30')).toEqual({ text: 'วันที่ไม่มีอยู่จริง', warn: true });
+  it('isoToThaiInput: ISO ค.ศ. → วว/ดด/ปปปป พ.ศ. สำหรับช่องกรอก', () => {
+    expect(isoToThaiInput('2026-10-31')).toBe('31/10/2569');
+    expect(isoToThaiInput('2027-02-01')).toBe('01/02/2570');
+    expect(isoToThaiInput('')).toBe('');
+    expect(isoToThaiInput('nope')).toBe('');
+  });
+
+  it('parseThaiInput: วันที่ พ.ศ. ที่พิมพ์ → ISO ค.ศ. — รับ / - . เลขไทย และปีสองหลัก', () => {
+    expect(parseThaiInput('31/10/2569')).toEqual({ ok: true, iso: '2026-10-31' });
+    expect(parseThaiInput(' 1/2/2570 ')).toEqual({ ok: true, iso: '2027-02-01' });
+    expect(parseThaiInput('31-10-2569')).toEqual({ ok: true, iso: '2026-10-31' });
+    expect(parseThaiInput('31.10.2569')).toEqual({ ok: true, iso: '2026-10-31' });
+    expect(parseThaiInput('๓๑/๑๐/๒๕๖๙')).toEqual({ ok: true, iso: '2026-10-31' });
+    expect(parseThaiInput('31/10/69')).toEqual({ ok: true, iso: '2026-10-31' });
+    expect(parseThaiInput('')).toEqual({ ok: true, iso: '' });
+  });
+
+  it('parseThaiInput: ปี ค.ศ. วันที่ไม่มีจริง และรูปแบบอื่นไม่ผ่าน พร้อมเหตุผล', () => {
+    expect(parseThaiInput('31/10/2026')).toEqual({ ok: false, error: 'ใส่ปีเป็น พ.ศ. เช่น 2569' });
+    expect(parseThaiInput('30/02/2569')).toEqual({ ok: false, error: 'วันที่ไม่มีอยู่จริง' });
+    expect(parseThaiInput('31/10')).toEqual({ ok: false, error: 'ใช้รูปแบบ วว/ดด/ปปปป เช่น 31/10/2569' });
+    expect(parseThaiInput('abc')).toEqual({ ok: false, error: 'ใช้รูปแบบ วว/ดด/ปปปป เช่น 31/10/2569' });
   });
 });
 

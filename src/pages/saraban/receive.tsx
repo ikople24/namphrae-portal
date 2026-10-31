@@ -178,7 +178,7 @@ function ReceivePage() {
               </p>
               <div className="flex gap-2">
                 <input type="number" min={1} className={inputClass} placeholder="เช่น 422" value={startNo} onChange={(e) => setStart(e.target.value)} />
-                <button type="button" className={outlineButton} disabled={!startNo || Number(startNo) < 1} onClick={saveStartNo}>
+                <button type="button" className={`${outlineButton} whitespace-nowrap`} disabled={!startNo || Number(startNo) < 1} onClick={saveStartNo}>
                   ตั้งค่า
                 </button>
               </div>

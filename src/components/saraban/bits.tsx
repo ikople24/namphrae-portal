@@ -1,9 +1,10 @@
 // ชิ้นส่วนร่วมของหน้าจอสารบรรณ — ค่าสี/ขนาดตาม handoff § Design Tokens
-import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import Icon from '@/components/Icon';
+import { buildMonthGrid, shiftMonth, THAI_DOW, THAI_MONTHS, todayInBangkok } from '@/lib/calendar-grid';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { LEVEL_LABELS, statusLabel } from '@/lib/saraban-labels';
-import { dateHint, fileSizeLabel, precheckFile, thaiDateTime } from '@/lib/saraban-view';
+import { fileSizeLabel, isoToThaiInput, parseThaiInput, precheckFile, thaiDate, thaiDateTime } from '@/lib/saraban-view';
 import type { DisplayStatus, SarabanLevel, SarabanRegister } from '@/types/saraban';
 
 const STATUS_TONE: Record<DisplayStatus, string> = {
@@ -68,7 +69,11 @@ export function Field({
   );
 }
 
-/** ช่องวันที่พร้อมป้าย พ.ศ. ใต้ช่อง (dateHint) */
+/**
+ * ช่องวันที่ปฏิทินไทย — พิมพ์ 'วว/ดด/ปปปป' (พ.ศ.) หรือกดเลือกจากปฏิทิน · ค่าที่ส่งออกเป็น ISO ค.ศ. เสมอ
+ * <input type="date"> แสดงตามภาษาของเครื่อง บังคับเป็นปี พ.ศ. ไม่ได้ จึงทำเอง
+ * พิมพ์ไม่ครบหรือผิด → ส่ง '' ให้ฟอร์ม (ถือว่ายังไม่กรอก) แต่ข้อความที่พิมพ์ยังอยู่ให้แก้ต่อ
+ */
 export function DateField({
   label,
   value,
@@ -80,11 +85,172 @@ export function DateField({
   onChange: (value: string) => void;
   required?: boolean;
 }) {
-  const hint = dateHint(value);
+  const id = useId();
+  const box = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState(() => isoToThaiInput(value));
+  const [emitted, setEmitted] = useState(value);
+  const [touched, setTouched] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  // ค่าจากข้างนอกเปลี่ยน (เช่น "วันนี้" มาถึงหลังโหลด หรือฟอร์มถูกล้าง) → แสดงตาม
+  // ปรับ state ระหว่าง render ตามแนวที่ React แนะนำ ไม่ใช่ใน effect
+  if (value !== emitted) {
+    setEmitted(value);
+    setText(isoToThaiInput(value));
+  }
+
+  function emit(iso: string) {
+    setEmitted(iso);
+    onChange(iso);
+  }
+
+  function type(next: string) {
+    setText(next);
+    const parsed = parseThaiInput(next);
+    emit(parsed.ok ? parsed.iso : '');
+  }
+
+  function pick(iso: string) {
+    setText(isoToThaiInput(iso));
+    setTouched(false);
+    setOpen(false);
+    emit(iso);
+  }
+
+  // ปิดปฏิทินเมื่อคลิกนอกกล่องหรือกด Esc — setState อยู่ใน callback ของ event ไม่ใช่ตัว effect
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const parsed = parseThaiInput(text);
+  const problem = touched && !parsed.ok ? parsed.error : '';
+
   return (
-    <Field label={label} required={required} hint={hint.text} warn={hint.warn}>
-      <input type="date" className={inputClass} value={value} onChange={(e) => onChange(e.target.value)} />
-    </Field>
+    <div ref={box} className="relative flex flex-col gap-1.5 text-[13px] font-medium text-sb-ink">
+      <label htmlFor={id}>
+        {label}
+        {required ? <span className="text-sb-danger"> *</span> : null}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          className={`${inputClass} pr-11 ${problem ? 'border-sb-danger' : ''}`}
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={10}
+          placeholder="วว/ดด/ปปปป เช่น 31/10/2569"
+          value={text}
+          onChange={(e) => type(e.target.value)}
+          onBlur={() => setTouched(true)}
+          aria-invalid={problem ? true : undefined}
+        />
+        <button
+          type="button"
+          aria-label={`เลือก${label}จากปฏิทิน`}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-sb-muted hover:bg-sb-hover hover:text-sb-accent"
+        >
+          <Icon name="calendar_month" size={20} />
+        </button>
+      </div>
+      {problem ? <span className="text-xs font-normal text-sb-danger">{problem}</span> : null}
+      {open ? <ThaiCalendar value={parsed.ok ? parsed.iso : ''} onPick={pick} /> : null}
+    </div>
+  );
+}
+
+/** ปฏิทินไทยของ DateField — เดือนไทย ปี พ.ศ. สัปดาห์เริ่มวันจันทร์ตาม buildMonthGrid ของปฏิทินงาน */
+function ThaiCalendar({ value, onPick }: { value: string; onPick: (iso: string) => void }) {
+  const today = todayInBangkok();
+  const [month, setMonth] = useState((value || today).slice(0, 7));
+  const year = Number(month.slice(0, 4));
+  const monthNo = Number(month.slice(5, 7));
+  const thisYear = Number(today.slice(0, 4));
+  // ย้อนหลัง 10 ปีพอสำหรับหนังสือเก่า เดินหน้า 1 ปีสำหรับกำหนดแล้วเสร็จ · ปีที่เลือกอยู่ต้องอยู่ในรายการเสมอ
+  const years = Array.from({ length: 12 }, (_, i) => thisYear - 10 + i);
+  if (!years.includes(year)) years.push(year);
+  years.sort((a, b) => a - b);
+  const select = 'rounded-lg border border-sb-line-input bg-white px-2 py-1 text-[13px]';
+
+  return (
+    <div
+      role="dialog"
+      aria-label="ปฏิทิน"
+      className="absolute left-0 top-full z-30 mt-1 w-[300px] rounded-xl border border-sb-line bg-white p-3 font-normal shadow-[0_8px_24px_rgba(0,0,0,.12)]"
+    >
+      <div className="mb-2 flex items-center gap-1.5">
+        <button type="button" aria-label="เดือนก่อน" onClick={() => setMonth(shiftMonth(month, -1))} className="rounded-lg p-1 text-sb-muted hover:bg-sb-hover">
+          <Icon name="chevron_left" size={20} />
+        </button>
+        <select aria-label="เดือน" className={`${select} flex-1`} value={monthNo} onChange={(e) => setMonth(`${year}-${e.target.value.padStart(2, '0')}`)}>
+          {THAI_MONTHS.map((name, i) => (
+            <option key={name} value={i + 1}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <select aria-label="ปี พ.ศ." className={select} value={year} onChange={(e) => setMonth(`${e.target.value}-${month.slice(5, 7)}`)}>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y + 543}
+            </option>
+          ))}
+        </select>
+        <button type="button" aria-label="เดือนถัดไป" onClick={() => setMonth(shiftMonth(month, 1))} className="rounded-lg p-1 text-sb-muted hover:bg-sb-hover">
+          <Icon name="chevron_right" size={20} />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center text-xs">
+        {THAI_DOW.map((d) => (
+          <span key={d} className="py-1 text-sb-muted">
+            {d}
+          </span>
+        ))}
+        {buildMonthGrid(year, monthNo)
+          .flat()
+          .map((cell) => {
+            const selected = cell.date === value;
+            const isToday = cell.date === today;
+            return (
+              <button
+                key={cell.date}
+                type="button"
+                aria-label={thaiDate(cell.date)}
+                aria-pressed={selected}
+                onClick={() => onPick(cell.date)}
+                className={`h-8 rounded-lg text-[13px] ${
+                  selected
+                    ? 'bg-sb-accent font-semibold text-white'
+                    : `${cell.inMonth ? 'text-sb-ink' : 'text-sb-muted/50'} hover:bg-sb-accent-light ${isToday ? 'font-semibold ring-1 ring-sb-accent' : ''}`
+                }`}
+              >
+                {Number(cell.date.slice(8))}
+              </button>
+            );
+          })}
+      </div>
+      <div className="mt-2 flex justify-between border-t border-sb-line pt-2 text-[13px]">
+        <button type="button" onClick={() => onPick(today)} className="rounded-lg px-2 py-1 font-medium text-sb-accent hover:bg-sb-accent-light">
+          วันนี้
+        </button>
+        <button type="button" onClick={() => onPick('')} className="rounded-lg px-2 py-1 text-sb-muted hover:bg-sb-hover">
+          ล้าง
+        </button>
+      </div>
+    </div>
   );
 }
 

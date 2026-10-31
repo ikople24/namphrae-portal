@@ -6,7 +6,7 @@
 
 export type GridCell = { date: string; inMonth: boolean };
 
-const THAI_MONTHS = [
+export const THAI_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
 ];
