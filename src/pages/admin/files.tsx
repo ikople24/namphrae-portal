@@ -46,11 +46,13 @@ function FilesPage() {
   const { q, page } = parseListQuery(router.query);
 
   // ช่องค้นหา: พิมพ์อิสระ แล้ว debounce ไปเขียน URL · URL เปลี่ยนจาก back/forward → sync กลับ
+  // sync เฉพาะเมื่อ draft ไม่ตรงกับ URL — ไม่งั้น URL ที่เพิ่งได้ค่า trim แล้วจะทับช่องว่างท้ายคำ
+  // และตัวที่พิมพ์ระหว่างรอ router.replace ("รายงาน " → "รายงาน" แล้วพิมพ์ต่อได้ "รายงาน2568")
   const [draft, setDraft] = useState(q);
   const [syncedQ, setSyncedQ] = useState(q);
   if (q !== syncedQ) {
     setSyncedQ(q);
-    setDraft(q);
+    if (draft.trim() !== q) setDraft(q);
   }
 
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -83,15 +85,17 @@ function FilesPage() {
   }, [draft, q, router]);
 
   // หน้าเกินจำนวนจริง (ลบรายการสุดท้ายของหน้าท้าย / ลิงก์เก่า) → ไปหน้าสุดท้าย
+  // ต้องเช็ค data.page === page: keepPreviousData ยังถือข้อมูลว่างของหน้าเดิมระหว่างรอหน้าใหม่
+  // และ router เปลี่ยน identity ทุกครั้งที่ route เปลี่ยน — ไม่เช็คแล้ว effect จะ replace ซ้ำวนไม่จบ
   useEffect(() => {
-    if (data && data.items.length === 0 && data.total > 0 && data.page > 1) {
+    if (data && data.page === page && data.items.length === 0 && data.total > 0 && page > 1) {
       void router.replace(
         { pathname: router.pathname, query: listQuery(q, totalPages(data.total)) },
         undefined,
         { shallow: true }
       );
     }
-  }, [data, q, router]);
+  }, [data, page, q, router]);
 
   function goToPage(next: number) {
     void router.push({ pathname: router.pathname, query: listQuery(q, next) }, undefined, {
@@ -99,9 +103,13 @@ function FilesPage() {
     });
   }
 
+  // revalidate ทั้งตอนสำเร็จและล้ม — ล้มเพราะ not_found (คนอื่นลบไปก่อน) แถวต้องหายไปด้วย
   async function onRename(item: LibraryListItem, title: string) {
-    await renameLibraryFile(item.id, title);
-    await mutate();
+    try {
+      await renameLibraryFile(item.id, title);
+    } finally {
+      await mutate();
+    }
   }
 
   async function onDelete(item: LibraryListItem) {
@@ -109,10 +117,10 @@ function FilesPage() {
     setNotice(null);
     try {
       await deleteLibraryFile(item.id);
-      await mutate();
     } catch (err) {
       setNotice(errorText(err));
     }
+    await mutate();
   }
 
   async function onUploaded() {
@@ -196,6 +204,15 @@ function FilesPage() {
         ) : null}
         {notice ? (
           <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{notice}</p>
+        ) : null}
+        {/* keepPreviousData ยังโชว์ตารางเดิม — ต้องบอกว่าที่เห็นไม่ใช่ผลของคำขอล่าสุด */}
+        {error && data ? (
+          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            โหลดรายการล่าสุดไม่สำเร็จ รายการที่เห็นอาจไม่ตรงกับหน้า/คำค้นปัจจุบัน{' '}
+            <button onClick={() => void mutate()} className="font-semibold underline">
+              ลองใหม่
+            </button>
+          </p>
         ) : null}
 
         <input

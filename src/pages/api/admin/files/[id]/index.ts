@@ -27,15 +27,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'DELETE') {
+    // ไม่มี storage = ลบ object ไม่ได้ — ห้ามลบแถวแล้วทิ้ง object ไว้เงียบ ๆ (ไม่มีเครื่องมือไล่หาไฟล์
+    // กำพร้าใต้ files/) ตอบ 503 ก่อนแตะ DB แบบเดียวกับ saraban/docs/[id]/files/[fileId].ts
+    if (!isStorageConfigured()) return res.status(503).json({ error: 'storage_not_configured' });
     try {
       const removed = await removeFile(id);
       if (!removed) return res.status(404).json({ error: 'not_found' });
       // ลบ object หลัง DB สำเร็จเท่านั้น — พลาดตรงนี้ = ไฟล์กำพร้าหนึ่งไฟล์ ไม่ใช่รายการที่ชี้ไฟล์ที่หายไป
-      if (isStorageConfigured()) {
-        await deleteObject(removed.key).catch((err) =>
-          console.warn('DELETE /api/admin/files/[id]: ลบ object ไม่สำเร็จ เหลือไฟล์กำพร้า', removed.key, err)
-        );
-      }
+      await deleteObject(removed.key).catch((err) =>
+        console.warn('DELETE /api/admin/files/[id]: ลบ object ไม่สำเร็จ เหลือไฟล์กำพร้า', removed.key, err)
+      );
       return res.status(204).end();
     } catch (err) {
       console.error('DELETE /api/admin/files/[id] failed', err);

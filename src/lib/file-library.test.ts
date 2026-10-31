@@ -175,6 +175,7 @@ describe('libraryErrorMessage', () => {
   it('code ที่รู้จัก → ข้อความไทย', () => {
     expect(libraryErrorMessage('file_too_large')).toBe('ไฟล์ใหญ่เกิน 10 MB');
     expect(libraryErrorMessage('bad_format')).toBe('รับเฉพาะไฟล์ PDF, JPG, PNG');
+    expect(libraryErrorMessage('invalid_name')).toBe('ชื่อไฟล์ยาวเกินไป (ไม่เกิน 255 ตัวอักษร)');
   });
   it('ไม่รู้จัก / ไม่มี / ชื่อ property ของ Object → ข้อความกลาง', () => {
     expect(libraryErrorMessage('อะไร')).toBe('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');

@@ -113,6 +113,7 @@ const ERROR_MESSAGES = new Map<string, string>([
   ['file_too_large', 'ไฟล์ใหญ่เกิน 10 MB'],
   ['bad_format', 'รับเฉพาะไฟล์ PDF, JPG, PNG'],
   ['invalid_title', 'กรุณาใส่ชื่อเรื่อง (ไม่เกิน 300 ตัวอักษร)'],
+  ['invalid_name', 'ชื่อไฟล์ยาวเกินไป (ไม่เกิน 255 ตัวอักษร)'],
   ['feature_denied', 'คุณไม่มีสิทธิ์จัดการคลังไฟล์'],
   ['not_found', 'ไม่พบไฟล์นี้ อาจถูกลบไปแล้ว'],
 ]);
