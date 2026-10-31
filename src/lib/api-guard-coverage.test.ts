@@ -9,7 +9,15 @@ import { describe, expect, it } from 'vitest';
 const API_DIR = join(process.cwd(), 'src', 'pages', 'api', 'admin');
 // me.ts: identity ของ sidebar ต้องเปิดให้สมาชิกทุกคน
 // config.ts: GET ใช้ร่วมหลายฟีเจอร์ ส่วน PUT เช็ค hasFeature('data') ในไฟล์เอง
-const BARE_REQUIRE_ADMIN_OK = new Set(['me.ts', 'config.ts']);
+// files/index.ts: GET รายการคลังไฟล์เปิดให้สมาชิกทุกคน ส่วน POST เช็ค hasFeature('files') ในไฟล์เอง
+//   (ตรึงด้วยเทสต์ท้ายไฟล์นี้)
+// files/[id]/view.ts: เปิดไฟล์ในคลัง สมาชิกทุกคนดูได้ (สเปก 2026-10-31 ข้อ 3)
+const BARE_REQUIRE_ADMIN_OK = new Set([
+  'me.ts',
+  'config.ts',
+  'files/index.ts',
+  'files/[id]/view.ts',
+]);
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -34,4 +42,16 @@ describe('guard coverage: /api/admin/**', () => {
       expect(guarded, `${rel} ไม่มี guard หรือใช้ requireAdmin นอก allowlist`).toBe(true);
     });
   }
+});
+
+describe('คลังไฟล์: route ที่เปิดให้สมาชิกทุกคนยังกันการเขียน', () => {
+  it('files/index.ts: POST เช็คสิทธิ์ files ในไฟล์เอง', () => {
+    const src = readFileSync(join(API_DIR, 'files', 'index.ts'), 'utf8');
+    expect(src).toContain("hasFeature(admin, 'files')");
+  });
+
+  it('files/[id]/view.ts: รับเฉพาะ GET', () => {
+    const src = readFileSync(join(API_DIR, 'files', '[id]', 'view.ts'), 'utf8');
+    expect(src).toContain("req.method !== 'GET'");
+  });
 });
