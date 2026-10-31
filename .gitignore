@@ -49,6 +49,9 @@ yarn-error.log*
 /data/saraban-units.json
 /data/saraban-years.json
 
+# คลังไฟล์ — dev fallback ของ Mongo
+/data/file-library.json
+
 # vercel
 .vercel
 
