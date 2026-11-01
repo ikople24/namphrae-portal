@@ -18,6 +18,7 @@ const NAV = [
   { href: '/admin/categories', label: 'หมวดหมู่', icon: 'category', exact: false, feature: 'categories' },
   { href: '/admin/map', label: 'ไฟล์แผนที่', icon: 'layers', exact: false, feature: 'map' },
   { href: '/admin/forest', label: 'ข้อมูลป่าไม้', icon: 'forest', exact: false, feature: 'forest' },
+  { href: '/admin/files', label: 'คลังไฟล์', icon: 'folder', exact: false, feature: 'member' },
   { href: '/saraban', label: 'ระบบสารบรรณ', icon: 'mail', exact: false, feature: 'saraban' },
   { href: '/admin/settings', label: 'ตั้งค่าเว็บไซต์', icon: 'tune', exact: false, feature: 'settings' },
   { href: '/admin/users', label: 'จัดการผู้ใช้', icon: 'group', exact: false, feature: 'manager' },
@@ -60,7 +61,10 @@ export default function AdminLayout({
       : NAV.filter((item) =>
           item.feature === 'manager'
             ? me.isManager === true
-            : me.isManager === true || (me.features ?? []).includes(item.feature)
+            : // 'member' = สมาชิกทุกคน (คลังไฟล์ — การดูไม่ผูกฟีเจอร์ สเปก 2026-10-31 ข้อ 3)
+              item.feature === 'member' ||
+              me.isManager === true ||
+              (me.features ?? []).includes(item.feature)
         );
 
   // Badge: จำนวนผู้สมัครที่รออนุมัติ. Refresh ทุกนาที; ถ้า endpoint พัง

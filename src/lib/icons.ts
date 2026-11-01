@@ -60,6 +60,7 @@ export const ICON_NAMES = [
   'description',
   'drag_indicator',
   'edit',
+  'folder',
   'forest',
   'group',
   'health_and_safety',
