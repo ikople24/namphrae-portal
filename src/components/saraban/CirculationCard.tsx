@@ -42,6 +42,7 @@ export default function CirculationCard({
               <button
                 type="button"
                 disabled={busy}
+                aria-label={`บันทึกว่า ${c.unitName} ทราบแล้ว`}
                 onClick={() => onAck(c.unitId)}
                 className="rounded-lg border border-sb-success px-2.5 py-1 text-xs font-medium text-sb-success hover:bg-sb-success-bg disabled:opacity-60"
               >

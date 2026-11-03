@@ -16,7 +16,10 @@ export default function FlowSteps({ step, overdue }: { step: FlowStepNo; overdue
         return (
           <li key={label} aria-current={current ? 'step' : undefined}>
             <div className={`h-1.5 rounded-full ${bar}`} />
-            <p className={`mt-1.5 text-center text-[11px] leading-tight ${current ? 'font-semibold' : ''} ${text}`}>{label}</p>
+            <p className={`mt-1.5 text-center text-[11px] leading-tight ${current ? 'font-semibold' : ''} ${text}`}>{label}
+              {done ? <span className="sr-only"> (ผ่านแล้ว)</span> : null}
+              {current ? <span className="sr-only"> (ขั้นปัจจุบัน{overdue ? ' เกินกำหนด' : ''})</span> : null}
+            </p>
           </li>
         );
       })}

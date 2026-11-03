@@ -4,7 +4,7 @@
 import { useState, type FormEvent } from 'react';
 import Icon from '@/components/Icon';
 import { Field, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
-import type { AnnotateRoute } from '@/lib/saraban-flow';
+import { MAX_CIRCULATE, type AnnotateRoute } from '@/lib/saraban-flow';
 import { QUICK_NOTES, ROUTE_LABELS } from '@/lib/saraban-labels';
 import type { SarabanDoc, SarabanUnit } from '@/types/saraban';
 
@@ -29,14 +29,18 @@ export default function AnnotateForm({
   onNoteChange: (note: string) => void;
   onSubmit: (body: AnnotateSubmit) => void;
 }) {
-  const [target, setTarget] = useState<string>(STAY);
+  const [rawTarget, setTarget] = useState<string>(STAY);
   const [circulating, setCirculating] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const already = new Set(doc.circulation.map((c) => c.unitId));
   const choosable = units.filter((u) => !already.has(u.id));
   const targets = units.filter((u) => u.id !== doc.holderUnitId);
-  const circulateTo = circulating ? [...picked] : [];
+  // refetch แล้วปลายทางที่เลือกไว้อาจกลายเป็นที่อยู่ปัจจุบันหรือถูกปิด — ตกกลับ "คงไว้ที่เดิม" ให้ select สรุป ปุ่ม และคำขอตรงกัน
+  const target = rawTarget === CLOSE || targets.some((u) => u.id === rawTarget) ? rawTarget : STAY;
+  // ตำแหน่งที่ติ๊กไว้อาจถูกเวียนไปแล้วหรือถูกปิดหลัง refetch — ตัดออกก่อนส่ง
+  const circulateTo = circulating ? [...picked].filter((id) => choosable.some((u) => u.id === id)) : [];
+  const tooMany = circulateTo.length > MAX_CIRCULATE;
   const route: AnnotateRoute =
     target === STAY ? { kind: 'stay' } : target === CLOSE ? { kind: 'close' } : { kind: 'forward', toUnitId: target };
   const targetName = units.find((u) => u.id === target)?.name;
@@ -50,13 +54,15 @@ export default function AnnotateForm({
     .filter(Boolean)
     .join(' · ');
   const submitLabel = route.kind === 'forward' ? 'บันทึกและส่งต่อ' : route.kind === 'close' ? 'บันทึกและจบเรื่อง' : 'บันทึก';
-  const blocked = busy || !note.trim() || (circulating && picked.size === 0);
+  const blocked = busy || !note.trim() || (circulating && circulateTo.length === 0) || tooMany;
 
   function togglePick(id: string) {
-    const next = new Set(picked);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setPicked(next);
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function submit(e: FormEvent) {
@@ -74,7 +80,7 @@ export default function AnnotateForm({
             key={q}
             type="button"
             className="rounded-full border border-sb-line bg-white px-3 py-1 text-xs hover:bg-sb-hover"
-            onClick={() => onNoteChange(note.trim() ? `${note.trim()} ${q}` : q)}
+            onClick={() => onNoteChange((note.trim() ? `${note.trim()} ${q}` : q).slice(0, 1000))}
           >
             {q}
           </button>
@@ -109,7 +115,7 @@ export default function AnnotateForm({
               ล้าง
             </button>
           </div>
-          <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
+          <div role="group" aria-label="ตำแหน่งที่จะแจ้งเวียน" className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
             {units.map((u) => {
               const sent = already.has(u.id);
               return (
@@ -123,12 +129,18 @@ export default function AnnotateForm({
               );
             })}
           </div>
+          {choosable.length === 0 ? (
+            <p className="mt-2 text-xs text-sb-muted">ทุกตำแหน่งเวียนแล้ว</p>
+          ) : circulateTo.length === 0 ? (
+            <p className="mt-2 text-xs text-sb-muted">เลือกตำแหน่งที่จะเวียนอย่างน้อย 1 ตำแหน่ง</p>
+          ) : null}
+          {tooMany ? <p className="mt-2 text-xs text-sb-danger">เวียนได้ไม่เกิน {MAX_CIRCULATE} ตำแหน่งต่อครั้ง</p> : null}
         </div>
       ) : null}
 
-      <p className="rounded-[10px] bg-sb-panel px-3 py-2 text-[13px]">{summary}</p>
+      <p aria-live="polite" className="rounded-[10px] bg-sb-panel px-3 py-2 text-[13px]">{summary}</p>
       <div className="flex justify-end gap-2.5">
-        <button type="reset" className={outlineButton} disabled={busy} onClick={() => { onNoteChange(''); setTarget(STAY); setCirculating(false); setPicked(new Set()); }}>
+        <button type="button" className={outlineButton} disabled={busy} onClick={() => { onNoteChange(''); setTarget(STAY); setCirculating(false); setPicked(new Set()); }}>
           ล้างฟอร์ม
         </button>
         <button type="submit" className={primaryButton} disabled={blocked}>
