@@ -3,12 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   EVENT_KIND_LABELS,
   fieldLabel,
+  FLOW_STEP_LABELS,
   LEVEL_LABELS,
+  QUICK_NOTES,
   REGISTER_LABELS,
+  ROUTE_LABELS,
   SEND_METHOD_LABELS,
   statusLabel,
 } from '@/lib/saraban-labels';
 import {
+  ANNOTATE_ROUTES,
   SARABAN_EVENT_KINDS,
   SARABAN_LEVELS,
   SARABAN_REGISTERS,
@@ -60,5 +64,17 @@ describe('fieldLabel — ชื่อช่องในประวัติก�
   it('ช่องที่ไม่รู้จักคืนชื่อเดิม — รวมชื่อที่ชนกับ property ของ Object', () => {
     expect(fieldLabel('in', 'mystery')).toBe('mystery');
     expect(fieldLabel('in', 'constructor')).toBe('constructor');
+  });
+});
+
+describe('ป้ายของรอบ 2', () => {
+  it('แถบ 5 ขั้นตามต้นแบบ', () => {
+    expect(FLOW_STEP_LABELS).toEqual(['ลงรับ', 'เสนอ/เกษียน', 'มอบหมาย', 'ดำเนินการ', 'จบเรื่อง']);
+  });
+
+  it('ปลายทางครบทุกแบบ · ข้อความสำเร็จรูปไม่ว่าง', () => {
+    for (const r of ANNOTATE_ROUTES) expect(ROUTE_LABELS[r]).toBeTruthy();
+    expect(QUICK_NOTES.length).toBeGreaterThan(0);
+    for (const n of QUICK_NOTES) expect(n.trim()).toBe(n);
   });
 });

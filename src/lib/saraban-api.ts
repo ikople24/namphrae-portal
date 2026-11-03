@@ -4,6 +4,7 @@
 
 import type { z } from 'zod';
 import type { RegisterView } from '@/lib/saraban-doc';
+import type { AnnotateRoute } from '@/lib/saraban-flow';
 import type {
   DocKind,
   DocPatch,
@@ -97,6 +98,17 @@ export function createDoc(kind: DocKind, body: ReceiveBody | SendBody): Promise<
 
 export function patchDoc(id: string, body: DocPatch): Promise<SarabanDoc> {
   return call(docKey(id), jsonInit('PATCH', body));
+}
+
+export function annotateDoc(
+  doc: Pick<SarabanDoc, 'id' | 'updatedAt'>,
+  body: { note: string; route: AnnotateRoute; circulateTo: string[] }
+): Promise<SarabanDoc> {
+  return patchDoc(doc.id, { action: 'annotate', updatedAt: doc.updatedAt, ...body });
+}
+
+export function ackCirculation(doc: Pick<SarabanDoc, 'id' | 'updatedAt'>, unitId: string): Promise<SarabanDoc> {
+  return patchDoc(doc.id, { action: 'ack', updatedAt: doc.updatedAt, unitId });
 }
 
 export function addDocFile(id: string, file: FileRef): Promise<SarabanDoc> {
