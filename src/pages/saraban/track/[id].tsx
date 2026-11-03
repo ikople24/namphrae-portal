@@ -69,8 +69,9 @@ function TrackPage() {
       await mutate(await action(), { revalidate: false });
       setPanel('none');
       showToast(done);
-      // รายการซ้ายและตัวเลขสรุปต้องตามสถานะใหม่
-      void globalMutate(docsKey({ register: 'in', scope: 'open' }));
+      // รายการซ้าย ทะเบียนทุกหน้า และตัวเลขสรุปต้องตามสถานะใหม่ — ทุก key ของรายการขึ้นต้นด้วย docs?
+      // (รวม scope=open) predicate เดียวกับหน้าเกษียน
+      void globalMutate((k) => typeof k === 'string' && k.startsWith('/api/admin/saraban/docs?'));
       void globalMutate(SUMMARY_KEY);
     } catch (err) {
       showToast(messageOf(err));

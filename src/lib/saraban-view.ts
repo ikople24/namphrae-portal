@@ -106,7 +106,7 @@ export function isUrgentOpen(doc: Pick<SarabanDoc, 'level' | 'status'>): boolean
 const ERROR_MESSAGES: Record<string, string> = {
   number_busy: 'มีคนลงรับพร้อมกัน กดอีกครั้ง',
   stale: 'มีคนบันทึกหนังสือนี้ไปก่อน โหลดใหม่แล้ว ลองอีกครั้ง',
-  invalid_unit: 'ตำแหน่ง/หน่วยงานที่เลือกใช้ไม่ได้ (ถูกปิด หรือยังไม่มีรหัสส่วนราชการ)',
+  invalid_unit: 'ตำแหน่ง/หน่วยงานที่เลือกใช้ไม่ได้ — อาจถูกปิดในสมุดผู้รับ (หรือยังไม่มีรหัสส่วนราชการ กรณีออกเลขส่ง)',
   invalid_file: 'ไฟล์แนบใช้ไม่ได้ ลองเลือกไฟล์ใหม่',
   file_too_large: 'ไฟล์ใหญ่เกิน 10 MB',
   bad_format: 'รับเฉพาะไฟล์ PDF, JPG, PNG',
