@@ -49,12 +49,15 @@ async function list(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ error: 'invalid_input', issues: parsed.error.issues });
   }
   try {
-    const { register, view, page } = parsed.data;
+    const { register, view, page, scope } = parsed.data;
     const today = bangkokDateOf(new Date());
     const currentYear = fiscalYearOf(today);
     const fiscalYear = parsed.data.year ?? currentYear;
+    // scope=open: หนังสือที่ยังเปิดอยู่ทุกปีงบ (รายการซ้ายของหน้าติดตาม สเปกรอบ 2 ข้อ 5)
+    // counts/years/carryOver ยังคำนวณตามเดิมโดยตั้งใจ — รูปร่าง response (DocListResponse) จะได้เหมือนกันทุกโหมด
+    const filter = scope === 'open' ? { register, statusIn: OPEN_STATUSES } : { register, fiscalYear, view };
     const [result, counts, years, carryOver] = await Promise.all([
-      listDocs({ register, fiscalYear, view }, page, today),
+      listDocs(filter, page, today),
       registerCounts(register, fiscalYear, today),
       listFiscalYears(register, currentYear),
       countDocs({ register, beforeFiscalYear: fiscalYear, statusIn: OPEN_STATUSES }, today),
