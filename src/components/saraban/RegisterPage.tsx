@@ -6,11 +6,12 @@ import useSWR from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { LevelText, StatusPill, card } from '@/components/saraban/bits';
-import { sarabanFetcher, type DocListResponse } from '@/lib/saraban-api';
+import { sarabanFetcher, UNITS_KEY, type DocListResponse } from '@/lib/saraban-api';
 import { displayStatus, type RegisterView } from '@/lib/saraban-doc';
+import { canAnnotate } from '@/lib/saraban-flow';
 import { fiscalYearOf, formatNo } from '@/lib/saraban-number';
 import { docsKey, isUrgentOpen, thaiDate, viewsOf } from '@/lib/saraban-view';
-import type { SarabanRegister } from '@/types/saraban';
+import type { SarabanRegister, SarabanUnit } from '@/types/saraban';
 
 const TAB_LABELS: Record<SarabanRegister, string> = { in: 'หนังสือรับ', out: 'หนังสือส่ง', circular: 'หนังสือเวียน' };
 
@@ -25,6 +26,8 @@ export default function RegisterPage({ registers, title }: { registers: SarabanR
     sarabanFetcher,
     { keepPreviousData: true }
   );
+  const { data: units } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
+  const unitName = (id: string) => units?.find((u) => u.id === id)?.name ?? '—';
 
   const reset = (patch: { register?: SarabanRegister; year?: number; view?: RegisterView }) => {
     if (patch.register) setRegister(patch.register);
@@ -119,7 +122,8 @@ export default function RegisterPage({ registers, title }: { registers: SarabanR
                 <th className="px-2.5 py-3 font-semibold">ลงวันที่</th>
                 <th className="px-2.5 py-3 font-semibold">ที่หนังสือ</th>
                 <th className="px-2.5 py-3 font-semibold">{isIn ? 'จาก' : 'ถึง'}</th>
-                <th className="w-[34%] px-2.5 py-3 font-semibold">เรื่อง</th>
+                <th className={`${isIn ? 'w-[28%]' : 'w-[34%]'} px-2.5 py-3 font-semibold`}>เรื่อง</th>
+                {isIn ? <th className="px-2.5 py-3 font-semibold">อยู่กับ</th> : null}
                 <th className="px-2.5 py-3 font-semibold">ชั้นความเร็ว</th>
                 <th className="px-2.5 py-3 font-semibold">สถานะ</th>
                 <th className="px-4 py-3" />
@@ -141,6 +145,7 @@ export default function RegisterPage({ registers, title }: { registers: SarabanR
                       <span className="ml-2 whitespace-nowrap rounded-full bg-sb-success-bg px-[7px] py-px text-[11px] text-sb-success">ไร้กระดาษ</span>
                     ) : null}
                   </td>
+                  {isIn ? <td className="whitespace-nowrap px-2.5 py-3 text-sb-muted">{unitName(doc.holderUnitId)}</td> : null}
                   <td className="px-2.5 py-3">
                     <LevelText level={doc.level} />
                   </td>
@@ -148,6 +153,14 @@ export default function RegisterPage({ registers, title }: { registers: SarabanR
                     <StatusPill register={doc.register} status={displayStatus(doc, data.today)} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
+                    {canAnnotate(doc) ? (
+                      <Link
+                        href={`/saraban/annotate/${doc.id}`}
+                        className="mr-1.5 rounded-lg bg-sb-accent-light px-2.5 py-[5px] text-xs font-medium text-sb-accent hover:bg-sb-hover"
+                      >
+                        เกษียน
+                      </Link>
+                    ) : null}
                     <Link
                       href={`/saraban/track/${doc.id}`}
                       className="rounded-lg border border-sb-line bg-white px-2.5 py-[5px] text-xs hover:bg-sb-hover"
