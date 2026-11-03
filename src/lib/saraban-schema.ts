@@ -1,9 +1,10 @@
 // src/lib/saraban-schema.ts
-// zod ของทุกคำขอในระบบสารบรรณรอบ 1 — ใช้ร่วมทั้ง API และฟอร์ม (แนวเดียวกับ schema.ts)
+// zod ของทุกคำขอในระบบสารบรรณรอบ 1–2 — ใช้ร่วมทั้ง API และฟอร์ม (แนวเดียวกับ schema.ts)
 
 import { z } from 'zod';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { REGISTER_VIEWS } from '@/lib/saraban-doc';
+import { MAX_CIRCULATE } from '@/lib/saraban-flow';
 import { SARABAN_LEVELS, SARABAN_REGISTERS, SEND_METHODS } from '@/types/saraban';
 
 /**
@@ -83,6 +84,13 @@ const editSchema = z
     message: 'ต้องมีอย่างน้อยหนึ่งช่อง',
   });
 
+// ปลายทางของการเกษียน (สเปกรอบ 2 ข้อ 4) — ชื่อตำแหน่งเซิร์ฟเวอร์เติมจากสมุดเอง ไม่รับจากตรงนี้
+const annotateRouteSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('forward'), toUnitId: z.string().min(1).max(100) }),
+  z.object({ kind: z.literal('close') }),
+  z.object({ kind: z.literal('stay') }),
+]);
+
 /**
  * PATCH /api/admin/saraban/docs/[id] — แยกตาม action (สเปกข้อ 6) แนวเดียวกับ PATCH ของ
  * ปฏิทินที่รวมการแก้กับการเปลี่ยนสถานะไว้ที่ route เดียว
@@ -98,6 +106,17 @@ export const docPatchSchema = z.discriminatedUnion('action', [
     reason: requiredText(500, 'ต้องระบุเหตุผลที่ยกเลิก'),
   }),
   z.object({ action: z.literal('sent'), updatedAt: z.string().min(1), method: z.enum(SEND_METHODS) }),
+  z.object({
+    action: z.literal('annotate'),
+    updatedAt: z.string().min(1),
+    note: requiredText(1000, 'ต้องมีข้อความเกษียน'),
+    route: annotateRouteSchema,
+    circulateTo: z
+      .array(z.string().min(1).max(100))
+      .max(MAX_CIRCULATE, `เวียนได้ไม่เกิน ${MAX_CIRCULATE} ตำแหน่งต่อครั้ง`)
+      .default([]),
+  }),
+  z.object({ action: z.literal('ack'), updatedAt: z.string().min(1), unitId: z.string().min(1).max(100) }),
 ]);
 export type DocPatch = z.infer<typeof docPatchSchema>;
 
@@ -146,6 +165,8 @@ export const docListQuerySchema = z.object({
   year: z.coerce.number().int().min(2500).max(2700).optional(),
   view: z.enum(REGISTER_VIEWS).default('all'),
   page: z.coerce.number().int().min(1).default(1),
+  // open = หนังสือที่ยังเปิดอยู่ทุกปีงบ (รายการซ้ายของหน้าติดตาม) — ไม่สน year/view
+  scope: z.enum(['open']).optional(),
 });
 export type DocListQuery = z.infer<typeof docListQuerySchema>;
 

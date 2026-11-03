@@ -125,6 +125,35 @@ describe('docPatchSchema — แยกตาม action', () => {
     expect(docPatchSchema.safeParse({ action: 'delete', updatedAt: 't' }).success).toBe(false);
     expect(docPatchSchema.safeParse({ action: 'void', reason: 'x' }).success).toBe(false);
   });
+
+  it('annotate: ข้อความบังคับ · route สามแบบ · circulateTo ค่าเริ่มต้น []', () => {
+    const base = { action: 'annotate', updatedAt: 't', note: ' ทราบ ' };
+    expect(docPatchSchema.parse({ ...base, route: { kind: 'stay' } })).toEqual({
+      action: 'annotate',
+      updatedAt: 't',
+      note: 'ทราบ',
+      route: { kind: 'stay' },
+      circulateTo: [],
+    });
+    expect(docPatchSchema.safeParse({ ...base, route: { kind: 'close' } }).success).toBe(true);
+    expect(docPatchSchema.safeParse({ ...base, route: { kind: 'forward', toUnitId: 'dir-works' } }).success).toBe(true);
+    expect(docPatchSchema.safeParse({ ...base, route: { kind: 'forward' } }).success).toBe(false);
+    expect(docPatchSchema.safeParse({ ...base, route: { kind: 'teleport' } }).success).toBe(false);
+    expect(docPatchSchema.safeParse({ ...base, note: '  ', route: { kind: 'stay' } }).success).toBe(false);
+    expect(docPatchSchema.safeParse({ ...base, note: 'ก'.repeat(1001), route: { kind: 'stay' } }).success).toBe(false);
+  });
+
+  it('annotate: เวียนได้ไม่เกิน 30 ตำแหน่ง', () => {
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `u${i}`);
+    const body = (n: number) => ({ action: 'annotate', updatedAt: 't', note: 'ทราบ', route: { kind: 'stay' }, circulateTo: ids(n) });
+    expect(docPatchSchema.safeParse(body(30)).success).toBe(true);
+    expect(docPatchSchema.safeParse(body(31)).success).toBe(false);
+  });
+
+  it('ack ต้องมี unitId', () => {
+    expect(docPatchSchema.safeParse({ action: 'ack', updatedAt: 't', unitId: 'finance' }).success).toBe(true);
+    expect(docPatchSchema.safeParse({ action: 'ack', updatedAt: 't', unitId: '' }).success).toBe(false);
+  });
 });
 
 describe('unitInputSchema / unitPatchSchema', () => {
@@ -173,6 +202,12 @@ describe('docListQuerySchema — ค่าจาก query string เป็นส
 
   it('ทะเบียนที่ไม่รู้จักไม่ผ่าน', () => {
     expect(docListQuerySchema.safeParse({ register: 'secret' }).success).toBe(false);
+  });
+
+  it('scope=open ผ่าน · ค่าอื่นไม่ผ่าน · ไม่ใส่ = undefined', () => {
+    expect(docListQuerySchema.parse({ register: 'in', scope: 'open' }).scope).toBe('open');
+    expect(docListQuerySchema.parse({ register: 'in' }).scope).toBeUndefined();
+    expect(docListQuerySchema.safeParse({ register: 'in', scope: 'all' }).success).toBe(false);
   });
 });
 
