@@ -11,6 +11,7 @@ import {
   type DisplayStatus,
   type SarabanDoc,
   type SarabanEvent,
+  type SarabanEventDetail,
   type SarabanEventKind,
   type SarabanFieldChange,
   type SarabanFile,
@@ -28,6 +29,7 @@ export function makeEvent(args: {
   kind: SarabanEventKind;
   note?: string;
   changes?: SarabanFieldChange[];
+  detail?: SarabanEventDetail;
 }): SarabanEvent {
   const event: SarabanEvent = {
     id: args.id,
@@ -38,6 +40,10 @@ export function makeEvent(args: {
     note: args.note ?? '',
   };
   if (args.changes) event.changes = args.changes;
+  // ใส่เฉพาะคีย์ที่มีค่า — คีย์ undefined ใน $push ของ Mongo กลายเป็น null ในเอกสาร
+  for (const [key, value] of Object.entries(args.detail ?? {})) {
+    if (value !== undefined) (event as Record<string, unknown>)[key] = value;
+  }
   return event;
 }
 
@@ -96,10 +102,20 @@ export function buildNewDoc(fields: NewDocFields, meta: NewDocMeta): SarabanDoc 
         note: meta.eventNote,
       }),
     ],
+    circulation: [],
     registeredAt: meta.now,
     registeredBy: meta.actor.id,
     updatedAt: meta.now,
   };
+}
+
+/**
+ * หนังสือที่บันทึกก่อนรอบ 2 ไม่มีคีย์ circulation — เติม [] ตอนอ่าน ไม่ต้อง migrate
+ * (สเปกรอบ 2 ข้อ 3) · store เรียกตัวนี้ทุกทางที่คืนหนังสือออกไป หน้าจอและ flow จึงเชื่อได้ว่ามีเสมอ
+ * คืนตัวเดิมเมื่อมีแล้ว ไม่ copy ทิ้งทุกครั้ง
+ */
+export function withDefaults(doc: SarabanDoc): SarabanDoc {
+  return Array.isArray(doc.circulation) ? doc : { ...doc, circulation: [] };
 }
 
 // สถานะที่หนังสือยัง "เปิดอยู่" — ใช้ร่วมทุกกฎที่ถามคำถามนี้ (เกินกำหนด · ยกเลิกได้ · ลบไฟล์ได้ ·

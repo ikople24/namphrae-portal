@@ -41,6 +41,8 @@ export const EVENT_KIND_LABELS: Record<SarabanEventKind, string> = {
   'file-removed': 'ลบไฟล์แนบ',
   sent: 'ส่งหนังสือแล้ว',
   voided: 'ยกเลิกเลขทะเบียน',
+  annotated: 'เกษียน/สั่งการ',
+  acknowledged: 'รับทราบ (แจ้งเวียน)',
 };
 
 const IN_STATUS_LABELS: Record<DisplayStatus, string> = {

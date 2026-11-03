@@ -37,8 +37,29 @@ export const SARABAN_EVENT_KINDS = [
   'file-removed',
   'sent',
   'voided',
+  'annotated', // เกษียน/สั่งการ (รอบ 2) — ธุรการบันทึกแทนตำแหน่งที่หนังสืออยู่
+  'acknowledged', // ติ๊กทราบแทนตำแหน่งที่ถูกเวียน (รอบ 2)
 ] as const;
 export type SarabanEventKind = (typeof SARABAN_EVENT_KINDS)[number];
+
+// ปลายทางของการเกษียน — forward: ส่งต่อ · close: ส่งคืนสารบรรณ (จบเรื่อง) · stay: คงไว้ที่เดิม
+export const ANNOTATE_ROUTES = ['forward', 'close', 'stay'] as const;
+export type AnnotateRouteKind = (typeof ANNOTATE_ROUTES)[number];
+
+export type SarabanUnitRef = { unitId: string; unitName: string };
+
+// รายละเอียดเฉพาะ event รอบ 2 — optional ทั้งหมดด้วยเหตุผลเดียวกับ changes: makeEvent ใส่เฉพาะ
+// คีย์ที่มีค่า · ชื่อทุกตัวเก็บ ณ เวลาที่ทำ (สเปกแม่ข้อ 3) ไม่เปลี่ยนตามสมุดผู้รับทีหลัง
+export type SarabanEventDetail = {
+  onBehalfUnitId?: string; // annotated: ตำแหน่งที่สั่ง = holderUnitId ตอนบันทึก
+  onBehalfName?: string;
+  route?: AnnotateRouteKind;
+  toUnitId?: string; // annotated + forward
+  toUnitName?: string;
+  circulateTo?: SarabanUnitRef[]; // annotated ที่มีการเวียน
+  unitId?: string; // acknowledged
+  unitName?: string;
+};
 
 export type SarabanFile = {
   id: string; // uuid — ใช้ใน URL แทน key ที่มี '/'
@@ -63,6 +84,17 @@ export type SarabanEvent = {
   // optional โดยตั้งใจ ต่างจากช่องอื่นที่ใช้ '' — event ต่อท้ายอย่างเดียวและสร้างผ่าน
   // makeEvent() ที่ใส่คีย์นี้เฉพาะเมื่อมีค่า จึงไม่มีทางถูกเขียนเป็น null ลง Mongo
   changes?: SarabanFieldChange[]; // เฉพาะ edited
+} & SarabanEventDetail;
+
+// แจ้งเวียนภายใน (รอบ 2) — หนึ่งแถวต่อตำแหน่ง ตำแหน่งหนึ่งอยู่ในรายการได้ครั้งเดียว
+export type SarabanCirculation = {
+  unitId: string;
+  unitName: string; // ณ เวลาที่เวียน
+  sentAt: string; // ISO
+  sentEventId: string; // event annotated ที่เวียน
+  ackAt: string; // '' = ยังไม่ทราบ
+  ackBy: string; // clerkId · '' ถ้ายังไม่ทราบ
+  ackByName: string;
 };
 
 export type SarabanDoc = {
@@ -82,6 +114,7 @@ export type SarabanDoc = {
   voidReason: string; // '' ถ้าไม่ได้ยกเลิก
   files: SarabanFile[];
   events: SarabanEvent[];
+  circulation: SarabanCirculation[]; // รอบ 2 — หนังสือรอบ 1 ไม่มีคีย์นี้ อ่านผ่าน withDefaults
   registeredAt: string; // ISO
   registeredBy: string; // clerkId หรือ 'dev-open' — ค่าเดียวกับ by ของ event แรก
   updatedAt: string; // ISO — เป็นเวอร์ชันกันการเขียนทับกันด้วย (ดู applyPatch)
