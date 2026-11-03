@@ -125,6 +125,7 @@ export function ackTransition(
   const circulation = doc.circulation.map((c) =>
     c.unitId === unitId ? { ...c, ackAt: stamp.now, ackBy: stamp.actor.id, ackByName: stamp.actor.name } : c
   );
+  // unitName ตั้งใจใช้จากแถว circulation (ชื่อที่เซิร์ฟเวอร์เก็บตอนเวียน) ไม่ค้นสมุดใหม่ — ประวัติจะตรงกับที่เวียนไป
   return { ok: true, set: { circulation }, note: '', detail: { unitId, unitName: row.unitName } };
 }
 

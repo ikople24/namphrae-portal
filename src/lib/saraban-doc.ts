@@ -31,20 +31,22 @@ export function makeEvent(args: {
   changes?: SarabanFieldChange[];
   detail?: SarabanEventDetail;
 }): SarabanEvent {
-  const event: SarabanEvent = {
+  // ใส่เฉพาะคีย์ที่มีค่า — คีย์ undefined ใน $push ของ Mongo กลายเป็น null ในเอกสาร
+  // detail ลงก่อน แล้วฟิลด์หลักทับท้าย — detail จึงทับ id/at/by/kind/note ไม่ได้ไม่ว่าชนิดจะเปลี่ยนไปอย่างไร
+  const event: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args.detail ?? {})) {
+    if (value !== undefined) event[key] = value;
+  }
+  Object.assign(event, {
     id: args.id,
     at: args.at,
     by: args.actor.id,
     byName: args.actor.name,
     kind: args.kind,
     note: args.note ?? '',
-  };
+  });
   if (args.changes) event.changes = args.changes;
-  // ใส่เฉพาะคีย์ที่มีค่า — คีย์ undefined ใน $push ของ Mongo กลายเป็น null ในเอกสาร
-  for (const [key, value] of Object.entries(args.detail ?? {})) {
-    if (value !== undefined) (event as Record<string, unknown>)[key] = value;
-  }
-  return event;
+  return event as SarabanEvent;
 }
 
 // ช่องที่ผู้เรียกกำหนด — รับ: มาจากฟอร์มที่ผ่าน zod · ส่ง/เวียน: ref ประกอบจาก refFor() และ

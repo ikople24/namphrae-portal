@@ -155,8 +155,9 @@ describe('annotateTransition — แจ้งเวียน', () => {
 
   it('ไม่เวียน = ไม่แตะ circulation', () => {
     const r = annotateTransition(makeDoc(), input(), UNITS, STAMP);
-    expect(r.ok && 'circulation' in r.set).toBe(false);
-    expect(r.ok && 'circulateTo' in r.detail).toBe(false);
+    if (!r.ok) throw new Error('expected ok');
+    expect('circulation' in r.set).toBe(false);
+    expect('circulateTo' in r.detail).toBe(false);
   });
 
   it('เวียนซ้ำตำแหน่งที่อยู่ในรายการแล้ว หรือซ้ำกันเองใน body → already_circulated', () => {
@@ -180,6 +181,40 @@ describe('annotateTransition — แจ้งเวียน', () => {
       error: 'invalid_unit',
       unitId: 'closed-unit',
     });
+  });
+});
+
+describe('ไม่แก้ doc เดิม (immutable)', () => {
+  const freezeCirculation = (doc: SarabanDoc): SarabanDoc => {
+    doc.circulation.forEach(Object.freeze);
+    Object.freeze(doc.circulation);
+    return doc;
+  };
+
+  it('forward + เวียนซ้อนบน circulation ที่ freeze ไว้ — สำเร็จ และของเดิมไม่เปลี่ยน', () => {
+    const first = annotateTransition(makeDoc(), input({ circulateTo: ['finance'] }), UNITS, STAMP);
+    if (!first.ok) throw new Error('fixture');
+    const doc = freezeCirculation(makeDoc({ circulation: first.set.circulation! }));
+    const before = JSON.stringify(doc.circulation);
+    const r = annotateTransition(
+      doc,
+      input({ route: { kind: 'forward', toUnitId: 'dir-works' }, circulateTo: ['education'] }),
+      UNITS,
+      STAMP
+    );
+    expect(r.ok && r.set.circulation?.map((c) => c.unitId)).toEqual(['finance', 'education']);
+    expect(doc.circulation).toHaveLength(1);
+    expect(JSON.stringify(doc.circulation)).toBe(before);
+  });
+
+  it('ack บน circulation ที่ freeze ไว้ — สำเร็จ และแถวเดิมไม่ถูกแก้', () => {
+    const first = annotateTransition(makeDoc(), input({ circulateTo: ['finance', 'education'] }), UNITS, STAMP);
+    if (!first.ok) throw new Error('fixture');
+    const doc = freezeCirculation(makeDoc({ status: 'in-progress', circulation: first.set.circulation! }));
+    const before = JSON.stringify(doc.circulation);
+    const r = ackTransition(doc, 'finance', { now: '2026-11-04T02:00:00.000Z', actor: ACTOR });
+    expect(r.ok && r.set.circulation?.[0].ackAt).toBe('2026-11-04T02:00:00.000Z');
+    expect(JSON.stringify(doc.circulation)).toBe(before);
   });
 });
 
