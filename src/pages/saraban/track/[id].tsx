@@ -1,4 +1,4 @@
-// หน้าหนังสือฉบับรอบ 1 (สเปกข้อ 6 "/saraban/track/[id]") — ข้อมูล · ไฟล์แนบ · แก้ไข/ยกเลิก/ส่งแล้ว ·
+// หน้าติดตามหนังสือ (สเปกรอบ 2 ข้อ 5 · ต้นแบบจอ 6) — ข้อมูล · ไฟล์แนบ · แก้ไข/ยกเลิก/ส่งแล้ว ·
 // เส้นทางหนังสือจาก events · ทุกปุ่มโชว์ตามฟังก์ชันของ 1A (editableFieldsOf / canVoid / canMarkSent /
 // canAddFile / canRemoveFile) ที่ API ใช้ตัดสินจริง หน้าจอกับเซิร์ฟเวอร์จึงเห็นตรงกัน
 import Link from 'next/link';
@@ -9,9 +9,13 @@ import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, LevelText, StatusPill, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
 import { showToast } from '@/components/saraban/toast';
+import CirculationCard from '@/components/saraban/CirculationCard';
+import EventDetail, { eventByline } from '@/components/saraban/EventDetail';
+import FlowSteps from '@/components/saraban/FlowSteps';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
+  ackCirculation,
   addDocFile,
   docKey,
   fileUrl,
@@ -23,13 +27,15 @@ import {
   SUMMARY_KEY,
   UNITS_KEY,
   uploadFile,
+  type DocListResponse,
   type SummaryResponse,
 } from '@/lib/saraban-api';
+import { canAnnotate, flowStep } from '@/lib/saraban-flow';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { canAddFile, canMarkSent, canRemoveFile, canVoid, displayStatus, editableFieldsOf, type DocEdit, type EditableField } from '@/lib/saraban-doc';
 import { EVENT_KIND_LABELS, fieldLabel, LEVEL_LABELS, SEND_METHOD_LABELS } from '@/lib/saraban-labels';
 import { formatNo } from '@/lib/saraban-number';
-import { changeValue, fileSizeLabel, precheckFile, thaiDate, thaiDateTime } from '@/lib/saraban-view';
+import { changeValue, docsKey, fileSizeLabel, precheckFile, thaiDate, thaiDateTime } from '@/lib/saraban-view';
 import { SARABAN_LEVELS, SEND_METHODS, type SarabanDoc, type SarabanUnit, type SendMethod } from '@/types/saraban';
 
 const NO_PREFIX = { in: 'รับที่', out: 'ส่งที่', circular: 'เวียนที่' } as const;
@@ -41,6 +47,8 @@ function TrackPage() {
   const { data: doc, error, mutate } = useSWR<SarabanDoc>(id ? docKey(id) : null, sarabanFetcher);
   const { data: units } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
   const { data: summary } = useSWR<SummaryResponse>(SUMMARY_KEY, sarabanFetcher);
+  // รายการซ้าย: หนังสือรับที่ยังเปิดอยู่ทุกปีงบ (หน้าแรก 50 เรื่อง) — ซ่อนบนจอแคบ
+  const { data: openList } = useSWR<DocListResponse>(docsKey({ register: 'in', scope: 'open' }), sarabanFetcher);
   const [panel, setPanel] = useState<Panel>('none');
   const [busy, setBusy] = useState(false);
 
@@ -108,7 +116,28 @@ function TrackPage() {
         ‹ กลับทะเบียน
       </Link>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        <aside className={`${card} hidden max-h-[80vh] overflow-y-auto p-2 xl:block`} aria-label="หนังสือที่ยังเปิดอยู่">
+          <p className="px-2 pb-2 pt-1 text-xs font-semibold text-sb-muted">หนังสือรับที่ยังเปิดอยู่</p>
+          {openList?.docs.length ? (
+            openList.docs.map((d) => (
+              <Link
+                key={d.id}
+                href={`/saraban/track/${d.id}`}
+                className={`mb-1 block rounded-[10px] border px-3 py-2 text-[13px] ${
+                  d.id === doc.id ? 'border-sb-accent bg-sb-accent-light' : 'border-transparent hover:bg-sb-hover'
+                }`}
+              >
+                <span className="text-xs font-semibold text-sb-accent">รับที่ {formatNo(d.register, d.no)}</span>
+                <span className="block truncate">{d.subject}</span>
+              </Link>
+            ))
+          ) : (
+            <p className="px-2 text-[13px] text-sb-muted">ไม่มีหนังสือค้าง</p>
+          )}
+        </aside>
+
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-3.5">
           <section className={`${card} p-[22px]`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -153,7 +182,17 @@ function TrackPage() {
                 </div>
               ) : null}
             </dl>
+            {(() => {
+              const step = flowStep(doc);
+              return step ? <FlowSteps step={step} overdue={status === 'overdue'} /> : null;
+            })()}
             <div className="mt-5 flex flex-wrap gap-2">
+              {canAnnotate(doc) ? (
+                <Link href={`/saraban/annotate/${doc.id}`} className={primaryButton}>
+                  <Icon name="assignment" size={18} />
+                  เกษียน
+                </Link>
+              ) : null}
               {editable.length > 0 ? (
                 <button type="button" className={outlineButton} disabled={busy} onClick={() => setPanel(panel === 'edit' ? 'none' : 'edit')}>
                   <Icon name="edit" size={18} />
@@ -196,6 +235,15 @@ function TrackPage() {
           {panel === 'sent' ? (
             <SentPanel busy={busy} onCancel={() => setPanel('none')} onSave={(method) => run(() => patchDoc(doc.id, { action: 'sent', updatedAt: doc.updatedAt, method }), 'บันทึกว่าส่งแล้ว')} />
           ) : null}
+
+          <CirculationCard
+            doc={doc}
+            busy={busy}
+            onAck={(unitId) => {
+              const name = doc.circulation.find((c) => c.unitId === unitId)?.unitName ?? unitId;
+              void run(() => ackCirculation(doc, unitId), `บันทึกว่า ${name} ทราบแล้ว`);
+            }}
+          />
 
           <section className={`${card} p-[22px]`}>
             <div className="mb-3 flex items-center justify-between">
@@ -274,7 +322,8 @@ function TrackPage() {
                   <p className="text-sm font-semibold">{EVENT_KIND_LABELS[ev.kind]}</p>
                   <p className="text-xs text-sb-muted">{thaiDateTime(ev.at)}</p>
                 </div>
-                <p className="mt-0.5 text-[13px] text-sb-muted">{ev.byName}</p>
+                <p className="mt-0.5 text-[13px] text-sb-muted">{eventByline(ev)}</p>
+                <EventDetail event={ev} />
                 {ev.note ? <p className="mt-1.5 rounded-lg bg-sb-panel px-3 py-2 text-[13px] leading-normal">{ev.note}</p> : null}
                 {ev.changes?.length ? (
                   <ul className="mt-1.5 flex flex-col gap-0.5 rounded-lg bg-sb-panel px-3 py-2 text-[13px]">
@@ -289,6 +338,7 @@ function TrackPage() {
             </div>
           ))}
         </section>
+        </div>
       </div>
     </SarabanLayout>
   );
