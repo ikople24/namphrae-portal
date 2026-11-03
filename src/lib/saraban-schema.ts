@@ -114,6 +114,7 @@ export const docPatchSchema = z.discriminatedUnion('action', [
     circulateTo: z
       .array(z.string().min(1).max(100))
       .max(MAX_CIRCULATE, `เวียนได้ไม่เกิน ${MAX_CIRCULATE} ตำแหน่งต่อครั้ง`)
+      .refine((ids) => new Set(ids).size === ids.length, 'เลือกตำแหน่งซ้ำ')
       .default([]),
   }),
   z.object({ action: z.literal('ack'), updatedAt: z.string().min(1), unitId: z.string().min(1).max(100) }),

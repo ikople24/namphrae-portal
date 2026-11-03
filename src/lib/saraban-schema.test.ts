@@ -150,6 +150,12 @@ describe('docPatchSchema — แยกตาม action', () => {
     expect(docPatchSchema.safeParse(body(31)).success).toBe(false);
   });
 
+  it('annotate: circulateTo ซ้ำกันในคำขอเดียว → ไม่ผ่าน', () => {
+    const body = (circulateTo: string[]) => ({ action: 'annotate', updatedAt: 't', note: 'ทราบ', route: { kind: 'stay' }, circulateTo });
+    expect(docPatchSchema.safeParse(body(['a', 'b'])).success).toBe(true);
+    expect(docPatchSchema.safeParse(body(['a', 'b', 'a'])).success).toBe(false);
+  });
+
   it('ack ต้องมี unitId', () => {
     expect(docPatchSchema.safeParse({ action: 'ack', updatedAt: 't', unitId: 'finance' }).success).toBe(true);
     expect(docPatchSchema.safeParse({ action: 'ack', updatedAt: 't', unitId: '' }).success).toBe(false);

@@ -140,10 +140,13 @@ export function docsKey(q: {
   scope?: 'open';
 }): string {
   const p = new URLSearchParams({ register: q.register });
-  if (q.year) p.set('year', String(q.year));
-  if (q.view && q.view !== 'all') p.set('view', q.view);
-  if (q.page && q.page > 1) p.set('page', String(q.page));
+  // scope=open: server ไม่ใช้ year/view — ไม่ใส่ในคีย์ จะได้ cache เดียวกันไม่ว่าหน้าอื่นเลือกปี/ตัวกรองอะไร
   if (q.scope) p.set('scope', q.scope);
+  else {
+    if (q.year) p.set('year', String(q.year));
+    if (q.view && q.view !== 'all') p.set('view', q.view);
+  }
+  if (q.page && q.page > 1) p.set('page', String(q.page));
   return `/api/admin/saraban/docs?${p}`;
 }
 

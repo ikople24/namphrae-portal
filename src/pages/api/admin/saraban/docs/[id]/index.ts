@@ -53,10 +53,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (current.updatedAt !== patch.updatedAt) return res.status(409).json({ error: 'stale' });
 
     // เวลากับ eventId สร้างครั้งเดียว — flow ใช้เป็น sentAt/sentEventId ของรายการเวียน และ
-    // applyPatch ใช้ event.at เป็น updatedAt ใหม่ ทั้งสามต้องตรงกัน
+    // applyPatch ใช้ event.at เป็น updatedAt ใหม่ ทั้งสามต้องตรงกัน · actor ต้องอ่านสมุดตำแหน่ง
+    // จึงหาเมื่อจำเป็น (ack ใช้ในตัว transition · ที่เหลือก่อนสร้าง event) ทางที่ไม่เขียนไม่ต้องจ่าย
     const now = new Date().toISOString();
     const eventId = crypto.randomUUID();
-    const actor = await resolveActor(admin);
+    let actor: Awaited<ReturnType<typeof resolveActor>> | undefined;
 
     let set: DocSet;
     let kind: SarabanEventKind;
@@ -79,15 +80,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       kind = 'edited';
       changes = nameUnitChanges(result.changes, nameOf);
     } else if (patch.action === 'annotate' || patch.action === 'ack') {
-      const result =
-        patch.action === 'annotate'
-          ? annotateTransition(current, patch, await listUnits(), { now, eventId })
-          : ackTransition(current, patch.unitId, { now, actor });
+      let result;
+      if (patch.action === 'annotate') {
+        result = annotateTransition(current, patch, await listUnits(), { now, eventId });
+      } else {
+        actor = await resolveActor(admin);
+        result = ackTransition(current, patch.unitId, { now, actor });
+      }
       if (!result.ok) {
-        const { ok: _ok, ...body } = result;
-        return res.status(FLOW_ERROR_STATUS[result.error]).json(
-          result.error === 'invalid_transition' ? { ...body, action: patch.action, status: current.status } : body
-        );
+        const body =
+          result.error === 'invalid_transition'
+            ? { error: result.error, action: patch.action, status: current.status }
+            : { error: result.error, ...('unitId' in result ? { unitId: result.unitId } : {}) };
+        return res.status(FLOW_ERROR_STATUS[result.error]).json(body);
       }
       set = result.set;
       kind = patch.action === 'annotate' ? 'annotated' : 'acknowledged';
@@ -104,6 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ({ set, kind, note } = transition);
     }
 
+    actor ??= await resolveActor(admin);
     const event = makeEvent({ id: eventId, at: now, actor, kind, note, changes, detail });
     const updated = await applyPatch(id, patch.updatedAt, set, event);
     if (updated) return res.status(200).json(updated);

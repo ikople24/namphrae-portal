@@ -130,6 +130,12 @@ describe('รอบ 2 — docsKey scope และข้อความ error', (
     expect(docsKey({ register: 'in', scope: 'open' })).toBe('/api/admin/saraban/docs?register=in&scope=open');
   });
 
+  it('scope=open ตัด year/view ออกจาก key (server ไม่ใช้) แต่ page ยังอยู่', () => {
+    expect(docsKey({ register: 'in', scope: 'open', year: 2569, view: 'done', page: 2 })).toBe(
+      '/api/admin/saraban/docs?register=in&scope=open&page=2'
+    );
+  });
+
   it('รหัสใหม่มีข้อความไทย', () => {
     for (const code of ['same_holder', 'already_circulated', 'not_circulated', 'already_acknowledged']) {
       expect(errorMessage(code)).not.toBe('เกิดข้อผิดพลาด ลองอีกครั้ง');
