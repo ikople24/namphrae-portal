@@ -72,7 +72,7 @@ function MemberDocPage() {
   const events = [...doc.events].reverse();
 
   return (
-    <MemberShell title={`รับที่ ${doc.no}`} canFull={false} back={home}>
+    <MemberShell title={`รับที่ ${doc.no}`} canFull={data.canReceive} back={home}>
       <section className="rounded-2xl border border-sb-line bg-white p-4">
         <div className="flex flex-wrap items-center gap-2 text-xs text-sb-muted">
           <span>{doc.ref}</span>

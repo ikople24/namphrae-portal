@@ -24,6 +24,8 @@ import {
   removeDocFile,
   sarabanFetcher,
   SarabanApiError,
+  revalidateSaraban,
+  clearMemberLists,
   SUMMARY_KEY,
   UNITS_KEY,
   uploadFile,
@@ -73,6 +75,9 @@ function TrackPage() {
       // (รวม scope=open) predicate เดียวกับหน้าเกษียน
       void globalMutate((k) => typeof k === 'string' && k.startsWith('/api/admin/saraban/docs?'));
       void globalMutate(SUMMARY_KEY);
+      // โหมดเจ้าหน้าที่ (งานของฉัน) เห็นเรื่องเดียวกัน — ล้างแคชของมันด้วย
+      void revalidateSaraban(globalMutate);
+      void clearMemberLists(globalMutate, undefined);
     } catch (err) {
       showToast(messageOf(err));
       if (err instanceof SarabanApiError && err.code === 'stale') await mutate();

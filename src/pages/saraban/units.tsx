@@ -1,7 +1,7 @@
 // สมุดผู้รับ (สเปกข้อ 6 "/saraban/units") — เพิ่มได้ แก้ได้ ลบไม่ได้ (ปิดแทน) เพราะหนังสืออ้าง id อยู่
 // รหัสส่วนราชการจำเป็นต่อการออกเลขหนังสือส่ง: ระบบต่อ "/เลข" ท้ายรหัสเอง รหัสจึงห้ามมี '/'
 import { useState, type FormEvent } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import UnitMembersPanel, { type MemberOption } from '@/components/saraban/UnitMembersPanel';
 import { ErrorBox, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
@@ -10,6 +10,7 @@ import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { adminFetcher } from '@/lib/admin-api';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { createUnit, messageOf, sarabanFetcher, UNITS_KEY, updateUnit } from '@/lib/saraban-api';
+import { memberSummaryKey } from '@/lib/saraban-view';
 import type { SarabanUnit } from '@/types/saraban';
 
 type Draft = { name: string; dept: string; refCode: string; order: string };
@@ -111,6 +112,7 @@ function UnitRow({ unit, isManager, options, onSaved }: { unit: SarabanUnit; isM
   const [d, setD] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
   const [binding, setBinding] = useState(false);
+  const { mutate: globalMutate } = useSWRConfig();
   const dirty = JSON.stringify(d) !== JSON.stringify(initial);
 
   async function save(patch: Parameters<typeof updateUnit>[1], done: string) {
@@ -191,7 +193,11 @@ function UnitRow({ unit, isManager, options, onSaved }: { unit: SarabanUnit; isM
     {binding ? (
       <tr>
         <td colSpan={7} className="px-4 pb-3">
-          <UnitMembersPanel unit={unit} options={options} onClose={() => setBinding(false)} onSaved={onSaved} />
+          <UnitMembersPanel unit={unit} options={options} onClose={() => setBinding(false)} onSaved={async () => {
+            await onSaved();
+            // ปุ่ม "งานของฉัน" ของคนที่เพิ่งถูกผูก/ถอด ต้องตามสถานะใหม่
+            void globalMutate(memberSummaryKey(undefined));
+          }} />
         </td>
       </tr>
     ) : null}

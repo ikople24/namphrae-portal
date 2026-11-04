@@ -32,6 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({
         doc: current,
         actions: memberActions(current, member.unitIds),
+        canReceive: member.canReceive,
         // ชิปปลายทาง — ไม่ส่ง memberClerkIds ออกไปให้เจ้าหน้าที่
         units: member.units.filter((u) => u.isActive).map(({ id: unitId, name, dept }) => ({ id: unitId, name, dept })),
       });
@@ -42,11 +43,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'invalid_input', issues: parsed.error.issues });
     }
     const patch = parsed.data;
-    if (current.updatedAt !== patch.updatedAt) return res.status(409).json({ error: 'stale' });
-
-    // ทำในนามตำแหน่งที่ตัวเองถือเท่านั้น — ตรวจก่อนเรียก transition ใด ๆ
+    // ทำในนามตำแหน่งที่ตัวเองถือเท่านั้น — ตรวจก่อน stale และก่อนเรียก transition ใด ๆ
     const actingUnit = patch.action === 'annotate' ? current.holderUnitId : patch.unitId;
     if (!member.unitIds.includes(actingUnit)) return res.status(403).json({ error: 'not_holder' });
+    if (current.updatedAt !== patch.updatedAt) return res.status(409).json({ error: 'stale' });
 
     // เวลา/eventId สร้างครั้งเดียวแบบ route โหมดเต็ม — ใช้ทั้งใน transition และ event
     const now = new Date().toISOString();

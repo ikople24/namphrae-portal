@@ -153,7 +153,7 @@ export function messageOf(err: unknown): string {
 export type UnitRef = { id: string; name: string; dept?: string };
 export type MemberSummary = { units: UnitRef[]; canReceive: boolean; counts: Record<MemberTab, number> };
 export type MemberDocsResponse = { items: SarabanDoc[]; total: number; page: number; pageSize: number };
-export type MemberDocResponse = { doc: SarabanDoc; actions: MemberActions; units: UnitRef[] };
+export type MemberDocResponse = { doc: SarabanDoc; actions: MemberActions; units: UnitRef[]; canReceive: boolean };
 
 type MemberBody = Extract<z.input<typeof memberPatchSchema>, { action: 'annotate' }>;
 

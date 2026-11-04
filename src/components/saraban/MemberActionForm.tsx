@@ -38,7 +38,8 @@ export default function MemberActionForm({
 
   const already = new Set(doc.circulation.map((c) => c.unitId));
   const targets = units.filter((u) => u.id !== doc.holderUnitId);
-  const circulatable = units.filter((u) => !already.has(u.id));
+  // ไม่เวียนให้ตำแหน่งที่ถือหนังสืออยู่ — เป็นเจ้าของเรื่องอยู่แล้ว
+  const circulatable = units.filter((u) => !already.has(u.id) && u.id !== doc.holderUnitId);
   // refetch แล้วตัวเลือกเดิมอาจใช้ไม่ได้ — คิดใหม่จากข้อมูลปัจจุบันทุกครั้ง (บทเรียน AnnotateForm รอบ 2)
   const to = targets.some((u) => u.id === rawTo) ? rawTo : '';
   const circulateTo = choice === 'circulate' ? [...picked].filter((id) => circulatable.some((u) => u.id === id)) : [];
@@ -110,7 +111,7 @@ export default function MemberActionForm({
                     {u.name}
                   </button>
                 ))
-              : units.map((u) => {
+              : units.filter((u) => u.id !== doc.holderUnitId).map((u) => {
                   const sent = already.has(u.id);
                   return (
                     <button

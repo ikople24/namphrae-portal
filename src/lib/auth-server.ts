@@ -163,7 +163,10 @@ export type AdminPageProps = { member: boolean; forbidden?: boolean };
  *   จึงไม่ต้องอ่านสมุดเพิ่ม · ปลายทางผ่าน guard ของตัวเองเพราะ getSarabanMemberSsrProps นับการผูก
  */
 function buildSsrGuard(
-  allowed: (identity: AdminIdentity, isBound: () => Promise<boolean>) => boolean | Promise<boolean>
+  allowed: (identity: AdminIdentity, isBound: () => Promise<boolean>) => boolean | Promise<boolean>,
+  // หน้าโหมดเต็มของสารบรรณ: คนไม่มีสิทธิ์แต่ผูกตำแหน่งไป /saraban/me ก่อน firstAllowedPath
+  // (ไม่งั้นเจ้าหน้าที่ที่มีฟีเจอร์ตั้งต้น calendar/data จะไม่มีทางเข้าโหมดเจ้าหน้าที่)
+  preferMember = false
 ): GetServerSideProps<AdminPageProps> {
   return async (ctx) => {
     const check = await checkAdmin(ctx.req);
@@ -177,7 +180,10 @@ function buildSsrGuard(
     let bound: Promise<boolean> | undefined;
     const isBound = () => (bound ??= isSarabanUnitMember(check.identity.userId));
     if (await allowed(check.identity, isBound)) return { props: { member: true } };
-    const destination = firstAllowedPath(check.identity) ?? ((await isBound()) ? '/saraban/me' : null);
+    const destination =
+      preferMember && (await isBound())
+        ? '/saraban/me'
+        : (firstAllowedPath(check.identity) ?? ((await isBound()) ? '/saraban/me' : null));
     if (destination) return { redirect: { destination, permanent: false } };
     return { props: { member: true, forbidden: true } };
   };
@@ -196,7 +202,7 @@ async function isSarabanUnitMember(userId: string): Promise<boolean> {
 export function getFeatureSsrProps(
   feature: FeatureKey
 ): GetServerSideProps<AdminPageProps> {
-  return buildSsrGuard((identity) => hasFeature(identity, feature));
+  return buildSsrGuard((identity) => hasFeature(identity, feature), feature === 'saraban');
 }
 
 export const getManagerSsrProps: GetServerSideProps<AdminPageProps> =

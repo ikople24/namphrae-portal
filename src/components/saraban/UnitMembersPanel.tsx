@@ -19,7 +19,12 @@ export default function UnitMembersPanel({
   onClose: () => void;
   onSaved: () => unknown;
 }) {
-  const [picked, setPicked] = useState<Set<string>>(new Set(unit.memberClerkIds));
+  // คนที่หลุดทะเบียนเริ่มแบบไม่ติ๊ก เพื่อให้บันทึกแล้วล้างออกให้ — ยกเว้นรายชื่อทะเบียนว่าง (โหลดไม่ได้)
+  // ที่ต้องคงติ๊กไว้ ไม่งั้นบันทึกครั้งเดียวจะล้างทุกคนทั้งที่แค่โหลดรายการไม่ขึ้น
+  const [picked, setPicked] = useState<Set<string>>(() => {
+    const known = new Set(options.map((o) => o.clerkId));
+    return new Set(options.length === 0 ? unit.memberClerkIds : unit.memberClerkIds.filter((id) => known.has(id)));
+  });
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const q = query.trim();

@@ -11,6 +11,8 @@ import {
   adminFetcher,
   type JobCountResponse,
 } from '@/lib/admin-api';
+import { sarabanFetcher } from '@/lib/saraban-api';
+import { memberSummaryKey } from '@/lib/saraban-view';
 
 const NAV = [
   { href: '/admin', label: 'ลิงก์บริการ', icon: 'link', exact: true, feature: 'links' },
@@ -24,6 +26,7 @@ const NAV = [
   { href: '/admin/users', label: 'จัดการผู้ใช้', icon: 'group', exact: false, feature: 'manager' },
   { href: '/admin/data', label: 'นำเข้า/ส่งออก', icon: 'swap_vert', exact: false, feature: 'data' },
 ] as const;
+type NavItem = (typeof NAV)[number] | { href: string; label: string; icon: string; exact: boolean; feature: string };
 
 // 1d admin chrome: left sidebar (brand, icon nav, dev-open warning card) with
 // the content pane alongside. Same props API as before so every admin page
@@ -53,6 +56,15 @@ export default function AdminLayout({
     shouldRetryOnError: false,
   });
 
+  // ทางเข้าโหมดเจ้าหน้าที่สารบรรณ: คนที่ไม่มีฟีเจอร์ saraban แต่ผูกตำแหน่งไว้ — ถามเงียบ ๆ ว่า
+  // /saraban/me ใช้ได้ไหม (ไม่ผูก = 403 ก็แค่ไม่โชว์เมนู) · คนมีสิทธิ์เต็มมีเมนูอยู่แล้วจึงไม่ยิง
+  // dev-open มีทุกฟีเจอร์อยู่แล้วจึงไม่แสดง
+  const { data: memberSummary } = useSWR(
+    clerkOn && me && !me.isManager && !(me.features ?? []).includes('saraban') ? memberSummaryKey(undefined) : null,
+    sarabanFetcher,
+    { shouldRetryOnError: false, revalidateOnFocus: false, revalidateIfStale: false }
+  );
+
   // dev-open เห็นครบ; Clerk on: รอ me ก่อนค่อยวาดเมนู (กันเมนูต้องห้ามแวบ)
   const nav = !clerkOn
     ? NAV
@@ -66,6 +78,10 @@ export default function AdminLayout({
               me.isManager === true ||
               (me.features ?? []).includes(item.feature)
         );
+  const navItems: readonly NavItem[] =
+    clerkOn && memberSummary
+      ? [...nav, { href: '/saraban/me', label: 'งานของฉัน (สารบรรณ)', icon: 'person', exact: false, feature: 'member' }]
+      : nav;
 
   // Badge: จำนวนผู้สมัครที่รออนุมัติ. Refresh ทุกนาที; ถ้า endpoint พัง
   // (เช่น Mongo ไม่พร้อม) ก็แค่ไม่แสดง badge — ไม่ retry รัว ๆ
@@ -114,7 +130,7 @@ export default function AdminLayout({
           </div>
 
           <nav className="flex gap-0.5 overflow-x-auto md:flex-col">
-            {nav.map((item) => {
+            {navItems.map((item) => {
               const active = item.exact
                 ? router.pathname === item.href
                 : router.pathname.startsWith(item.href);
