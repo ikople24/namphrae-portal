@@ -1,5 +1,5 @@
 // src/lib/saraban-schema.ts
-// zod ของทุกคำขอในระบบสารบรรณรอบ 1–2 — ใช้ร่วมทั้ง API และฟอร์ม (แนวเดียวกับ schema.ts)
+// zod ของทุกคำขอในระบบสารบรรณรอบ 1–3 — ใช้ร่วมทั้ง API และฟอร์ม (แนวเดียวกับ schema.ts)
 
 import { z } from 'zod';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
@@ -120,6 +120,12 @@ export const docPatchSchema = z.discriminatedUnion('action', [
     reason: requiredText(500, 'ต้องระบุเหตุผลที่ยกเลิก'),
   }),
   z.object({ action: z.literal('sent'), updatedAt: z.string().min(1), method: z.enum(SEND_METHODS) }),
+  // ผู้จัดการเท่านั้น — route เช็ค isManager (สเปก 2026-11-04-saraban-reopen)
+  z.object({
+    action: z.literal('reopen'),
+    updatedAt: z.string().min(1),
+    reason: requiredText(500, 'ต้องระบุเหตุผลที่ดึงเรื่องกลับ'),
+  }),
   annotatePatchSchema,
   ackPatchSchema,
 ]);

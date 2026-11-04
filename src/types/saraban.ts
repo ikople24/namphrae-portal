@@ -39,6 +39,7 @@ export const SARABAN_EVENT_KINDS = [
   'voided',
   'annotated', // เกษียน/สั่งการ (รอบ 2) — ธุรการบันทึกแทนตำแหน่งที่หนังสืออยู่
   'acknowledged', // ติ๊กทราบแทนตำแหน่งที่ถูกเวียน (รอบ 2)
+  'reopened', // ผู้จัดการดึงหนังสือรับที่จบเรื่องแล้วกลับมาดำเนินการ
 ] as const;
 export type SarabanEventKind = (typeof SARABAN_EVENT_KINDS)[number];
 

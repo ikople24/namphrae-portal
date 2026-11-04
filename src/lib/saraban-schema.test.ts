@@ -119,6 +119,15 @@ describe('docPatchSchema — แยกตาม action', () => {
     expect(docPatchSchema.safeParse({ action: 'void', updatedAt: 't', reason: 'ลงรับซ้ำ' }).success).toBe(true);
   });
 
+  it('ดึงเรื่องกลับต้องมีเหตุผล', () => {
+    expect(docPatchSchema.safeParse({ action: 'reopen', updatedAt: 't', reason: ' ' }).success).toBe(false);
+    expect(docPatchSchema.parse({ action: 'reopen', updatedAt: 't', reason: ' จบผิด ' })).toEqual({
+      action: 'reopen',
+      updatedAt: 't',
+      reason: 'จบผิด',
+    });
+  });
+
   it('ส่งแล้วรับเฉพาะวิธีส่งที่รู้จัก', () => {
     expect(docPatchSchema.safeParse({ action: 'sent', updatedAt: 't', method: 'post' }).success).toBe(true);
     expect(docPatchSchema.safeParse({ action: 'sent', updatedAt: 't', method: 'fax' }).success).toBe(false);
@@ -242,10 +251,11 @@ describe('memberPatchSchema', () => {
     expect(memberPatchSchema.safeParse({ action: 'ack', updatedAt: 'x', unitId: 'palad' }).success).toBe(true);
   });
 
-  it('ไม่รับ edit / void / sent', () => {
+  it('ไม่รับ edit / void / sent / reopen', () => {
     expect(memberPatchSchema.safeParse({ action: 'void', updatedAt: 'x', reason: 'ผิด' }).success).toBe(false);
     expect(memberPatchSchema.safeParse({ action: 'edit', updatedAt: 'x', edit: {} }).success).toBe(false);
     expect(memberPatchSchema.safeParse({ action: 'sent', updatedAt: 'x', method: 'post' }).success).toBe(false);
+    expect(memberPatchSchema.safeParse({ action: 'reopen', updatedAt: 'x', reason: 'ผิด' }).success).toBe(false);
   });
 });
 

@@ -44,6 +44,7 @@ export const EVENT_KIND_LABELS: Record<SarabanEventKind, string> = {
   voided: 'ยกเลิกเลขทะเบียน',
   annotated: 'เกษียน/สั่งการ',
   acknowledged: 'รับทราบ (แจ้งเวียน)',
+  reopened: 'ดึงเรื่องกลับ',
 };
 
 const IN_STATUS_LABELS: Record<DisplayStatus, string> = {

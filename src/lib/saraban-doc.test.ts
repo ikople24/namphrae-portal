@@ -6,6 +6,7 @@ import {
   canAddFile,
   canMarkSent,
   canRemoveFile,
+  canReopen,
   canVoid,
   displayStatus,
   EDITABLE_FIELDS,
@@ -17,6 +18,7 @@ import {
   nameUnitChanges,
   pickActorName,
   REGISTER_VIEWS,
+  reopenTransition,
   sentTransition,
   toMongoQuery,
   voidTransition,
@@ -319,10 +321,8 @@ describe('editableFieldsOf', () => {
   });
 
   it('หนังสือรับที่เดินไปแล้ว: เปลี่ยนเสนอถึงไม่ได้ — หลังจากนี้หนังสือเดินตามการเกษียน', () => {
-    for (const status of ['in-progress', 'done'] as const) {
-      expect(editableFieldsOf({ register: 'in', status })).not.toContain('holderUnitId');
-      expect(editableFieldsOf({ register: 'in', status })).toContain('subject');
-    }
+    expect(editableFieldsOf({ register: 'in', status: 'in-progress' })).not.toContain('holderUnitId');
+    expect(editableFieldsOf({ register: 'in', status: 'in-progress' })).toContain('subject');
   });
 
   it('ส่ง/เวียน: "ที่" กับเจ้าของเรื่องล็อก (อาจพิมพ์ลงหนังสือจริงแล้ว) และไม่มีกำหนดแล้วเสร็จ', () => {
@@ -335,6 +335,18 @@ describe('editableFieldsOf', () => {
 
   it('ยกเลิกแล้วแก้อะไรไม่ได้เลย', () => {
     expect(editableFieldsOf({ register: 'in', status: 'void' })).toEqual([]);
+  });
+
+  it('หนังสือรับที่จบเรื่องแล้ว: ล็อกสำหรับคนทั่วไป ผู้จัดการยังแก้ได้ (ยกเว้นเสนอถึง)', () => {
+    expect(editableFieldsOf({ register: 'in', status: 'done' })).toEqual([]);
+    expect(editableFieldsOf({ register: 'in', status: 'done' }, { isManager: false })).toEqual([]);
+    expect(editableFieldsOf({ register: 'in', status: 'done' }, { isManager: true })).toEqual([
+      'ref', 'docDate', 'party', 'subject', 'level', 'dueDate',
+    ]);
+  });
+
+  it('ล็อกเฉพาะหนังสือรับ — ส่ง/เวียนที่ส่งแล้วแก้ได้เหมือนเดิม', () => {
+    expect(editableFieldsOf({ register: 'out', status: 'done' })).toEqual(['docDate', 'party', 'subject', 'level']);
   });
 
   it('เลขทะเบียน ทะเบียน ปีงบ สถานะ และ audit ไม่มีทางอยู่ในรายการช่องที่แก้ได้', () => {
@@ -384,6 +396,16 @@ describe('buildEdit', () => {
   it('หลายช่องพร้อมกัน — changes เรียงตามลำดับของ EDITABLE_FIELDS', () => {
     const result = buildEdit(doc, { level: 'normal', ref: 'ชม 1/2' });
     expect(result.ok && result.changes.map((c) => c.field)).toEqual(['ref', 'level']);
+  });
+
+  it('หนังสือรับที่จบเรื่องแล้ว: คนทั่วไปแก้ไม่ได้ ผู้จัดการแก้ได้', () => {
+    const done = makeDoc({ status: 'done' });
+    expect(buildEdit(done, { subject: 'ใหม่' })).toEqual({ ok: false, field: 'subject' });
+    expect(buildEdit(done, { subject: 'ใหม่' }, { isManager: true })).toEqual({
+      ok: true,
+      set: { subject: 'ใหม่' },
+      changes: [{ field: 'subject', from: done.subject, to: 'ใหม่' }],
+    });
   });
 });
 
@@ -435,6 +457,31 @@ describe('voidTransition / sentTransition', () => {
 
   it('หนังสือรับบันทึกว่าส่งแล้วไม่ได้ → null', () => {
     expect(sentTransition({ register: 'in', status: 'in-progress' }, 'post')).toBeNull();
+  });
+});
+
+describe('canReopen / reopenTransition', () => {
+  it('ดึงกลับได้เฉพาะหนังสือรับที่จบเรื่องแล้ว', () => {
+    expect(canReopen({ register: 'in', status: 'done' })).toBe(true);
+    for (const status of ['pending', 'in-progress', 'void'] as const) {
+      expect(canReopen({ register: 'in', status }), status).toBe(false);
+    }
+    for (const register of ['out', 'circular'] as const) {
+      expect(canReopen({ register, status: 'done' }), register).toBe(false);
+    }
+  });
+
+  it('ดึงกลับ: กลับเป็นดำเนินการ ตำแหน่งเดิม และเหตุผลเป็นข้อความของ event', () => {
+    expect(reopenTransition({ register: 'in', status: 'done' }, 'จบผิดเรื่อง')).toEqual({
+      set: { status: 'in-progress' },
+      kind: 'reopened',
+      note: 'จบผิดเรื่อง',
+    });
+  });
+
+  it('สถานะอื่น → null (route ตอบ 409)', () => {
+    expect(reopenTransition({ register: 'in', status: 'in-progress' }, 'x')).toBeNull();
+    expect(reopenTransition({ register: 'out', status: 'done' }, 'x')).toBeNull();
   });
 });
 

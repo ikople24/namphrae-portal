@@ -127,6 +127,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_member: 'มีรายชื่อที่ไม่ใช่สมาชิกในระบบ',
   not_found: 'ไม่พบหนังสือ',
   feature_denied: 'ไม่มีสิทธิ์ใช้ระบบสารบรรณ',
+  manager_only: 'เฉพาะผู้จัดการระบบเท่านั้น',
 };
 
 export function errorMessage(code: string | undefined): string {

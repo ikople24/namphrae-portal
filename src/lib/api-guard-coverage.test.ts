@@ -94,6 +94,13 @@ describe('สารบรรณโหมดเจ้าหน้าที่: �
     expect(src).toContain('activeRegistryFilter(');
   });
 
+  it('docs/[id]: ดึงเรื่องกลับเช็คผู้จัดการก่อนเปลี่ยนสถานะ · แก้ไขส่ง isManager ให้กฎล็อก', () => {
+    const src = readFileSync(join(API_DIR, 'saraban', 'docs', '[id]', 'index.ts'), 'utf8');
+    expect(src).toContain('manager_only');
+    expect(src.indexOf('manager_only')).toBeLessThan(src.indexOf('reopenTransition(current'));
+    expect(src).toContain('buildEdit(current, patch.edit, { isManager: admin.isManager })');
+  });
+
   it('me/docs/[id]: ทำในนามตำแหน่งที่ถือเท่านั้น และไม่ใช้ schema โหมดเต็ม', () => {
     const src = readFileSync(join(ME_DIR, 'docs', '[id]', 'index.ts'), 'utf8');
     expect(src).toContain('not_holder');
