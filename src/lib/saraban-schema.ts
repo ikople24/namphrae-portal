@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { REGISTER_VIEWS } from '@/lib/saraban-doc';
 import { MAX_CIRCULATE } from '@/lib/saraban-flow';
+import { MEMBER_TABS } from '@/lib/saraban-member';
 import { SARABAN_LEVELS, SARABAN_REGISTERS, SEND_METHODS } from '@/types/saraban';
 
 /**
@@ -98,6 +99,19 @@ const annotateRouteSchema = z.discriminatedUnion('kind', [
  * updatedAt = เวอร์ชันของหนังสือที่หน้าจอเห็นตอนกด — applyPatch เขียนได้เฉพาะเมื่อยังตรง
  * กับใน DB กันสองคนแก้/ยกเลิกเรื่องเดียวกันพร้อมกันแล้วคนหลังเขียนทับเงียบ ๆ
  */
+const annotatePatchSchema = z.object({
+  action: z.literal('annotate'),
+  updatedAt: z.string().min(1),
+  note: requiredText(1000, 'ต้องมีข้อความเกษียน'),
+  route: annotateRouteSchema,
+  circulateTo: z
+    .array(z.string().min(1).max(100))
+    .max(MAX_CIRCULATE, `เวียนได้ไม่เกิน ${MAX_CIRCULATE} ตำแหน่งต่อครั้ง`)
+    .refine((ids) => new Set(ids).size === ids.length, 'เลือกตำแหน่งซ้ำ')
+    .default([]),
+});
+const ackPatchSchema = z.object({ action: z.literal('ack'), updatedAt: z.string().min(1), unitId: z.string().min(1).max(100) });
+
 export const docPatchSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('edit'), updatedAt: z.string().min(1), edit: editSchema }),
   z.object({
@@ -106,20 +120,15 @@ export const docPatchSchema = z.discriminatedUnion('action', [
     reason: requiredText(500, 'ต้องระบุเหตุผลที่ยกเลิก'),
   }),
   z.object({ action: z.literal('sent'), updatedAt: z.string().min(1), method: z.enum(SEND_METHODS) }),
-  z.object({
-    action: z.literal('annotate'),
-    updatedAt: z.string().min(1),
-    note: requiredText(1000, 'ต้องมีข้อความเกษียน'),
-    route: annotateRouteSchema,
-    circulateTo: z
-      .array(z.string().min(1).max(100))
-      .max(MAX_CIRCULATE, `เวียนได้ไม่เกิน ${MAX_CIRCULATE} ตำแหน่งต่อครั้ง`)
-      .refine((ids) => new Set(ids).size === ids.length, 'เลือกตำแหน่งซ้ำ')
-      .default([]),
-  }),
-  z.object({ action: z.literal('ack'), updatedAt: z.string().min(1), unitId: z.string().min(1).max(100) }),
+  annotatePatchSchema,
+  ackPatchSchema,
 ]);
 export type DocPatch = z.infer<typeof docPatchSchema>;
+
+// PATCH /api/admin/saraban/me/docs/[id] — เจ้าตัวทำได้แค่เกษียนกับทราบ (สเปกรอบ 3 ข้อ 3)
+// แก้ข้อมูล/ยกเลิก/ไฟล์ยังเป็นงานของธุรการในโหมดเต็ม
+export const memberPatchSchema = z.discriminatedUnion('action', [annotatePatchSchema, ackPatchSchema]);
+export type MemberPatch = z.infer<typeof memberPatchSchema>;
 
 // ระบบต่อ "/เลข" ท้ายรหัสเอง — รหัสที่มี '/' จะได้ "ที่" หน้าตาเพี้ยนอย่าง 'ชม 55201//388'
 const refCodeSchema = z
@@ -180,3 +189,18 @@ export const yearQuerySchema = z.object({
 // POST /api/admin/saraban/docs?kind=… — ลงรับกับออกเลขใช้ schema คนละตัว
 export const docKindSchema = z.enum(['receive', 'send']);
 export type DocKind = z.infer<typeof docKindSchema>;
+
+// GET /api/admin/saraban/me/docs
+export const memberDocsQuerySchema = z.object({
+  tab: z.enum(MEMBER_TABS).default('todo'),
+  page: z.coerce.number().int().min(1).default(1),
+});
+
+// PUT /api/admin/saraban/units/[id]/members — ว่าง = ถอดทุกคน · สูงสุด 10 คนต่อตำแหน่ง (รักษาการแทน)
+export const MAX_UNIT_MEMBERS = 10;
+export const unitMembersSchema = z.object({
+  clerkIds: z
+    .array(z.string().min(1).max(100))
+    .max(MAX_UNIT_MEMBERS, `ผูกได้ไม่เกิน ${MAX_UNIT_MEMBERS} คนต่อตำแหน่ง`)
+    .refine((ids) => new Set(ids).size === ids.length, 'เลือกคนซ้ำ'),
+});

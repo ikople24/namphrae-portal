@@ -7,9 +7,14 @@ import {
   fileSizeLabel,
   isoToThaiInput,
   isUrgentOpen,
+  memberDocKey,
+  memberDocsKey,
+  memberFileUrl,
+  memberSummaryKey,
   parseThaiInput,
   precheckFile,
   thaiDate,
+  withAs,
   thaiDateTime,
   viewsOf,
 } from '@/lib/saraban-view';
@@ -140,5 +145,27 @@ describe('รอบ 2 — docsKey scope และข้อความ error', (
     for (const code of ['same_holder', 'already_circulated', 'not_circulated', 'already_acknowledged']) {
       expect(errorMessage(code)).not.toBe('เกิดข้อผิดพลาด ลองอีกครั้ง');
     }
+  });
+});
+
+describe('คีย์โหมดเจ้าหน้าที่', () => {
+  it('ต่อ as เมื่อมี (dev-open) · ไม่มีก็ไม่ใส่', () => {
+    expect(withAs('/api/x', undefined)).toBe('/api/x');
+    expect(withAs('/api/x', 'palad')).toBe('/api/x?as=palad');
+    expect(withAs('/api/x?tab=done', 'palad')).toBe('/api/x?tab=done&as=palad');
+  });
+
+  it('รูปคีย์', () => {
+    expect(memberSummaryKey(undefined)).toBe('/api/admin/saraban/me');
+    expect(memberDocsKey({ tab: 'todo', page: 1 })).toBe('/api/admin/saraban/me/docs?tab=todo');
+    expect(memberDocsKey({ tab: 'done', page: 3, as: 'palad' })).toBe('/api/admin/saraban/me/docs?tab=done&page=3&as=palad');
+    expect(memberDocKey('doc 1', 'palad')).toBe('/api/admin/saraban/me/docs/doc%201?as=palad');
+    expect(memberFileUrl('d', 'f', undefined)).toBe('/api/admin/saraban/me/docs/d/files/f');
+  });
+
+  it('ข้อความ error ใหม่', () => {
+    expect(errorMessage('not_member')).toContain('ยังไม่ได้ผูก');
+    expect(errorMessage('not_holder')).toContain('ไม่ได้อยู่กับตำแหน่งของคุณ');
+    expect(errorMessage('invalid_member')).toContain('ไม่ใช่สมาชิก');
   });
 });

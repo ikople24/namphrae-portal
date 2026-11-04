@@ -6,6 +6,7 @@ import { arabicDigits } from '@/lib/iso-date';
 import { MAX_FILE_BYTES } from '@/lib/saraban-attachment';
 import { isOpen, type RegisterView } from '@/lib/saraban-doc';
 import { LEVEL_LABELS, statusLabel } from '@/lib/saraban-labels';
+import type { MemberTab } from '@/lib/saraban-member';
 import type { SarabanDoc, SarabanLevel, SarabanRegister } from '@/types/saraban';
 
 const THAI_MONTHS = [
@@ -121,6 +122,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   already_circulated: 'มีตำแหน่งที่เวียนถึงแล้ว เอาออกจากรายการแล้วบันทึกอีกครั้ง',
   not_circulated: 'ตำแหน่งนี้ไม่ได้อยู่ในรายการแจ้งเวียน',
   already_acknowledged: 'ตำแหน่งนี้ทราบแล้ว',
+  not_member: 'ยังไม่ได้ผูกกับตำแหน่งใด ติดต่อผู้ดูแลระบบ',
+  not_holder: 'หนังสือนี้ไม่ได้อยู่กับตำแหน่งของคุณแล้ว',
+  invalid_member: 'มีรายชื่อที่ไม่ใช่สมาชิกในระบบ',
   not_found: 'ไม่พบหนังสือ',
   feature_denied: 'ไม่มีสิทธิ์ใช้ระบบสารบรรณ',
 };
@@ -166,3 +170,25 @@ export function precheckFile(file: { name: string; size: number }): string | nul
   if (!/\.(pdf|jpe?g|png)$/i.test(file.name)) return `${file.name}: รับเฉพาะ PDF, JPG, PNG`;
   return null;
 }
+
+const ME_BASE = '/api/admin/saraban/me';
+
+/** ?as= ของ dev-open (สเปกรอบ 3 ข้อ 2) — ต่อท้ายทุกคำขอใต้ /me · ตั้ง Clerk แล้วเซิร์ฟเวอร์ไม่สนค่านี้ */
+export function withAs(url: string, as: string | undefined): string {
+  if (!as) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}as=${encodeURIComponent(as)}`;
+}
+
+export const memberSummaryKey = (as: string | undefined) => withAs(ME_BASE, as);
+
+export function memberDocsKey(q: { tab: MemberTab; page: number; as?: string }): string {
+  const p = new URLSearchParams({ tab: q.tab });
+  if (q.page > 1) p.set('page', String(q.page));
+  return withAs(`${ME_BASE}/docs?${p}`, q.as);
+}
+
+export const memberDocKey = (id: string, as: string | undefined) =>
+  withAs(`${ME_BASE}/docs/${encodeURIComponent(id)}`, as);
+
+export const memberFileUrl = (id: string, fileId: string, as: string | undefined) =>
+  withAs(`${ME_BASE}/docs/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`, as);
