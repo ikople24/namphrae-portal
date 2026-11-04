@@ -10,6 +10,8 @@ import {
   resolveAccess,
   type FeatureKey,
 } from '@/lib/user-access';
+import { memberUnitIdsFor } from '@/lib/saraban-member';
+import { listUnits } from '@/lib/saraban-units-store';
 import { getAccessDoc } from '@/lib/user-access-store';
 
 // SERVER ONLY. Import this only from API routes / getServerSideProps — it pulls
@@ -157,9 +159,11 @@ export type AdminPageProps = { member: boolean; forbidden?: boolean };
  *   ผ่าน guard ของตัวเองเสมอเพราะ firstAllowedPath เลือกจาก features ของคน
  *   นั้นเอง — ไม่มีลูป
  * - ไม่มีสิทธิ์ฟีเจอร์ใดเลย → การ์ด forbidden (ห้าม redirect ไม่งั้นวนลูป)
+ * - (สารบรรณรอบ 3) ไม่มีฟีเจอร์ใดเลยแต่ผูกตำแหน่ง → /saraban/me · เช็คเฉพาะกรณีนี้ คำขอทั่วไป
+ *   จึงไม่ต้องอ่านสมุดเพิ่ม · ปลายทางผ่าน guard ของตัวเองเพราะ getSarabanMemberSsrProps นับการผูก
  */
 function buildSsrGuard(
-  allowed: (identity: AdminIdentity) => boolean
+  allowed: (identity: AdminIdentity) => boolean | Promise<boolean>
 ): GetServerSideProps<AdminPageProps> {
   return async (ctx) => {
     const check = await checkAdmin(ctx.req);
@@ -169,11 +173,23 @@ function buildSsrGuard(
       }
       return { props: { member: false } };
     }
-    if (allowed(check.identity)) return { props: { member: true } };
-    const destination = firstAllowedPath(check.identity);
+    if (await allowed(check.identity)) return { props: { member: true } };
+    const destination =
+      firstAllowedPath(check.identity) ??
+      ((await isSarabanUnitMember(check.identity.userId)) ? '/saraban/me' : null);
     if (destination) return { redirect: { destination, permanent: false } };
     return { props: { member: true, forbidden: true } };
   };
+}
+
+/** ผูกกับตำแหน่งที่เปิดใช้อย่างน้อยหนึ่ง — อ่านสมุดไม่ได้ถือว่าไม่ได้ผูก (fail closed) */
+async function isSarabanUnitMember(userId: string): Promise<boolean> {
+  try {
+    return memberUnitIdsFor({ clerkOn: true, userId, as: undefined, units: await listUnits() }).length > 0;
+  } catch (err) {
+    console.error('isSarabanUnitMember: อ่านสมุดผู้รับไม่ได้', err);
+    return false;
+  }
 }
 
 export function getFeatureSsrProps(
@@ -190,3 +206,11 @@ export const getManagerSsrProps: GetServerSideProps<AdminPageProps> =
  * ทะเบียนแล้ว จึงคืน true เสมอ ส่วนคนนอกทะเบียนยังถูก buildSsrGuard เด้งไป /apply เหมือนหน้าอื่น
  */
 export const getMemberSsrProps: GetServerSideProps<AdminPageProps> = buildSsrGuard(() => true);
+
+/**
+ * หน้าโหมดเจ้าหน้าที่ /saraban/me* (สเปกรอบ 3 ข้อ 2) — มีสิทธิ์ saraban หรือผูกตำแหน่ง · dev-open ผ่าน
+ * ด้วยสิทธิ์ครบ แล้วหน้าจอให้เลือกตำแหน่งที่จะสวม (?as=)
+ */
+export const getSarabanMemberSsrProps: GetServerSideProps<AdminPageProps> = buildSsrGuard(
+  async (identity) => hasFeature(identity, 'saraban') || (await isSarabanUnitMember(identity.userId))
+);
