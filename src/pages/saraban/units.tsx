@@ -3,9 +3,11 @@
 import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
+import UnitMembersPanel, { type MemberOption } from '@/components/saraban/UnitMembersPanel';
 import { ErrorBox, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
 import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { adminFetcher } from '@/lib/admin-api';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import { createUnit, messageOf, sarabanFetcher, UNITS_KEY, updateUnit } from '@/lib/saraban-api';
 import type { SarabanUnit } from '@/types/saraban';
@@ -27,6 +29,17 @@ function toInput(d: Draft) {
 
 function UnitsPage() {
   const { data: units, error, mutate } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
+  // ผูกคน = ผู้จัดการ (สเปกรอบ 3 ข้อ 1.4) — รายชื่อสมาชิกอ่านได้เฉพาะผู้จัดการ คนอื่นเห็นแค่จำนวน
+  const { data: me } = useSWR<{ isManager: boolean }>('/api/admin/me', adminFetcher, { revalidateOnFocus: false });
+  const isManager = me?.isManager === true;
+  const { data: people } = useSWR<{ members: { clerkId: string | null; name: string; position: string; isActive: boolean; isArchived: boolean }[] }>(
+    isManager ? '/api/admin/users' : null,
+    adminFetcher,
+    { shouldRetryOnError: false }
+  );
+  const options: MemberOption[] = (people?.members ?? [])
+    .filter((m): m is typeof m & { clerkId: string } => Boolean(m.clerkId) && m.isActive && !m.isArchived)
+    .map(({ clerkId, name, position }) => ({ clerkId, name, position }));
   const [draft, setDraft] = useState<Draft>(BLANK);
   const [problem, setProblem] = useState('');
   const [busy, setBusy] = useState(false);
@@ -68,20 +81,21 @@ function UnitsPage() {
 
       <div className={`${card} overflow-hidden`}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-[13.5px]">
+          <table className="w-full min-w-[900px] border-collapse text-[13.5px]">
             <thead>
               <tr className="bg-sb-panel text-left text-xs text-sb-muted">
                 <th className="px-4 py-3 font-semibold">ชื่อ</th>
                 <th className="px-2.5 py-3 font-semibold">สังกัด</th>
                 <th className="px-2.5 py-3 font-semibold">รหัสส่วนราชการ</th>
                 <th className="px-2.5 py-3 font-semibold">ลำดับ</th>
+                <th className="px-2.5 py-3 font-semibold">ผู้ถือตำแหน่ง</th>
                 <th className="px-2.5 py-3 font-semibold">สถานะ</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {(units ?? []).map((u) => (
-                <UnitRow key={u.id} unit={u} onSaved={() => mutate()} />
+                <UnitRow key={u.id} unit={u} isManager={isManager} options={options} onSaved={() => mutate()} />
               ))}
             </tbody>
           </table>
@@ -92,10 +106,11 @@ function UnitsPage() {
   );
 }
 
-function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) {
+function UnitRow({ unit, isManager, options, onSaved }: { unit: SarabanUnit; isManager: boolean; options: MemberOption[]; onSaved: () => void }) {
   const initial: Draft = { name: unit.name, dept: unit.dept, refCode: unit.refCode, order: String(unit.order) };
   const [d, setD] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
+  const [binding, setBinding] = useState(false);
   const dirty = JSON.stringify(d) !== JSON.stringify(initial);
 
   async function save(patch: Parameters<typeof updateUnit>[1], done: string) {
@@ -113,6 +128,7 @@ function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) 
 
   const cell = 'w-full rounded-lg border border-transparent bg-transparent px-2 py-1.5 hover:border-sb-line-input focus:border-sb-line-input';
   return (
+    <>
     <tr className={`border-t border-sb-page ${unit.isActive ? '' : 'text-sb-muted'}`}>
       <td className="px-3 py-1.5">
         <input className={cell} value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
@@ -125,6 +141,22 @@ function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) 
       </td>
       <td className="w-20 px-1 py-1.5">
         <input className={cell} inputMode="numeric" value={d.order} onChange={(e) => setD({ ...d, order: e.target.value })} />
+      </td>
+      <td className="px-2.5 py-1.5">
+        {isManager ? (
+          <div className="flex flex-wrap items-center gap-1">
+            {unit.memberClerkIds.map((cid) => (
+              <span key={cid} className="rounded-full bg-sb-accent-light px-2 py-0.5 text-xs text-sb-accent">
+                {options.find((o) => o.clerkId === cid)?.name || `${cid.slice(0, 10)}…`}
+              </span>
+            ))}
+            <button type="button" className="text-xs text-sb-accent hover:underline" onClick={() => setBinding(!binding)}>
+              ผูกคน
+            </button>
+          </div>
+        ) : (
+          <span className="text-xs text-sb-muted">{unit.memberClerkIds.length ? `${unit.memberClerkIds.length} คน` : '—'}</span>
+        )}
       </td>
       <td className="px-2.5 py-1.5">
         <span className={`rounded-full px-2.5 py-[3px] text-xs font-semibold ${unit.isActive ? 'bg-sb-success-bg text-sb-success' : 'bg-sb-subtle text-sb-muted'}`}>
@@ -156,6 +188,14 @@ function UnitRow({ unit, onSaved }: { unit: SarabanUnit; onSaved: () => void }) 
         </button>
       </td>
     </tr>
+    {binding ? (
+      <tr>
+        <td colSpan={7} className="px-4 pb-3">
+          <UnitMembersPanel unit={unit} options={options} onClose={() => setBinding(false)} onSaved={onSaved} />
+        </td>
+      </tr>
+    ) : null}
+    </>
   );
 }
 

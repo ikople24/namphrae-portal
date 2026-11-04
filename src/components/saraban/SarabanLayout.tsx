@@ -10,6 +10,7 @@ import { Toaster } from '@/components/saraban/toast';
 import { adminFetcher } from '@/lib/admin-api';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
 import { SUMMARY_KEY, sarabanFetcher, type SummaryResponse } from '@/lib/saraban-api';
+import { memberSummaryKey } from '@/lib/saraban-view';
 import { sarabanFont } from '@/lib/saraban-font';
 import { fiscalYearOf } from '@/lib/saraban-number';
 
@@ -75,6 +76,14 @@ export default function SarabanLayout({
     adminFetcher,
     { revalidateOnFocus: false, shouldRetryOnError: false }
   );
+
+  // ปุ่ม "งานของฉัน" (สเปกรอบ 3 ข้อ 2) — โชว์เมื่อผูกตำแหน่ง (403 not_member = ซ่อน) · dev-open โชว์เสมอ
+  // เพราะไม่มีใครผูกได้ ไปเลือกตำแหน่งที่จะสวมที่หน้านั้น
+  const { data: memberSummary } = useSWR(clerkOn ? memberSummaryKey(undefined) : null, sarabanFetcher, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+  });
+  const showMyWork = !clerkOn || Boolean(memberSummary);
 
   // ปีงบจาก today ของเซิร์ฟเวอร์ (เวลากรุงเทพฯ) — ไม่ใช้นาฬิกาเครื่องผู้ใช้ และไม่คำนวณตอน SSR
   const fiscalYear = summary ? fiscalYearOf(summary.today) : null;
@@ -173,6 +182,15 @@ export default function SarabanLayout({
             <div className="flex-1" />
             {fiscalYear ? (
               <span className="hidden whitespace-nowrap text-[13px] text-sb-muted sm:inline">ปีงบประมาณ {fiscalYear}</span>
+            ) : null}
+            {showMyWork ? (
+              <Link
+                href="/saraban/me"
+                className="inline-flex h-9 flex-none items-center gap-1 whitespace-nowrap rounded-[10px] border border-sb-line px-3 text-sm font-semibold text-sb-ink-2 hover:bg-sb-hover"
+              >
+                <Icon name="person" size={18} />
+                <span className="hidden sm:inline">งานของฉัน</span>
+              </Link>
             ) : null}
             <Link
               href="/saraban/receive"
