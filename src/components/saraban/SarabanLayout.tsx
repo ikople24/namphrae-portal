@@ -81,6 +81,7 @@ export default function SarabanLayout({
   // เพราะไม่มีใครผูกได้ ไปเลือกตำแหน่งที่จะสวมที่หน้านั้น
   const { data: memberSummary } = useSWR(clerkOn ? memberSummaryKey(undefined) : null, sarabanFetcher, {
     revalidateOnFocus: false,
+    revalidateIfStale: false,
     shouldRetryOnError: false,
   });
   const showMyWork = !clerkOn || Boolean(memberSummary);

@@ -17,12 +17,15 @@ export default function UnitMembersPanel({
   unit: SarabanUnit;
   options: MemberOption[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => unknown;
 }) {
   const [picked, setPicked] = useState<Set<string>>(new Set(unit.memberClerkIds));
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const q = query.trim();
+  // คนที่ผูกไว้แต่หลุดทะเบียน (ปิด/เก็บถาวร) — ต้องแสดงให้ผู้จัดการเอาติ๊กออกได้ ไม่งั้นบันทึกไม่ผ่าน (invalid_member)
+  const known = new Set(options.map((o) => o.clerkId));
+  const orphans = unit.memberClerkIds.filter((id) => !known.has(id));
   const shown = q ? options.filter((o) => `${o.name} ${o.position}`.includes(q)) : options;
 
   function toggle(id: string) {
@@ -39,7 +42,7 @@ export default function UnitMembersPanel({
     try {
       await setUnitMembers(unit.id, [...picked]);
       showToast('บันทึกผู้ถือตำแหน่งแล้ว');
-      onSaved();
+      await onSaved();
       onClose();
     } catch (err) {
       showToast(messageOf(err));
@@ -58,6 +61,18 @@ export default function UnitMembersPanel({
         className="h-10 rounded-lg border border-sb-line-input px-3 text-sm"
       />
       <div role="group" aria-label={`ผู้ถือตำแหน่ง ${unit.name}`} className="grid max-h-64 gap-1 overflow-y-auto [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
+        {options.length === 0 ? (
+          <p className="text-xs text-sb-muted">ไม่มีรายชื่อสมาชิก (ต้องมีทะเบียนสมาชิก)</p>
+        ) : null}
+        {orphans.map((id) => (
+          <label key={id} className="flex min-h-11 items-start gap-2 rounded-lg px-2 py-1.5 text-[13px] hover:bg-white">
+            <input type="checkbox" className="mt-0.5" checked={picked.has(id)} onChange={() => toggle(id)} />
+            <span>
+              {id.slice(0, 10)}…
+              <span className="block text-[11px] text-sb-muted">(ไม่อยู่ในทะเบียนแล้ว)</span>
+            </span>
+          </label>
+        ))}
         {shown.map((o) => (
           <label key={o.clerkId} className="flex min-h-11 items-start gap-2 rounded-lg px-2 py-1.5 text-[13px] hover:bg-white">
             <input type="checkbox" className="mt-0.5" checked={picked.has(o.clerkId)} onChange={() => toggle(o.clerkId)} />

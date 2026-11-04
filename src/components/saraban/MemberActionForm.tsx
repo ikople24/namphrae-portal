@@ -1,6 +1,6 @@
 // การ์ดดำเนินการของหน้าหนังสือ (ต้นแบบ B) — 1. ทำอะไร → 2. ส่งถึงใคร → 3. ข้อความ → สรุป
 // ตัดสินจริงที่เซิร์ฟเวอร์ (annotateTransition) ฟอร์มแค่ไม่ให้เลือกสิ่งที่รู้ว่าผิดแน่
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import Icon from '@/components/Icon';
 import type { AnnotateSubmit } from '@/components/saraban/AnnotateForm';
 import type { UnitRef } from '@/lib/saraban-api';
@@ -31,6 +31,10 @@ export default function MemberActionForm({
   const [rawTo, setTo] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [note, setNote] = useState('');
+  const uid = useId();
+  const h1 = `${uid}-1`;
+  const h2 = `${uid}-2`;
+  const h3 = `${uid}-3`;
 
   const already = new Set(doc.circulation.map((c) => c.unitId));
   const targets = units.filter((u) => u.id !== doc.holderUnitId);
@@ -80,8 +84,8 @@ export default function MemberActionForm({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-sb-line bg-white p-4" aria-label="ดำเนินการ">
       <div>
-        <p className="mb-2 text-sm font-semibold">1. ต้องการทำอะไร</p>
-        <div className="grid grid-cols-3 gap-2">
+        <p id={h1} className="mb-2 text-sm font-semibold">1. ต้องการทำอะไร</p>
+        <div role="group" aria-labelledby={h1} className="grid grid-cols-3 gap-2">
           {CHOICES.map((c) => (
             <button
               key={c.key}
@@ -98,8 +102,8 @@ export default function MemberActionForm({
 
       {choice !== 'close' ? (
         <div>
-          <p className="mb-2 text-sm font-semibold">2. ส่งถึงใคร</p>
-          <div role="group" aria-label="ตำแหน่งปลายทาง" className="flex flex-wrap gap-2">
+          <p id={h2} className="mb-2 text-sm font-semibold">2. ส่งถึงใคร</p>
+          <div role="group" aria-labelledby={h2} className="flex flex-wrap gap-2">
             {choice === 'forward'
               ? targets.map((u) => (
                   <button key={u.id} type="button" aria-pressed={to === u.id} onClick={() => setTo(u.id)} className={chip(to === u.id)}>
@@ -113,7 +117,7 @@ export default function MemberActionForm({
                       key={u.id}
                       type="button"
                       disabled={sent}
-                      aria-pressed={sent || picked.has(u.id)}
+                      aria-pressed={picked.has(u.id)}
                       onClick={() => togglePick(u.id)}
                       className={`${chip(picked.has(u.id))} ${sent ? 'opacity-50' : ''}`}
                     >
@@ -128,8 +132,8 @@ export default function MemberActionForm({
       ) : null}
 
       <div>
-        <p className="mb-2 text-sm font-semibold">{choice === 'close' ? '2' : '3'}. ข้อความ</p>
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        <p id={h3} className="mb-2 text-sm font-semibold">{choice === 'close' ? '2' : '3'}. ข้อความ</p>
+        <div role="group" aria-labelledby={h3} className="mb-2 flex flex-wrap gap-1.5">
           {QUICK_NOTES.map((q) => (
             <button
               key={q}

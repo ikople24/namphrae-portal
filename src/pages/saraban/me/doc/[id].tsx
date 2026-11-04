@@ -1,7 +1,7 @@
 // หน้าหนังสือของเจ้าตัว (สเปกรอบ 3 ข้อ 4 · ต้นแบบ B) — ดู · ประวัติย่อ · ดำเนินการในจอเดียว
 import { useRouter } from 'next/router';
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import Icon from '@/components/Icon';
 import type { AnnotateSubmit } from '@/components/saraban/AnnotateForm';
 import EventDetail, { eventByline } from '@/components/saraban/EventDetail';
@@ -12,9 +12,11 @@ import { showToast } from '@/components/saraban/toast';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getSarabanMemberSsrProps } from '@/lib/auth-server';
 import {
+  clearMemberLists,
   memberAck,
   memberAnnotate,
   messageOf,
+  revalidateSaraban,
   sarabanFetcher,
   SarabanApiError,
   type MemberDocResponse,
@@ -30,6 +32,7 @@ function MemberDocPage() {
   const { data, error, mutate } = useSWR<MemberDocResponse>(id ? memberDocKey(id, as) : null, sarabanFetcher, {
     shouldRetryOnError: false,
   });
+  const { mutate: globalMutate } = useSWRConfig();
   const [busy, setBusy] = useState(false);
 
   async function run(action: () => Promise<unknown>, done: string) {
@@ -37,6 +40,8 @@ function MemberDocPage() {
     try {
       await action();
       showToast(done);
+      // ล้างแคชทั้งแบบธรรมดาและ infinite ก่อนกลับ ไม่งั้นรายการเห็นของเก่า
+      await Promise.all([revalidateSaraban(globalMutate), clearMemberLists(globalMutate, as)]);
       await router.push(home);
     } catch (err) {
       showToast(messageOf(err));
@@ -125,6 +130,7 @@ function MemberDocPage() {
 
       {actions.annotateAs ? (
         <MemberActionForm
+          key={doc.id}
           doc={doc}
           units={units}
           busy={busy}

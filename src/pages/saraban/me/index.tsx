@@ -12,9 +12,12 @@ import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getSarabanMemberSsrProps } from '@/lib/auth-server';
 import { isClerkPublicConfigured } from '@/lib/clerk-config';
 import {
+  clearMemberLists,
   memberAck,
   memberAnnotate,
+  memberListGetKey,
   messageOf,
+  revalidateSaraban,
   sarabanFetcher,
   SarabanApiError,
   UNITS_KEY,
@@ -22,7 +25,7 @@ import {
   type MemberSummary,
 } from '@/lib/saraban-api';
 import { MEMBER_TABS, memberActions, type MemberTab } from '@/lib/saraban-member';
-import { errorMessage, memberDocsKey, memberSummaryKey, withAs } from '@/lib/saraban-view';
+import { errorMessage, memberSummaryKey, withAs } from '@/lib/saraban-view';
 import type { SarabanDoc, SarabanUnit } from '@/types/saraban';
 
 const TAB_LABELS: Record<MemberTab, string> = { todo: 'รอฉันทำ', forwarded: 'ส่งต่อแล้ว', done: 'จบเรื่อง' };
@@ -43,17 +46,14 @@ function MyWorkPage() {
     shouldRetryOnError: false,
   });
   const notMember = summaryError instanceof SarabanApiError && summaryError.code === 'not_member';
-  const list = useSWRInfinite<MemberDocsResponse>(
-    (index) => (summary ? memberDocsKey({ tab, page: index + 1, as }) : null),
-    sarabanFetcher
-  );
+  const list = useSWRInfinite<MemberDocsResponse>(memberListGetKey(tab, as, Boolean(summary)), sarabanFetcher);
   const docs = list.data?.flatMap((p) => p.items) ?? [];
   const total = list.data?.[0]?.total ?? 0;
   const unitIds = summary?.units.map((u) => u.id) ?? [];
 
   const refresh = () => {
-    void globalMutate((k) => typeof k === 'string' && k.startsWith('/api/admin/saraban/me'));
-    void list.mutate();
+    void revalidateSaraban(globalMutate);
+    void clearMemberLists(globalMutate, as).then(() => list.mutate());
   };
 
   async function run(doc: SarabanDoc, action: () => Promise<unknown>, done: string) {
@@ -97,12 +97,11 @@ function MyWorkPage() {
         ) : undefined
       }
     >
-      <div role="tablist" aria-label="แท็บงาน" className="grid grid-cols-3 gap-2">
+      <nav aria-label="แท็บงาน" className="grid grid-cols-3 gap-2">
         {MEMBER_TABS.map((t) => (
           <Link
             key={t}
-            role="tab"
-            aria-selected={t === tab}
+            aria-current={t === tab ? 'page' : undefined}
             href={tabHref(t)}
             replace
             className={`flex min-h-[64px] flex-col items-center justify-center rounded-2xl border px-2 py-2 ${
@@ -113,9 +112,11 @@ function MyWorkPage() {
             <span className="mt-1 text-xs font-semibold">{TAB_LABELS[t]}</span>
           </Link>
         ))}
-      </div>
+      </nav>
 
       {summaryError && !notMember ? <p className="text-center text-sm text-sb-danger">{messageOf(summaryError)}</p> : null}
+      {list.error ? <p className="text-center text-sm text-sb-danger">{messageOf(list.error)}</p> : null}
+      {summary && !list.data && !list.error ? <p className="p-4 text-center text-sm text-sb-muted">กำลังโหลด…</p> : null}
       {list.data && docs.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-sb-line p-8 text-center text-sm text-sb-muted">{EMPTY[tab]}</p>
       ) : null}
@@ -125,7 +126,7 @@ function MyWorkPage() {
           doc={doc}
           href={docHref(doc.id)}
           actions={tab === 'todo' ? memberActions(doc, unitIds) : null}
-          busy={busyId === doc.id}
+          busy={busyId !== ''}
           onQuickClose={() => {
             if (!confirm('ทราบและจบเรื่อง — จบแล้วเปิดกลับไม่ได้ ยืนยัน?')) return;
             void run(doc, () => memberAnnotate(doc, { note: 'ทราบ', route: { kind: 'close' } }, as), 'จบเรื่องแล้ว');
@@ -134,7 +135,12 @@ function MyWorkPage() {
         />
       ))}
       {docs.length < total ? (
-        <button type="button" onClick={() => void list.setSize(list.size + 1)} className="h-11 rounded-xl border border-sb-line bg-white text-sm font-semibold text-sb-ink-2">
+        <button
+          type="button"
+          disabled={list.isValidating && list.size > (list.data?.length ?? 0)}
+          onClick={() => void list.setSize(list.size + 1)}
+          className="h-11 rounded-xl border border-sb-line bg-white text-sm font-semibold text-sb-ink-2 disabled:opacity-50"
+        >
           โหลดเพิ่ม
         </button>
       ) : null}

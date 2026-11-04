@@ -106,7 +106,7 @@ function UnitsPage() {
   );
 }
 
-function UnitRow({ unit, isManager, options, onSaved }: { unit: SarabanUnit; isManager: boolean; options: MemberOption[]; onSaved: () => void }) {
+function UnitRow({ unit, isManager, options, onSaved }: { unit: SarabanUnit; isManager: boolean; options: MemberOption[]; onSaved: () => unknown }) {
   const initial: Draft = { name: unit.name, dept: unit.dept, refCode: unit.refCode, order: String(unit.order) };
   const [d, setD] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
@@ -150,7 +150,7 @@ function UnitRow({ unit, isManager, options, onSaved }: { unit: SarabanUnit; isM
                 {options.find((o) => o.clerkId === cid)?.name || `${cid.slice(0, 10)}…`}
               </span>
             ))}
-            <button type="button" className="text-xs text-sb-accent hover:underline" onClick={() => setBinding(!binding)}>
+            <button type="button" aria-expanded={binding} className="text-xs text-sb-accent hover:underline" onClick={() => setBinding(!binding)}>
               ผูกคน
             </button>
           </div>
