@@ -25,6 +25,7 @@ import {
   withDefaults,
 } from '@/lib/saraban-doc';
 import { readJsonArray, writeJsonArray } from '@/lib/saraban-file';
+import { canSeeDoc, memberCandidateQuery } from '@/lib/saraban-member';
 import { bangkokDateOf, fiscalYearOf, nextNo } from '@/lib/saraban-number';
 import type {
   SarabanDoc,
@@ -137,6 +138,10 @@ function ensureIndexes(): Promise<void> {
         // ไม่ unique: index แบบ multikey ที่ unique จะนับหนังสือที่ไม่มีไฟล์เลยว่าชนกันเอง —
         // กันแนบซ้ำด้วย attachedKeys() ที่ route แทน (สเปกข้อ 5)
         { key: { 'files.key': 1 } },
+        // โหมดเจ้าหน้าที่ (รอบ 3) ค้นเรื่องที่ตำแหน่งเกี่ยวสามทาง — memberCandidateQuery
+        { key: { holderUnitId: 1 } },
+        { key: { 'circulation.unitId': 1 } },
+        { key: { 'events.onBehalfUnitId': 1 } },
       ]);
     }
   );
@@ -209,6 +214,21 @@ export async function listFiscalYears(
     ? await (await docsCollection()).distinct('fiscalYear', { register })
     : (await readDocs()).filter((doc) => doc.register === register).map((doc) => doc.fiscalYear);
   return [...new Set([...years, currentYear])].sort((a, b) => b - a);
+}
+
+/**
+ * หนังสือทุกเรื่องที่ตำแหน่งเหล่านี้เกี่ยว (ยังไม่แบ่งแท็บ) — แท็บ/จำนวน/หน้า ตัดสินด้วย pageMemberDocs
+ * กับ countMemberTabs ใน memory · ตำแหน่งหนึ่งเกี่ยวหลักร้อยเรื่องต่อปี ถ้าเกินหลักพันค่อยย้ายไป aggregate
+ */
+export async function listMemberCandidates(unitIds: readonly string[]): Promise<SarabanDoc[]> {
+  if (unitIds.length === 0) return [];
+  if (isMongoConfigured()) {
+    const docs = await (await docsCollection())
+      .find(memberCandidateQuery(unitIds) as Filter<SarabanDoc>, { projection: { _id: 0 } })
+      .toArray();
+    return docs.map(withDefaults);
+  }
+  return (await readDocs()).map(withDefaults).filter((doc) => doc.status !== 'void' && canSeeDoc(doc, unitIds));
 }
 
 // ---- เลขเริ่มต้นและข้อมูลของปี ---------------------------------------------
