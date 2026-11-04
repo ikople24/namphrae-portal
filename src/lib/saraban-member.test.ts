@@ -1,6 +1,6 @@
 // src/lib/saraban-member.test.ts
 import { describe, expect, it } from 'vitest';
-import { buildNewDoc, makeEvent } from '@/lib/saraban-doc';
+import { buildNewDoc, makeEvent, withDefaults } from '@/lib/saraban-doc';
 import {
   canSeeDoc,
   countMemberTabs,
@@ -73,6 +73,23 @@ describe('canSeeDoc', () => {
   });
 });
 
+describe('canSeeDoc ตรงกับกฎที่ memberCandidateQuery สะท้อน', () => {
+  const legacy = makeDoc();
+  delete (legacy as Partial<SarabanDoc>).circulation;
+  const cases: Array<[string, SarabanDoc, boolean]> = [
+    ['holder', makeDoc(), true],
+    ['circulated', makeDoc({ holderUnitId: 'works', circulation: [circ('palad')] }), true],
+    ['onBehalf-only', forwardedFromPalad(), true],
+    ['void', makeDoc({ status: 'void' }), false],
+    ["register 'out'", makeDoc({ register: 'out' }), false],
+    ['legacy ไม่มี circulation', legacy, true],
+    ['unrelated', makeDoc({ holderUnitId: 'finance' }), false],
+  ];
+  it.each(cases)('%s', (_name, d, expected) => {
+    expect(canSeeDoc(withDefaults(d), ['palad']) && d.status !== 'void').toBe(expected);
+  });
+});
+
 describe('memberTab', () => {
   it('ถือหนังสือที่ยังเปิด → todo', () => {
     expect(memberTab(makeDoc(), ['palad'])).toBe('todo');
@@ -104,10 +121,29 @@ describe('memberTab', () => {
     expect(memberTab(forwardedFromPalad(), ['palad', 'works'])).toBe('todo');
   });
 
-  it('ไม่แก้ doc ที่รับเข้า', () => {
-    const doc = Object.freeze(makeDoc({ circulation: Object.freeze([circ('finance')]) as SarabanCirculation[] }));
-    expect(() => memberTab(doc, ['finance'])).not.toThrow();
-    expect(() => memberActions(doc, ['finance'])).not.toThrow();
+  it('เรื่องเก่าที่ไม่มี circulation → ทำงานได้', () => {
+    const legacy = makeDoc();
+    delete (legacy as Partial<SarabanDoc>).circulation;
+    expect(memberTab(withDefaults(legacy), ['palad'])).toBe('todo');
+  });
+
+  it('เกษียนในนามอย่างเดียวและเรื่องจบแล้ว → done', () => {
+    expect(memberTab(forwardedFromPalad({ status: 'done' }), ['palad'])).toBe('done');
+  });
+
+  it('ไม่แก้ input', () => {
+    const docs = [makeDoc({ circulation: [circ('finance')] }), forwardedFromPalad({ id: 'c' })];
+    const ids = ['finance', 'palad'];
+    const docsClone = structuredClone(docs);
+    const idsClone = structuredClone(ids);
+    for (const d of docs) {
+      memberTab(d, ids);
+      memberActions(d, ids);
+    }
+    pageMemberDocs(docs, ids, 'todo', 1);
+    countMemberTabs(docs, ids);
+    expect(docs).toEqual(docsClone);
+    expect(ids).toEqual(idsClone);
   });
 });
 
@@ -179,5 +215,11 @@ describe('pageMemberDocs / countMemberTabs', () => {
     const second = pageMemberDocs(many, ['palad'], 'todo', 2);
     expect(second.items).toHaveLength(3);
     expect(second.total).toBe(MEMBER_PAGE_SIZE + 3);
+    // เวลาเท่ากัน → เรียงตาม id
+    expect(pageMemberDocs(many, ['palad'], 'todo', 1).items[0].id).toBe('d000');
+    expect(second.items.map((d) => d.id)).toEqual(['d020', 'd021', 'd022']);
+    const past = pageMemberDocs(many, ['palad'], 'todo', 3);
+    expect(past.items).toEqual([]);
+    expect(past.total).toBe(MEMBER_PAGE_SIZE + 3);
   });
 });

@@ -92,13 +92,6 @@ const annotateRouteSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('stay') }),
 ]);
 
-/**
- * PATCH /api/admin/saraban/docs/[id] — แยกตาม action (สเปกข้อ 6) แนวเดียวกับ PATCH ของ
- * ปฏิทินที่รวมการแก้กับการเปลี่ยนสถานะไว้ที่ route เดียว
- *
- * updatedAt = เวอร์ชันของหนังสือที่หน้าจอเห็นตอนกด — applyPatch เขียนได้เฉพาะเมื่อยังตรง
- * กับใน DB กันสองคนแก้/ยกเลิกเรื่องเดียวกันพร้อมกันแล้วคนหลังเขียนทับเงียบ ๆ
- */
 const annotatePatchSchema = z.object({
   action: z.literal('annotate'),
   updatedAt: z.string().min(1),
@@ -112,6 +105,13 @@ const annotatePatchSchema = z.object({
 });
 const ackPatchSchema = z.object({ action: z.literal('ack'), updatedAt: z.string().min(1), unitId: z.string().min(1).max(100) });
 
+/**
+ * PATCH /api/admin/saraban/docs/[id] — แยกตาม action (สเปกข้อ 6) แนวเดียวกับ PATCH ของ
+ * ปฏิทินที่รวมการแก้กับการเปลี่ยนสถานะไว้ที่ route เดียว
+ *
+ * updatedAt = เวอร์ชันของหนังสือที่หน้าจอเห็นตอนกด — applyPatch เขียนได้เฉพาะเมื่อยังตรง
+ * กับใน DB กันสองคนแก้/ยกเลิกเรื่องเดียวกันพร้อมกันแล้วคนหลังเขียนทับเงียบ ๆ
+ */
 export const docPatchSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('edit'), updatedAt: z.string().min(1), edit: editSchema }),
   z.object({

@@ -21,7 +21,7 @@ export function canSeeDoc(doc: MemberDocView, unitIds: readonly string[]): boole
   return (
     mine.has(doc.holderUnitId) ||
     doc.circulation.some((c) => mine.has(c.unitId)) ||
-    doc.events.some((e) => Boolean(e.onBehalfUnitId) && mine.has(e.onBehalfUnitId as string))
+    doc.events.some((e) => mine.has(e.onBehalfUnitId ?? ''))
   );
 }
 
