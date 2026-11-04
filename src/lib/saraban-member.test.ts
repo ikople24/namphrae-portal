@@ -86,7 +86,15 @@ describe('canSeeDoc ตรงกับกฎที่ memberCandidateQuery ส�
     ['unrelated', makeDoc({ holderUnitId: 'finance' }), false],
   ];
   it.each(cases)('%s', (_name, d, expected) => {
-    expect(canSeeDoc(withDefaults(d), ['palad']) && d.status !== 'void').toBe(expected);
+    expect(canSeeDoc(withDefaults(d), ['palad'])).toBe(expected);
+  });
+});
+
+describe('canSeeDoc: หนังสือที่ยกเลิก', () => {
+  it('void → ไม่เห็น แม้ถืออยู่/ถูกเวียนถึง/เคยเกษียน', () => {
+    expect(canSeeDoc(makeDoc({ status: 'void' }), ['palad'])).toBe(false);
+    expect(canSeeDoc(makeDoc({ status: 'void', holderUnitId: 'works', circulation: [circ('palad')] }), ['palad'])).toBe(false);
+    expect(canSeeDoc(forwardedFromPalad({ status: 'void' }), ['palad'])).toBe(false);
   });
 });
 

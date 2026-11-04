@@ -80,4 +80,24 @@ describe('สารบรรณโหมดเจ้าหน้าที่: �
     const src = readFileSync(join(API_DIR, 'saraban', 'units', '[id]', 'members.ts'), 'utf8');
     expect(src).toContain('requireManager(');
   });
+
+  it('guard: requireAdmin ก่อนอ่านสมุด · as มาจาก query string · Clerk ตัดสินจาก isClerkConfigured', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'lib', 'saraban-member-guard.ts'), 'utf8');
+    expect(src).toContain('clerkOn: isClerkConfigured()');
+    expect(src).toContain("typeof req.query.as === 'string'");
+    expect(src.indexOf('requireAdmin(')).toBeGreaterThan(-1);
+    expect(src.indexOf('requireAdmin(')).toBeLessThan(src.indexOf('listUnits('));
+  });
+
+  it('ผูกคน: ตรวจกับทะเบียน active', () => {
+    const src = readFileSync(join(API_DIR, 'saraban', 'units', '[id]', 'members.ts'), 'utf8');
+    expect(src).toContain('activeRegistryFilter(');
+  });
+
+  it('me/docs/[id]: ทำในนามตำแหน่งที่ถือเท่านั้น และไม่ใช้ schema โหมดเต็ม', () => {
+    const src = readFileSync(join(ME_DIR, 'docs', '[id]', 'index.ts'), 'utf8');
+    expect(src).toContain('not_holder');
+    expect(src).toContain('memberPatchSchema');
+    expect(src).not.toContain('docPatchSchema');
+  });
 });

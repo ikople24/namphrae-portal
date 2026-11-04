@@ -14,9 +14,9 @@ export const MEMBER_PAGE_SIZE = 20;
 
 type MemberDocView = Pick<SarabanDoc, 'register' | 'status' | 'holderUnitId' | 'circulation' | 'events'>;
 
-/** ถืออยู่ · ถูกเวียนถึง · เคยเกษียน/ส่งต่อในนามตำแหน่งนี้ (สเปกรอบ 3 ข้อ 1.2) */
+/** ถืออยู่ · ถูกเวียนถึง · เคยเกษียน/ส่งต่อในนามตำแหน่งนี้ (สเปกรอบ 3 ข้อ 1.2) · ยกเลิกแล้วไม่เห็นเลย รวมเปิดตรงด้วย id */
 export function canSeeDoc(doc: MemberDocView, unitIds: readonly string[]): boolean {
-  if (doc.register !== 'in') return false;
+  if (doc.register !== 'in' || doc.status === 'void') return false;
   const mine = new Set(unitIds);
   return (
     mine.has(doc.holderUnitId) ||

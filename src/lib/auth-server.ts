@@ -163,7 +163,7 @@ export type AdminPageProps = { member: boolean; forbidden?: boolean };
  *   จึงไม่ต้องอ่านสมุดเพิ่ม · ปลายทางผ่าน guard ของตัวเองเพราะ getSarabanMemberSsrProps นับการผูก
  */
 function buildSsrGuard(
-  allowed: (identity: AdminIdentity) => boolean | Promise<boolean>
+  allowed: (identity: AdminIdentity, isBound: () => Promise<boolean>) => boolean | Promise<boolean>
 ): GetServerSideProps<AdminPageProps> {
   return async (ctx) => {
     const check = await checkAdmin(ctx.req);
@@ -173,10 +173,11 @@ function buildSsrGuard(
       }
       return { props: { member: false } };
     }
-    if (await allowed(check.identity)) return { props: { member: true } };
-    const destination =
-      firstAllowedPath(check.identity) ??
-      ((await isSarabanUnitMember(check.identity.userId)) ? '/saraban/me' : null);
+    // อ่านสมุดครั้งเดียวต่อคำขอ แม้ทั้ง allowed และทางสำรองถามเรื่องการผูกตำแหน่ง
+    let bound: Promise<boolean> | undefined;
+    const isBound = () => (bound ??= isSarabanUnitMember(check.identity.userId));
+    if (await allowed(check.identity, isBound)) return { props: { member: true } };
+    const destination = firstAllowedPath(check.identity) ?? ((await isBound()) ? '/saraban/me' : null);
     if (destination) return { redirect: { destination, permanent: false } };
     return { props: { member: true, forbidden: true } };
   };
@@ -212,5 +213,5 @@ export const getMemberSsrProps: GetServerSideProps<AdminPageProps> = buildSsrGua
  * ด้วยสิทธิ์ครบ แล้วหน้าจอให้เลือกตำแหน่งที่จะสวม (?as=)
  */
 export const getSarabanMemberSsrProps: GetServerSideProps<AdminPageProps> = buildSsrGuard(
-  async (identity) => hasFeature(identity, 'saraban') || (await isSarabanUnitMember(identity.userId))
+  async (identity, isBound) => hasFeature(identity, 'saraban') || (await isBound())
 );

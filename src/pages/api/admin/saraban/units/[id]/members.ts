@@ -32,7 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const found = await Promise.all(
         clerkIds.map((clerkId) => users.countDocuments(activeRegistryFilter(clerkId), { limit: 1 }))
       );
-      if (found.some((n) => n === 0)) return res.status(400).json({ error: 'invalid_member' });
+      const missing = clerkIds.filter((_, i) => found[i] === 0);
+      if (missing.length > 0) return res.status(400).json({ error: 'invalid_member', clerkIds: missing });
     }
     const unit = await setUnitMembers(id, clerkIds);
     return unit ? res.status(200).json(unit) : res.status(404).json({ error: 'not_found' });
