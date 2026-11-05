@@ -140,3 +140,21 @@ export async function updateUnit(id: string, patch: UnitPatch): Promise<SarabanU
   await writeJsonArray(RUNTIME_FILE, units);
   return units[index];
 }
+
+/** ผูกคนเข้าตำแหน่ง (สเปกรอบ 3 ข้อ 2) — แทนทั้งรายการ · route ตรวจทะเบียนสมาชิกมาก่อนแล้ว */
+export async function setUnitMembers(id: string, clerkIds: string[]): Promise<SarabanUnit | null> {
+  if (isMongoConfigured()) {
+    await ensureSeeded();
+    return (await unitsCollection()).findOneAndUpdate(
+      { id },
+      { $set: { memberClerkIds: clerkIds } },
+      { returnDocument: 'after', projection: { _id: 0 } }
+    );
+  }
+  const units = await fileRead();
+  const index = units.findIndex((unit) => unit.id === id);
+  if (index === -1) return null;
+  units[index] = { ...units[index], memberClerkIds: clerkIds };
+  await writeJsonArray(RUNTIME_FILE, units);
+  return units[index];
+}

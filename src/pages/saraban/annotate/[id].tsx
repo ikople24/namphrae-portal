@@ -19,6 +19,8 @@ import {
   messageOf,
   sarabanFetcher,
   SarabanApiError,
+  revalidateSaraban,
+  clearMemberLists,
   SUMMARY_KEY,
   UNITS_KEY,
   type SummaryResponse,
@@ -79,6 +81,9 @@ function AnnotatePage() {
       // ทะเบียน/รายการค้าง/ตัวเลขสรุปต้องตามสถานะใหม่
       void globalMutate(SUMMARY_KEY);
       void globalMutate((k) => typeof k === 'string' && k.startsWith('/api/admin/saraban/docs?'));
+      // โหมดเจ้าหน้าที่ (งานของฉัน) เห็นเรื่องเดียวกัน — ล้างแคชของมันด้วย
+      void revalidateSaraban(globalMutate);
+      void clearMemberLists(globalMutate, undefined);
       const no = formatNo(doc.register, doc.no);
       if (body.route.kind === 'stay') {
         await mutate(updated, { revalidate: false });

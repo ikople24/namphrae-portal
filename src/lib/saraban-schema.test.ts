@@ -4,9 +4,12 @@ import {
   docKindSchema,
   docListQuerySchema,
   docPatchSchema,
+  memberDocsQuerySchema,
+  memberPatchSchema,
   receiveInputSchema,
   sendInputSchema,
   unitInputSchema,
+  unitMembersSchema,
   unitPatchSchema,
   yearQuerySchema,
   yearStartSchema,
@@ -114,6 +117,15 @@ describe('docPatchSchema — แยกตาม action', () => {
   it('ยกเลิกต้องมีเหตุผล', () => {
     expect(docPatchSchema.safeParse({ action: 'void', updatedAt: 't', reason: ' ' }).success).toBe(false);
     expect(docPatchSchema.safeParse({ action: 'void', updatedAt: 't', reason: 'ลงรับซ้ำ' }).success).toBe(true);
+  });
+
+  it('ดึงเรื่องกลับต้องมีเหตุผล', () => {
+    expect(docPatchSchema.safeParse({ action: 'reopen', updatedAt: 't', reason: ' ' }).success).toBe(false);
+    expect(docPatchSchema.parse({ action: 'reopen', updatedAt: 't', reason: ' จบผิด ' })).toEqual({
+      action: 'reopen',
+      updatedAt: 't',
+      reason: 'จบผิด',
+    });
   });
 
   it('ส่งแล้วรับเฉพาะวิธีส่งที่รู้จัก', () => {
@@ -228,5 +240,38 @@ describe('yearQuerySchema / docKindSchema', () => {
     expect(docKindSchema.parse('receive')).toBe('receive');
     expect(docKindSchema.parse('send')).toBe('send');
     expect(docKindSchema.safeParse('delete').success).toBe(false);
+  });
+});
+
+describe('memberPatchSchema', () => {
+  it('รับ annotate และ ack', () => {
+    expect(
+      memberPatchSchema.safeParse({ action: 'annotate', updatedAt: 'x', note: 'ทราบ', route: { kind: 'close' } }).success
+    ).toBe(true);
+    expect(memberPatchSchema.safeParse({ action: 'ack', updatedAt: 'x', unitId: 'palad' }).success).toBe(true);
+  });
+
+  it('ไม่รับ edit / void / sent / reopen', () => {
+    expect(memberPatchSchema.safeParse({ action: 'void', updatedAt: 'x', reason: 'ผิด' }).success).toBe(false);
+    expect(memberPatchSchema.safeParse({ action: 'edit', updatedAt: 'x', edit: {} }).success).toBe(false);
+    expect(memberPatchSchema.safeParse({ action: 'sent', updatedAt: 'x', method: 'post' }).success).toBe(false);
+    expect(memberPatchSchema.safeParse({ action: 'reopen', updatedAt: 'x', reason: 'ผิด' }).success).toBe(false);
+  });
+});
+
+describe('memberDocsQuerySchema', () => {
+  it('ค่าเริ่มต้น tab=todo page=1 · tab ผิดไม่ผ่าน', () => {
+    expect(memberDocsQuerySchema.parse({})).toEqual({ tab: 'todo', page: 1 });
+    expect(memberDocsQuerySchema.parse({ tab: 'done', page: '2' })).toEqual({ tab: 'done', page: 2 });
+    expect(memberDocsQuerySchema.safeParse({ tab: 'all' }).success).toBe(false);
+  });
+});
+
+describe('unitMembersSchema', () => {
+  it('ว่างได้ (ถอดทุกคน) · ไม่เกิน 10 · ห้ามซ้ำ', () => {
+    expect(unitMembersSchema.safeParse({ clerkIds: [] }).success).toBe(true);
+    expect(unitMembersSchema.safeParse({ clerkIds: ['a', 'b'] }).success).toBe(true);
+    expect(unitMembersSchema.safeParse({ clerkIds: ['a', 'a'] }).success).toBe(false);
+    expect(unitMembersSchema.safeParse({ clerkIds: Array.from({ length: 11 }, (_, i) => `u${i}`) }).success).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import {
   buildEdit,
   makeEvent,
   nameUnitChanges,
+  reopenTransition,
   sentTransition,
   voidTransition,
 } from '@/lib/saraban-doc';
@@ -16,7 +17,8 @@ import { listUnits } from '@/lib/saraban-units-store';
 import type { SarabanEventDetail, SarabanEventKind, SarabanFieldChange } from '@/types/saraban';
 
 // GET   /api/admin/saraban/docs/[id]
-// PATCH /api/admin/saraban/docs/[id]  body { action: 'edit' | 'void' | 'sent' | 'annotate' | 'ack', updatedAt, … }
+// PATCH /api/admin/saraban/docs/[id]  body { action: 'edit' | 'void' | 'sent' | 'annotate' | 'ack' | 'reopen', updatedAt, … }
+//   reopen = ผู้จัดการดึงหนังสือรับที่จบแล้วกลับ (403 manager_only) · แก้หนังสือรับที่จบแล้วได้เฉพาะผู้จัดการ
 //   updatedAt = เวอร์ชันที่หน้าจอเห็น — ไม่ตรงกับใน DB = มีคนแก้ไปก่อน → 409 stale ให้โหลดใหม่
 //   ไม่มี DELETE โดยตั้งใจ: เลขทะเบียนเป็นหลักฐานทางราชการ ใช้ยกเลิกแทน (สเปกข้อ 6)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -46,6 +48,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'invalid_input', issues: parsed.error.issues });
   }
   const patch = parsed.data;
+  if (patch.action === 'reopen' && !admin.isManager) {
+    return res.status(403).json({ error: 'manager_only' });
+  }
 
   try {
     const current = await getDoc(id);
@@ -66,7 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let detail: SarabanEventDetail | undefined;
 
     if (patch.action === 'edit') {
-      const result = buildEdit(current, patch.edit);
+      const result = buildEdit(current, patch.edit, { isManager: admin.isManager });
       if (!result.ok) return res.status(409).json({ error: 'field_locked', field: result.field });
       // ไม่มีอะไรเปลี่ยน → คืนเรื่องเดิม ไม่ต่อ event "แก้ไขข้อมูล" เปล่า ๆ (handoff ของแผน 1A)
       if (result.changes.length === 0) return res.status(200).json(current);
@@ -102,7 +107,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const transition =
         patch.action === 'void'
           ? voidTransition(current, patch.reason)
-          : sentTransition(current, patch.method);
+          : patch.action === 'reopen'
+            ? reopenTransition(current, patch.reason)
+            : sentTransition(current, patch.method);
       if (!transition) {
         return res.status(409).json({ error: 'invalid_transition', action: patch.action, status: current.status });
       }

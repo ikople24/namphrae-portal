@@ -2,12 +2,16 @@
 // ตัวเรียก API สารบรรณฝั่งเบราว์เซอร์ — โยน SarabanApiError ที่มีรหัสจาก API และข้อความไทย
 // (errorMessage) ให้หน้าจอเอาไปแสดงได้ทันที · ชนิดจาก store ใช้แค่ import type (ไม่ดึงโค้ดเซิร์ฟเวอร์)
 
+import type { ScopedMutator } from 'swr';
+import { unstable_serialize } from 'swr/infinite';
 import type { z } from 'zod';
 import type { RegisterView } from '@/lib/saraban-doc';
+import { MEMBER_TABS, type MemberActions, type MemberTab } from '@/lib/saraban-member';
 import type {
   DocKind,
   docPatchSchema,
   FileRef,
+  memberPatchSchema,
   receiveInputSchema,
   sendInputSchema,
   UnitInput,
@@ -15,7 +19,7 @@ import type {
   YearStartInput,
 } from '@/lib/saraban-schema';
 import type { YearInfo } from '@/lib/saraban-store';
-import { errorMessage } from '@/lib/saraban-view';
+import { errorMessage, memberDocKey, memberDocsKey } from '@/lib/saraban-view';
 import type { SarabanDoc, SarabanUnit } from '@/types/saraban';
 
 export class SarabanApiError extends Error {
@@ -142,4 +146,52 @@ export function setStartNo(body: YearStartInput): Promise<YearInfo> {
 /** ข้อความของ error ใด ๆ สำหรับ toast */
 export function messageOf(err: unknown): string {
   return err instanceof SarabanApiError ? err.message : 'เชื่อมต่อไม่ได้ ลองอีกครั้ง';
+}
+
+// ---- โหมดเจ้าหน้าที่ (สเปกรอบ 3) — ทุกคำขอต่อ ?as= ของ dev-open ผ่าน withAs ในตัวสร้างคีย์ ----
+
+export type UnitRef = { id: string; name: string; dept?: string };
+export type MemberSummary = { units: UnitRef[]; canReceive: boolean; counts: Record<MemberTab, number> };
+export type MemberDocsResponse = { items: SarabanDoc[]; total: number; page: number; pageSize: number };
+export type MemberDocResponse = { doc: SarabanDoc; actions: MemberActions; units: UnitRef[]; canReceive: boolean };
+
+type MemberBody = Extract<z.input<typeof memberPatchSchema>, { action: 'annotate' }>;
+
+export function memberAnnotate(
+  doc: Pick<SarabanDoc, 'id' | 'updatedAt'>,
+  body: Omit<MemberBody, 'action' | 'updatedAt'>,
+  as: string | undefined
+): Promise<SarabanDoc> {
+  return call(memberDocKey(doc.id, as), jsonInit('PATCH', { action: 'annotate', updatedAt: doc.updatedAt, ...body }));
+}
+
+export function memberAck(doc: Pick<SarabanDoc, 'id' | 'updatedAt'>, unitId: string, as: string | undefined): Promise<SarabanDoc> {
+  return call(memberDocKey(doc.id, as), jsonInit('PATCH', { action: 'ack', updatedAt: doc.updatedAt, unitId }));
+}
+
+export function setUnitMembers(id: string, clerkIds: string[]): Promise<SarabanUnit> {
+  return call(`${UNITS_KEY}/${encodeURIComponent(id)}/members`, jsonInit('PUT', { clerkIds }));
+}
+
+// ---- แคชของโหมดเจ้าหน้าที่ (บทเรียนรอบ 2: เขียนแล้วต้องล้างแคชทุกหน้าที่เกี่ยว) ----
+
+/** getKey ของรายการงานตามแท็บ (useSWRInfinite) — ใช้ร่วมกันทุกหน้าเพื่อให้ unstable_serialize ได้คีย์ตรงกัน */
+export function memberListGetKey(tab: MemberTab, as: string | undefined, enabled = true) {
+  return (index: number): string | null => (enabled ? memberDocsKey({ tab, page: index + 1, as }) : null);
+}
+
+/** ล้างแคชหลังเขียน: คีย์ธรรมดาของ me/* และ docs/* + สรุปของโหมดเต็ม
+ *  (mutate แบบ filter ข้ามคีย์ $inf$ ของรายการ infinite — ต้องล้างแยกด้วย clearMemberLists) */
+export async function revalidateSaraban(mutate: ScopedMutator): Promise<void> {
+  await Promise.all([
+    mutate((k) => typeof k === 'string' && (k.startsWith('/api/admin/saraban/me') || k.startsWith('/api/admin/saraban/docs'))),
+    mutate(SUMMARY_KEY),
+  ]);
+}
+
+/** ทิ้งแคช infinite ของทุกแท็บ (ไม่ revalidate) — กลับไปหน้ารายการแล้วโหลดใหม่ ไม่เห็นของเก่า */
+export async function clearMemberLists(mutate: ScopedMutator, as: string | undefined): Promise<void> {
+  await Promise.all(
+    MEMBER_TABS.map((t) => mutate(unstable_serialize(memberListGetKey(t, as)), undefined, { revalidate: false }))
+  );
 }

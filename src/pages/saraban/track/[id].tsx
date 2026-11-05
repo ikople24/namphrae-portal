@@ -1,6 +1,7 @@
 // หน้าติดตามหนังสือ (สเปกรอบ 2 ข้อ 5 · ต้นแบบจอ 6) — ข้อมูล · ไฟล์แนบ · แก้ไข/ยกเลิก/ส่งแล้ว ·
 // เส้นทางหนังสือจาก events · ทุกปุ่มโชว์ตามฟังก์ชันของ 1A (editableFieldsOf / canVoid / canMarkSent /
-// canAddFile / canRemoveFile) ที่ API ใช้ตัดสินจริง หน้าจอกับเซิร์ฟเวอร์จึงเห็นตรงกัน
+// canAddFile / canRemoveFile / canReopen) ที่ API ใช้ตัดสินจริง หน้าจอกับเซิร์ฟเวอร์จึงเห็นตรงกัน
+// ผู้จัดการ (จาก /api/admin/me แบบหน้าสมุดผู้รับ) แก้หนังสือรับที่จบแล้วได้ และดึงเรื่องกลับได้
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, type FormEvent } from 'react';
@@ -13,6 +14,7 @@ import CirculationCard from '@/components/saraban/CirculationCard';
 import EventDetail, { eventByline } from '@/components/saraban/EventDetail';
 import FlowSteps from '@/components/saraban/FlowSteps';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
+import { adminFetcher } from '@/lib/admin-api';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
   ackCirculation,
@@ -24,6 +26,8 @@ import {
   removeDocFile,
   sarabanFetcher,
   SarabanApiError,
+  revalidateSaraban,
+  clearMemberLists,
   SUMMARY_KEY,
   UNITS_KEY,
   uploadFile,
@@ -32,14 +36,14 @@ import {
 } from '@/lib/saraban-api';
 import { canAnnotate, flowStep } from '@/lib/saraban-flow';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
-import { canAddFile, canMarkSent, canRemoveFile, canVoid, displayStatus, editableFieldsOf, type DocEdit, type EditableField } from '@/lib/saraban-doc';
+import { canAddFile, canMarkSent, canRemoveFile, canReopen, canVoid, displayStatus, editableFieldsOf, type DocEdit, type EditableField } from '@/lib/saraban-doc';
 import { EVENT_KIND_LABELS, fieldLabel, LEVEL_LABELS, SEND_METHOD_LABELS } from '@/lib/saraban-labels';
 import { formatNo } from '@/lib/saraban-number';
 import { changeValue, docsKey, fileSizeLabel, precheckFile, thaiDate, thaiDateTime } from '@/lib/saraban-view';
 import { SARABAN_LEVELS, SEND_METHODS, type SarabanDoc, type SarabanUnit, type SendMethod } from '@/types/saraban';
 
 const NO_PREFIX = { in: 'รับที่', out: 'ส่งที่', circular: 'เวียนที่' } as const;
-type Panel = 'none' | 'edit' | 'void' | 'sent';
+type Panel = 'none' | 'edit' | 'void' | 'sent' | 'reopen';
 
 function TrackPage() {
   const router = useRouter();
@@ -47,6 +51,8 @@ function TrackPage() {
   const { data: doc, error, mutate } = useSWR<SarabanDoc>(id ? docKey(id) : null, sarabanFetcher);
   const { data: units } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
   const { data: summary } = useSWR<SummaryResponse>(SUMMARY_KEY, sarabanFetcher);
+  const { data: me } = useSWR<{ isManager: boolean }>('/api/admin/me', adminFetcher, { revalidateOnFocus: false });
+  const isManager = me?.isManager === true;
   // รายการซ้าย: หนังสือรับที่ยังเปิดอยู่ทุกปีงบ (หน้าแรก 50 เรื่อง) — ซ่อนบนจอแคบ
   const { data: openList } = useSWR<DocListResponse>(docsKey({ register: 'in', scope: 'open' }), sarabanFetcher);
   const { mutate: globalMutate } = useSWRConfig();
@@ -73,6 +79,9 @@ function TrackPage() {
       // (รวม scope=open) predicate เดียวกับหน้าเกษียน
       void globalMutate((k) => typeof k === 'string' && k.startsWith('/api/admin/saraban/docs?'));
       void globalMutate(SUMMARY_KEY);
+      // โหมดเจ้าหน้าที่ (งานของฉัน) เห็นเรื่องเดียวกัน — ล้างแคชของมันด้วย
+      void revalidateSaraban(globalMutate);
+      void clearMemberLists(globalMutate, undefined);
     } catch (err) {
       showToast(messageOf(err));
       if (err instanceof SarabanApiError && err.code === 'stale') await mutate();
@@ -119,7 +128,7 @@ function TrackPage() {
   const today = summary?.today;
   const status = today ? displayStatus(doc, today) : doc.status;
   const step = flowStep(doc);
-  const editable = editableFieldsOf(doc);
+  const editable = editableFieldsOf(doc, { isManager });
   const storageOn = summary?.storageConfigured !== false;
   const back = doc.register === 'in' ? '/saraban/inbox' : '/saraban/outbox';
 
@@ -217,6 +226,12 @@ function TrackPage() {
                     บันทึกว่าส่งแล้ว
                   </button>
                 ) : null}
+                {isManager && canReopen(doc) ? (
+                  <button type="button" className={outlineButton} disabled={busy} onClick={() => setPanel(panel === 'reopen' ? 'none' : 'reopen')}>
+                    <Icon name="history" size={18} />
+                    ดึงเรื่องกลับ
+                  </button>
+                ) : null}
                 {canVoid(doc) ? (
                   <button
                     type="button"
@@ -244,6 +259,15 @@ function TrackPage() {
             ) : null}
             {panel === 'void' ? (
               <VoidPanel key={doc.id} busy={busy} onCancel={() => setPanel('none')} onSave={(reason) => run(() => patchDoc(doc.id, { action: 'void', updatedAt: doc.updatedAt, reason }), 'ยกเลิกเลขทะเบียนแล้ว')} />
+            ) : null}
+            {panel === 'reopen' ? (
+              <ReopenPanel
+                key={doc.id}
+                holder={unitName(doc.holderUnitId)}
+                busy={busy}
+                onCancel={() => setPanel('none')}
+                onSave={(reason) => run(() => patchDoc(doc.id, { action: 'reopen', updatedAt: doc.updatedAt, reason }), 'ดึงเรื่องกลับแล้ว')}
+              />
             ) : null}
             {panel === 'sent' ? (
               <SentPanel key={doc.id} busy={busy} onCancel={() => setPanel('none')} onSave={(method) => run(() => patchDoc(doc.id, { action: 'sent', updatedAt: doc.updatedAt, method }), 'บันทึกว่าส่งแล้ว')} />
@@ -468,6 +492,37 @@ function VoidPanel({ busy, onCancel, onSave }: { busy: boolean; onCancel: () => 
           onClick={() => onSave(reason.trim())}
         >
           ยืนยันยกเลิก
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReopenPanel({
+  holder,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  holder: string;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <div className={`${card} flex flex-col gap-3 p-[22px]`}>
+      <h3 className="font-semibold">ดึงเรื่องกลับ</h3>
+      <p className="text-[13px] text-sb-muted">หนังสือจะกลับเป็น “ดำเนินการ” ที่ {holder} และบันทึกเหตุผลไว้ในเส้นทางหนังสือ</p>
+      <Field label="เหตุผล" required>
+        <textarea className={inputClass} rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2.5">
+        <button type="button" className={outlineButton} disabled={busy} onClick={onCancel}>
+          ยกเลิก
+        </button>
+        <button type="button" className={primaryButton} disabled={busy || !reason.trim()} onClick={() => onSave(reason.trim())}>
+          ยืนยันดึงเรื่องกลับ
         </button>
       </div>
     </div>

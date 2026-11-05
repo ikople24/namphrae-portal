@@ -238,12 +238,16 @@ export type DocEdit = Partial<Pick<SarabanDoc, EditableField>>;
  *   เจ้าของเรื่องเป็นคนกำหนดรหัสใน "ที่" · ไม่มีกำหนดแล้วเสร็จ → ถ้าผิดให้ยกเลิกแล้วออกเลขใหม่
  * - รับ: เปลี่ยน "เสนอถึง" ได้เฉพาะตอนรอเกษียน — หลังจากนั้นหนังสือเดินตามการเกษียน (รอบ 2)
  *   ถ้าแก้ตรงนี้ได้ จะเป็นทางลัดข้ามการเกษียนที่ไม่ทิ้งร่องรอยว่าใครส่งต่อ
+ * - รับที่จบเรื่องแล้ว: ผู้จัดการแก้ได้คนเดียว (สเปก 2026-11-04-saraban-reopen) — คนอื่นต้องให้
+ *   ผู้จัดการดึงเรื่องกลับก่อน ประวัติจึงบอกได้ว่าใครเปิดเรื่องที่ปิดไปแล้ว
  */
 export function editableFieldsOf(
-  doc: Pick<SarabanDoc, 'register' | 'status'>
+  doc: Pick<SarabanDoc, 'register' | 'status'>,
+  opts: { isManager?: boolean } = {}
 ): readonly EditableField[] {
   if (doc.status === 'void') return [];
   if (doc.register !== 'in') return ['docDate', 'party', 'subject', 'level'];
+  if (doc.status === 'done' && !opts.isManager) return [];
   const base: EditableField[] = ['ref', 'docDate', 'party', 'subject', 'level', 'dueDate'];
   return doc.status === 'pending' ? [...base, 'holderUnitId'] : base;
 }
@@ -261,8 +265,8 @@ export type EditResult =
  * ในลูปไม่ผ่าน เพราะ field เป็น union ของคีย์ต่างชนิด (level เป็น SarabanLevel) — เหตุผล
  * เดียวกับคอมเมนต์บน buildJobPatch ใน jobs-store.ts
  */
-export function buildEdit(doc: SarabanDoc, edit: DocEdit): EditResult {
-  const allowed = new Set<EditableField>(editableFieldsOf(doc));
+export function buildEdit(doc: SarabanDoc, edit: DocEdit, opts: { isManager?: boolean } = {}): EditResult {
+  const allowed = new Set<EditableField>(editableFieldsOf(doc, opts));
   const set: Record<string, string> = {};
   const changes: SarabanFieldChange[] = [];
   for (const field of EDITABLE_FIELDS) {
@@ -304,6 +308,17 @@ export type Transition = {
 export function voidTransition(doc: Pick<SarabanDoc, 'status'>, reason: string): Transition | null {
   if (!canVoid(doc)) return null;
   return { set: { status: 'void', voidReason: reason }, kind: 'voided', note: reason };
+}
+
+/** ดึงเรื่องกลับได้เฉพาะหนังสือรับที่จบเรื่องแล้ว — ใครกดได้ (ผู้จัดการ) route เป็นคนตัดสิน */
+export function canReopen(doc: Pick<SarabanDoc, 'register' | 'status'>): boolean {
+  return doc.register === 'in' && doc.status === 'done';
+}
+
+/** ดึงเรื่องกลับ — คงตำแหน่งที่กดจบเรื่องไว้ เรื่องจึงกลับเข้า "รอฉันทำ" ของตำแหน่งนั้น · null = 409 */
+export function reopenTransition(doc: Pick<SarabanDoc, 'register' | 'status'>, reason: string): Transition | null {
+  if (!canReopen(doc)) return null;
+  return { set: { status: 'in-progress' }, kind: 'reopened', note: reason };
 }
 
 /** บันทึกว่าส่งแล้ว — null = ไม่ใช่ส่ง/เวียนที่รอส่ง */
