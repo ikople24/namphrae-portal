@@ -1,17 +1,21 @@
-// หน้าหนังสือฉบับรอบ 1 (สเปกข้อ 6 "/saraban/track/[id]") — ข้อมูล · ไฟล์แนบ · แก้ไข/ยกเลิก/ส่งแล้ว ·
+// หน้าติดตามหนังสือ (สเปกรอบ 2 ข้อ 5 · ต้นแบบจอ 6) — ข้อมูล · ไฟล์แนบ · แก้ไข/ยกเลิก/ส่งแล้ว ·
 // เส้นทางหนังสือจาก events · ทุกปุ่มโชว์ตามฟังก์ชันของ 1A (editableFieldsOf / canVoid / canMarkSent /
 // canAddFile / canRemoveFile) ที่ API ใช้ตัดสินจริง หน้าจอกับเซิร์ฟเวอร์จึงเห็นตรงกัน
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, type FormEvent } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import Icon from '@/components/Icon';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import { DateField, ErrorBox, Field, LevelText, StatusPill, card, inputClass, outlineButton, primaryButton } from '@/components/saraban/bits';
 import { showToast } from '@/components/saraban/toast';
+import CirculationCard from '@/components/saraban/CirculationCard';
+import EventDetail, { eventByline } from '@/components/saraban/EventDetail';
+import FlowSteps from '@/components/saraban/FlowSteps';
 import { withMemberGuard } from '@/components/admin/MemberGuard';
 import { getFeatureSsrProps } from '@/lib/auth-server';
 import {
+  ackCirculation,
   addDocFile,
   docKey,
   fileUrl,
@@ -23,13 +27,15 @@ import {
   SUMMARY_KEY,
   UNITS_KEY,
   uploadFile,
+  type DocListResponse,
   type SummaryResponse,
 } from '@/lib/saraban-api';
+import { canAnnotate, flowStep } from '@/lib/saraban-flow';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { canAddFile, canMarkSent, canRemoveFile, canVoid, displayStatus, editableFieldsOf, type DocEdit, type EditableField } from '@/lib/saraban-doc';
 import { EVENT_KIND_LABELS, fieldLabel, LEVEL_LABELS, SEND_METHOD_LABELS } from '@/lib/saraban-labels';
 import { formatNo } from '@/lib/saraban-number';
-import { changeValue, fileSizeLabel, precheckFile, thaiDate, thaiDateTime } from '@/lib/saraban-view';
+import { changeValue, docsKey, fileSizeLabel, precheckFile, thaiDate, thaiDateTime } from '@/lib/saraban-view';
 import { SARABAN_LEVELS, SEND_METHODS, type SarabanDoc, type SarabanUnit, type SendMethod } from '@/types/saraban';
 
 const NO_PREFIX = { in: 'รับที่', out: 'ส่งที่', circular: 'เวียนที่' } as const;
@@ -41,10 +47,20 @@ function TrackPage() {
   const { data: doc, error, mutate } = useSWR<SarabanDoc>(id ? docKey(id) : null, sarabanFetcher);
   const { data: units } = useSWR<SarabanUnit[]>(UNITS_KEY, sarabanFetcher);
   const { data: summary } = useSWR<SummaryResponse>(SUMMARY_KEY, sarabanFetcher);
+  // รายการซ้าย: หนังสือรับที่ยังเปิดอยู่ทุกปีงบ (หน้าแรก 50 เรื่อง) — ซ่อนบนจอแคบ
+  const { data: openList } = useSWR<DocListResponse>(docsKey({ register: 'in', scope: 'open' }), sarabanFetcher);
+  const { mutate: globalMutate } = useSWRConfig();
   const [panel, setPanel] = useState<Panel>('none');
+  // Pages Router ใช้ instance เดิมเมื่อ [id] เปลี่ยน (กดสลับจากรายการซ้าย) — ถ้าไม่รีเซ็ต แผงแก้ไขที่เปิดค้างจะ
+  // ถือค่าของเรื่องก่อนหน้าแล้วไปบันทึกทับอีกเรื่อง
+  const [prevId, setPrevId] = useState(id);
+  if (id !== prevId) {
+    setPrevId(id);
+    setPanel('none');
+  }
   const [busy, setBusy] = useState(false);
 
-  const unitName = (unitId: string) => units?.find((u) => u.id === unitId)?.name ?? unitId;
+  const unitName = (unitId: string) => units?.find((u) => u.id === unitId)?.name ?? '—';
 
   // stale = มีคนแก้ไปก่อน — โหลดฉบับล่าสุดให้เลย ผู้ใช้จะได้เห็นว่าเปลี่ยนอะไร
   async function run(action: () => Promise<SarabanDoc>, done: string) {
@@ -53,6 +69,10 @@ function TrackPage() {
       await mutate(await action(), { revalidate: false });
       setPanel('none');
       showToast(done);
+      // รายการซ้าย ทะเบียนทุกหน้า และตัวเลขสรุปต้องตามสถานะใหม่ — ทุก key ของรายการขึ้นต้นด้วย docs?
+      // (รวม scope=open) predicate เดียวกับหน้าเกษียน
+      void globalMutate((k) => typeof k === 'string' && k.startsWith('/api/admin/saraban/docs?'));
+      void globalMutate(SUMMARY_KEY);
     } catch (err) {
       showToast(messageOf(err));
       if (err instanceof SarabanApiError && err.code === 'stale') await mutate();
@@ -98,6 +118,7 @@ function TrackPage() {
 
   const today = summary?.today;
   const status = today ? displayStatus(doc, today) : doc.status;
+  const step = flowStep(doc);
   const editable = editableFieldsOf(doc);
   const storageOn = summary?.storageConfigured !== false;
   const back = doc.register === 'in' ? '/saraban/inbox' : '/saraban/outbox';
@@ -108,187 +129,229 @@ function TrackPage() {
         ‹ กลับทะเบียน
       </Link>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-3.5">
-          <section className={`${card} p-[22px]`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs text-sb-muted">
-                  {NO_PREFIX[doc.register]} {formatNo(doc.register, doc.no)} · ปีงบ {doc.fiscalYear} · ที่ {doc.ref || '—'}
-                </p>
-                <h2 className="mt-0.5 text-[17px] font-bold">{doc.subject}</h2>
-                <p className="mt-0.5 text-[13px] text-sb-muted">
-                  {doc.register === 'in' ? 'จาก' : 'ถึง'} {doc.party} · ลงวันที่ {thaiDate(doc.docDate)}
-                </p>
-              </div>
-              <StatusPill register={doc.register} status={status} />
-            </div>
-            <dl className="mt-4 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
-              <div className="flex gap-2">
-                <dt className="text-sb-muted">ชั้นความเร็ว</dt>
-                <dd>
-                  <LevelText level={doc.level} />
-                </dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="text-sb-muted">{doc.register === 'in' ? 'อยู่กับ' : 'เจ้าของเรื่อง'}</dt>
-                <dd>{unitName(doc.holderUnitId)}</dd>
-              </div>
-              {doc.register === 'in' ? (
-                <div className="flex gap-2">
-                  <dt className="text-sb-muted">กำหนดแล้วเสร็จ</dt>
-                  <dd>{doc.dueDate ? thaiDate(doc.dueDate) : 'ไม่กำหนด'}</dd>
-                </div>
-              ) : null}
-              {doc.sendMethod ? (
-                <div className="flex gap-2">
-                  <dt className="text-sb-muted">วิธีส่ง</dt>
-                  <dd>{SEND_METHOD_LABELS[doc.sendMethod]}</dd>
-                </div>
-              ) : null}
-              {doc.voidReason ? (
-                <div className="flex gap-2 sm:col-span-2">
-                  <dt className="text-sb-muted">เหตุที่ยกเลิก</dt>
-                  <dd className="text-sb-danger">{doc.voidReason}</dd>
-                </div>
-              ) : null}
-            </dl>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {editable.length > 0 ? (
-                <button type="button" className={outlineButton} disabled={busy} onClick={() => setPanel(panel === 'edit' ? 'none' : 'edit')}>
-                  <Icon name="edit" size={18} />
-                  แก้ไข
-                </button>
-              ) : null}
-              {canMarkSent(doc) ? (
-                <button type="button" className={outlineButton} disabled={busy} onClick={() => setPanel(panel === 'sent' ? 'none' : 'sent')}>
-                  <Icon name="send" size={18} />
-                  บันทึกว่าส่งแล้ว
-                </button>
-              ) : null}
-              {canVoid(doc) ? (
-                <button
-                  type="button"
-                  className={`${outlineButton} text-sb-danger`}
-                  disabled={busy}
-                  onClick={() => setPanel(panel === 'void' ? 'none' : 'void')}
-                >
-                  <Icon name="block" size={18} />
-                  ยกเลิกเลขทะเบียน
-                </button>
-              ) : null}
-            </div>
-          </section>
+      <div className="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className={`${card} hidden max-h-[80vh] overflow-y-auto p-2 xl:block`} aria-label="หนังสือที่ยังเปิดอยู่">
+          <p className="px-2 pb-2 pt-1 text-xs font-semibold text-sb-muted">หนังสือรับที่ยังเปิดอยู่</p>
+          {!openList ? (
+            <p className="px-2 text-[13px] text-sb-muted">กำลังโหลด…</p>
+          ) : openList.docs.length ? (
+            openList.docs.map((d) => (
+              <Link
+                key={d.id}
+                href={`/saraban/track/${d.id}`}
+                className={`mb-1 block rounded-[10px] border px-3 py-2 text-[13px] ${
+                  d.id === doc.id ? 'border-sb-accent bg-sb-accent-light' : 'border-transparent hover:bg-sb-hover'
+                }`}
+              >
+                <span className="text-xs font-semibold text-sb-accent">รับที่ {formatNo(d.register, d.no)}</span>
+                <span className="block truncate">{d.subject}</span>
+              </Link>
+            ))
+          ) : (
+            <p className="px-2 text-[13px] text-sb-muted">ไม่มีหนังสือค้าง</p>
+          )}
+        </aside>
 
-          {panel === 'edit' ? (
-            <EditPanel
-              doc={doc}
-              fields={editable}
-              units={(units ?? []).filter((u) => u.isActive || u.id === doc.holderUnitId)}
-              busy={busy}
-              onCancel={() => setPanel('none')}
-              onSave={(edit) => run(() => patchDoc(doc.id, { action: 'edit', updatedAt: doc.updatedAt, edit }), 'บันทึกการแก้ไขแล้ว')}
-            />
-          ) : null}
-          {panel === 'void' ? (
-            <VoidPanel busy={busy} onCancel={() => setPanel('none')} onSave={(reason) => run(() => patchDoc(doc.id, { action: 'void', updatedAt: doc.updatedAt, reason }), 'ยกเลิกเลขทะเบียนแล้ว')} />
-          ) : null}
-          {panel === 'sent' ? (
-            <SentPanel busy={busy} onCancel={() => setPanel('none')} onSave={(method) => run(() => patchDoc(doc.id, { action: 'sent', updatedAt: doc.updatedAt, method }), 'บันทึกว่าส่งแล้ว')} />
-          ) : null}
-
-          <section className={`${card} p-[22px]`}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-semibold">ไฟล์แนบ ({doc.files.length})</h3>
-              {storageOn && canAddFile(doc) && doc.files.length < MAX_FILES_PER_DOC ? (
-                <label className={`${outlineButton} cursor-pointer px-3 py-1.5 text-[13px]`}>
-                  <Icon name="upload_file" size={18} />
-                  เพิ่มไฟล์
-                  <input
-                    type="file"
-                    multiple
-                    hidden
+        <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-3.5">
+            <section className={`${card} p-[22px]`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs text-sb-muted">
+                    {NO_PREFIX[doc.register]} {formatNo(doc.register, doc.no)} · ปีงบ {doc.fiscalYear} · ที่ {doc.ref || '—'}
+                  </p>
+                  <h2 className="mt-0.5 text-[17px] font-bold">{doc.subject}</h2>
+                  <p className="mt-0.5 text-[13px] text-sb-muted">
+                    {doc.register === 'in' ? 'จาก' : 'ถึง'} {doc.party} · ลงวันที่ {thaiDate(doc.docDate)}
+                  </p>
+                </div>
+                <StatusPill register={doc.register} status={status} />
+              </div>
+              <dl className="mt-4 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
+                <div className="flex gap-2">
+                  <dt className="text-sb-muted">ชั้นความเร็ว</dt>
+                  <dd>
+                    <LevelText level={doc.level} />
+                  </dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="text-sb-muted">{doc.register === 'in' ? 'อยู่กับ' : 'เจ้าของเรื่อง'}</dt>
+                  <dd>{unitName(doc.holderUnitId)}</dd>
+                </div>
+                {doc.register === 'in' ? (
+                  <div className="flex gap-2">
+                    <dt className="text-sb-muted">กำหนดแล้วเสร็จ</dt>
+                    <dd>{doc.dueDate ? thaiDate(doc.dueDate) : 'ไม่กำหนด'}</dd>
+                  </div>
+                ) : null}
+                {doc.sendMethod ? (
+                  <div className="flex gap-2">
+                    <dt className="text-sb-muted">วิธีส่ง</dt>
+                    <dd>{SEND_METHOD_LABELS[doc.sendMethod]}</dd>
+                  </div>
+                ) : null}
+                {doc.voidReason ? (
+                  <div className="flex gap-2 sm:col-span-2">
+                    <dt className="text-sb-muted">เหตุที่ยกเลิก</dt>
+                    <dd className="text-sb-danger">{doc.voidReason}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {step ? <FlowSteps step={step} overdue={status === 'overdue'} /> : null}
+              <div className="mt-5 flex flex-wrap gap-2">
+                {canAnnotate(doc) ? (
+                  <Link href={`/saraban/annotate/${doc.id}`} className={primaryButton}>
+                    <Icon name="assignment" size={18} />
+                    เกษียน
+                  </Link>
+                ) : null}
+                {editable.length > 0 ? (
+                  <button type="button" className={outlineButton} disabled={busy} onClick={() => setPanel(panel === 'edit' ? 'none' : 'edit')}>
+                    <Icon name="edit" size={18} />
+                    แก้ไข
+                  </button>
+                ) : null}
+                {canMarkSent(doc) ? (
+                  <button type="button" className={outlineButton} disabled={busy} onClick={() => setPanel(panel === 'sent' ? 'none' : 'sent')}>
+                    <Icon name="send" size={18} />
+                    บันทึกว่าส่งแล้ว
+                  </button>
+                ) : null}
+                {canVoid(doc) ? (
+                  <button
+                    type="button"
+                    className={`${outlineButton} text-sb-danger`}
                     disabled={busy}
-                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                    onChange={(e) => {
-                      void addFiles(e.target.files);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
-              ) : null}
-            </div>
-            {doc.files.length === 0 ? (
-              <p className="text-[13px] text-sb-muted">ยังไม่มีไฟล์แนบ</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {doc.files.map((f) => (
-                  <li key={f.id} className="flex items-center gap-3 rounded-[10px] border border-sb-line px-3 py-2 text-[13px]">
-                    <Icon name="attach_file" size={18} className="text-sb-muted" />
-                    <a href={fileUrl(doc.id, f.id)} target="_blank" rel="noopener" className="min-w-0 flex-1 truncate font-medium text-sb-accent hover:underline">
-                      {f.name}
-                    </a>
-                    <span className="whitespace-nowrap text-xs text-sb-muted">
-                      {f.format.toUpperCase()} · {fileSizeLabel(f.bytes)}
-                      {f.format === 'pdf' && f.pages > 0 ? ` · ${f.pages} หน้า` : ''}
-                    </span>
-                    {canRemoveFile(doc) ? (
-                      <button
-                        type="button"
-                        aria-label={`ลบ ${f.name}`}
-                        disabled={busy}
-                        className="text-sb-muted hover:text-sb-danger"
-                        onClick={() => {
-                          if (confirm(`ลบไฟล์ “${f.name}” ออกจากหนังสือนี้?`)) {
-                            void run(() => removeDocFile(doc.id, f.id), 'ลบไฟล์แนบแล้ว');
-                          }
-                        }}
-                      >
-                        <Icon name="delete" size={18} />
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-
-        <section className={`${card} p-[22px]`}>
-          <h3 className="mb-3.5 flex items-center gap-1.5 font-semibold">
-            <Icon name="history" size={18} />
-            เส้นทางหนังสือ
-          </h3>
-          {doc.events.map((ev, i) => (
-            <div key={ev.id} className="flex gap-3.5">
-              <div className="flex flex-col items-center">
-                <div
-                  className={`mt-[3px] h-3.5 w-3.5 flex-none rounded-full border-[3px] bg-white ${
-                    i === doc.events.length - 1 ? 'border-sb-accent' : 'border-sb-success'
-                  }`}
-                />
-                {i < doc.events.length - 1 ? <div className="w-0.5 flex-1 bg-[#C9E3D5]" /> : null}
-              </div>
-              <div className="flex-1 pb-[18px]">
-                <div className="flex flex-wrap justify-between gap-2">
-                  <p className="text-sm font-semibold">{EVENT_KIND_LABELS[ev.kind]}</p>
-                  <p className="text-xs text-sb-muted">{thaiDateTime(ev.at)}</p>
-                </div>
-                <p className="mt-0.5 text-[13px] text-sb-muted">{ev.byName}</p>
-                {ev.note ? <p className="mt-1.5 rounded-lg bg-sb-panel px-3 py-2 text-[13px] leading-normal">{ev.note}</p> : null}
-                {ev.changes?.length ? (
-                  <ul className="mt-1.5 flex flex-col gap-0.5 rounded-lg bg-sb-panel px-3 py-2 text-[13px]">
-                    {ev.changes.map((c) => (
-                      <li key={c.field}>
-                        <span className="text-sb-muted">{fieldLabel(doc.register, c.field)}:</span> {changeValue(c.field, c.from)} → {changeValue(c.field, c.to)}
-                      </li>
-                    ))}
-                  </ul>
+                    onClick={() => setPanel(panel === 'void' ? 'none' : 'void')}
+                  >
+                    <Icon name="block" size={18} />
+                    ยกเลิกเลขทะเบียน
+                  </button>
                 ) : null}
               </div>
-            </div>
-          ))}
-        </section>
+            </section>
+
+            {panel === 'edit' ? (
+              <EditPanel
+                key={doc.id}
+                doc={doc}
+                fields={editable}
+                units={(units ?? []).filter((u) => u.isActive || u.id === doc.holderUnitId)}
+                busy={busy}
+                onCancel={() => setPanel('none')}
+                onSave={(edit) => run(() => patchDoc(doc.id, { action: 'edit', updatedAt: doc.updatedAt, edit }), 'บันทึกการแก้ไขแล้ว')}
+              />
+            ) : null}
+            {panel === 'void' ? (
+              <VoidPanel key={doc.id} busy={busy} onCancel={() => setPanel('none')} onSave={(reason) => run(() => patchDoc(doc.id, { action: 'void', updatedAt: doc.updatedAt, reason }), 'ยกเลิกเลขทะเบียนแล้ว')} />
+            ) : null}
+            {panel === 'sent' ? (
+              <SentPanel key={doc.id} busy={busy} onCancel={() => setPanel('none')} onSave={(method) => run(() => patchDoc(doc.id, { action: 'sent', updatedAt: doc.updatedAt, method }), 'บันทึกว่าส่งแล้ว')} />
+            ) : null}
+
+            <CirculationCard
+              doc={doc}
+              busy={busy}
+              onAck={(unitId) => {
+                const name = doc.circulation.find((c) => c.unitId === unitId)?.unitName ?? unitId;
+                void run(() => ackCirculation(doc, unitId), `บันทึกว่า ${name} ทราบแล้ว`);
+              }}
+            />
+
+            <section className={`${card} p-[22px]`}>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="font-semibold">ไฟล์แนบ ({doc.files.length})</h3>
+                {storageOn && canAddFile(doc) && doc.files.length < MAX_FILES_PER_DOC ? (
+                  <label className={`${outlineButton} cursor-pointer px-3 py-1.5 text-[13px]`}>
+                    <Icon name="upload_file" size={18} />
+                    เพิ่มไฟล์
+                    <input
+                      type="file"
+                      multiple
+                      hidden
+                      disabled={busy}
+                      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                      onChange={(e) => {
+                        void addFiles(e.target.files);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
+              {doc.files.length === 0 ? (
+                <p className="text-[13px] text-sb-muted">ยังไม่มีไฟล์แนบ</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {doc.files.map((f) => (
+                    <li key={f.id} className="flex items-center gap-3 rounded-[10px] border border-sb-line px-3 py-2 text-[13px]">
+                      <Icon name="attach_file" size={18} className="text-sb-muted" />
+                      <a href={fileUrl(doc.id, f.id)} target="_blank" rel="noopener" className="min-w-0 flex-1 truncate font-medium text-sb-accent hover:underline">
+                        {f.name}
+                      </a>
+                      <span className="whitespace-nowrap text-xs text-sb-muted">
+                        {f.format.toUpperCase()} · {fileSizeLabel(f.bytes)}
+                        {f.format === 'pdf' && f.pages > 0 ? ` · ${f.pages} หน้า` : ''}
+                      </span>
+                      {canRemoveFile(doc) ? (
+                        <button
+                          type="button"
+                          aria-label={`ลบ ${f.name}`}
+                          disabled={busy}
+                          className="text-sb-muted hover:text-sb-danger"
+                          onClick={() => {
+                            if (confirm(`ลบไฟล์ “${f.name}” ออกจากหนังสือนี้?`)) {
+                              void run(() => removeDocFile(doc.id, f.id), 'ลบไฟล์แนบแล้ว');
+                            }
+                          }}
+                        >
+                          <Icon name="delete" size={18} />
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          <section className={`${card} p-[22px]`}>
+            <h3 className="mb-3.5 flex items-center gap-1.5 font-semibold">
+              <Icon name="history" size={18} />
+              เส้นทางหนังสือ
+            </h3>
+            {doc.events.map((ev, i) => (
+              <div key={ev.id} className="flex gap-3.5">
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`mt-[3px] h-3.5 w-3.5 flex-none rounded-full border-[3px] bg-white ${
+                      i === doc.events.length - 1 ? 'border-sb-accent' : 'border-sb-success'
+                    }`}
+                  />
+                  {i < doc.events.length - 1 ? <div className="w-0.5 flex-1 bg-[#C9E3D5]" /> : null}
+                </div>
+                <div className="flex-1 pb-[18px]">
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <p className="text-sm font-semibold">{EVENT_KIND_LABELS[ev.kind]}</p>
+                    <p className="text-xs text-sb-muted">{thaiDateTime(ev.at)}</p>
+                  </div>
+                  <p className="mt-0.5 text-[13px] text-sb-muted">{eventByline(ev)}</p>
+                  <EventDetail event={ev} />
+                  {ev.note ? <p className="mt-1.5 rounded-lg bg-sb-panel px-3 py-2 text-[13px] leading-normal">{ev.note}</p> : null}
+                  {ev.changes?.length ? (
+                    <ul className="mt-1.5 flex flex-col gap-0.5 rounded-lg bg-sb-panel px-3 py-2 text-[13px]">
+                      {ev.changes.map((c) => (
+                        <li key={c.field}>
+                          <span className="text-sb-muted">{fieldLabel(doc.register, c.field)}:</span> {changeValue(c.field, c.from)} → {changeValue(c.field, c.to)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </section>
+        </div>
       </div>
     </SarabanLayout>
   );

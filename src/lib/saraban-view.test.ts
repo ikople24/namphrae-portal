@@ -124,3 +124,21 @@ describe('ตัวช่วยอื่น', () => {
     expect(precheckFile({ name: 'big.pdf', size: 10 * 1024 * 1024 + 1 })).toBe('big.pdf: ใหญ่เกิน 10 MB');
   });
 });
+
+describe('รอบ 2 — docsKey scope และข้อความ error', () => {
+  it('scope=open อยู่ใน key', () => {
+    expect(docsKey({ register: 'in', scope: 'open' })).toBe('/api/admin/saraban/docs?register=in&scope=open');
+  });
+
+  it('scope=open ตัด year/view ออกจาก key (server ไม่ใช้) แต่ page ยังอยู่', () => {
+    expect(docsKey({ register: 'in', scope: 'open', year: 2569, view: 'done', page: 2 })).toBe(
+      '/api/admin/saraban/docs?register=in&scope=open&page=2'
+    );
+  });
+
+  it('รหัสใหม่มีข้อความไทย', () => {
+    for (const code of ['same_holder', 'already_circulated', 'not_circulated', 'already_acknowledged']) {
+      expect(errorMessage(code)).not.toBe('เกิดข้อผิดพลาด ลองอีกครั้ง');
+    }
+  });
+});

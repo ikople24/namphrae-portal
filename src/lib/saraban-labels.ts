@@ -2,6 +2,7 @@
 // ป้ายภาษาไทยของคีย์ในโดเมนสารบรรณ — client-safe ใช้ทั้งหน้าจอและข้อความใน event
 
 import type {
+  AnnotateRouteKind,
   DisplayStatus,
   SarabanEventKind,
   SarabanLevel,
@@ -41,6 +42,8 @@ export const EVENT_KIND_LABELS: Record<SarabanEventKind, string> = {
   'file-removed': 'ลบไฟล์แนบ',
   sent: 'ส่งหนังสือแล้ว',
   voided: 'ยกเลิกเลขทะเบียน',
+  annotated: 'เกษียน/สั่งการ',
+  acknowledged: 'รับทราบ (แจ้งเวียน)',
 };
 
 const IN_STATUS_LABELS: Record<DisplayStatus, string> = {
@@ -83,3 +86,21 @@ export function fieldLabel(register: SarabanRegister, field: string): string {
   };
   return Object.hasOwn(labels, field) ? labels[field] : field;
 }
+
+// แถบ 5 ขั้นของหน้าติดตาม (ต้นแบบจอ 6) — ลำดับตรงกับ flowStep() ใน saraban-flow.ts (ขั้น 1 = index 0)
+export const FLOW_STEP_LABELS = ['ลงรับ', 'เสนอ/เกษียน', 'มอบหมาย', 'ดำเนินการ', 'จบเรื่อง'] as const;
+
+export const ROUTE_LABELS: Record<AnnotateRouteKind, string> = {
+  forward: 'ส่งต่อ',
+  close: 'ส่งคืนสารบรรณ (จบเรื่อง)',
+  stay: 'คงไว้ที่เดิม',
+};
+
+// ชิปข้อความสำเร็จรูปของฟอร์มเกษียน — ค่าคงที่ไปก่อน ยังไม่มีหน้าตั้งค่า (สเปกรอบ 2 ข้อ 1.8)
+export const QUICK_NOTES = [
+  'ทราบ',
+  'ทราบ มอบดำเนินการ',
+  'เพื่อโปรดพิจารณา',
+  'ทราบ แจ้งเวียนให้ทราบ',
+  'ทราบ เก็บเข้าแฟ้ม',
+] as const;

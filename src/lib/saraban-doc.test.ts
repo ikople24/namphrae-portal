@@ -20,6 +20,7 @@ import {
   sentTransition,
   toMongoQuery,
   voidTransition,
+  withDefaults,
   type DocFilter,
   type NewDocFields,
 } from '@/lib/saraban-doc';
@@ -71,7 +72,7 @@ function makeDoc(
 const DOC_KEYS = [
   'id', 'register', 'fiscalYear', 'no', 'ref', 'docDate', 'party', 'subject', 'level',
   'dueDate', 'holderUnitId', 'status', 'sendMethod', 'voidReason', 'files', 'events',
-  'registeredAt', 'registeredBy', 'updatedAt',
+  'circulation', 'registeredAt', 'registeredBy', 'updatedAt',
 ] as const satisfies readonly (keyof SarabanDoc)[];
 
 describe('buildNewDoc', () => {
@@ -475,5 +476,43 @@ describe('nameUnitChanges — ประวัติเก็บชื่อห�
       { field: 'subject', from: 'ก', to: 'ข' },
       { field: 'holderUnitId', from: 'ปลัดเทศบาล', to: 'นายกเทศมนตรี' },
     ]);
+  });
+});
+
+describe('รอบ 2 — circulation และ detail ของ event', () => {
+  it('buildNewDoc เขียน circulation: [] เสมอ', () => {
+    expect(makeDoc().circulation).toEqual([]);
+    expect(makeDoc({}, { register: 'out' }).circulation).toEqual([]);
+  });
+
+  it('withDefaults เติม circulation ให้หนังสือรอบ 1 ที่ไม่มีคีย์ · ของที่มีแล้วคืนตัวเดิม', () => {
+    const { circulation: _drop, ...legacy } = makeDoc();
+    const fixed = withDefaults(legacy as SarabanDoc);
+    expect(fixed.circulation).toEqual([]);
+    const current = makeDoc();
+    expect(withDefaults(current)).toBe(current);
+  });
+
+  it('makeEvent ใส่ detail เฉพาะคีย์ที่มีค่า — ไม่เขียน undefined ลง Mongo', () => {
+    const ev = makeEvent({
+      id: 'e',
+      at: NOW,
+      actor: ACTOR,
+      kind: 'annotated',
+      note: 'ทราบ',
+      detail: { onBehalfUnitId: 'palad', onBehalfName: 'ปลัดเทศบาล', route: 'stay', toUnitId: undefined },
+    });
+    expect(ev).toEqual({
+      id: 'e',
+      at: NOW,
+      by: 'user_clerk_1',
+      byName: 'สมหญิง ใจดี',
+      kind: 'annotated',
+      note: 'ทราบ',
+      onBehalfUnitId: 'palad',
+      onBehalfName: 'ปลัดเทศบาล',
+      route: 'stay',
+    });
+    expect('toUnitId' in ev).toBe(false);
   });
 });

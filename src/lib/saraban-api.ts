@@ -6,7 +6,7 @@ import type { z } from 'zod';
 import type { RegisterView } from '@/lib/saraban-doc';
 import type {
   DocKind,
-  DocPatch,
+  docPatchSchema,
   FileRef,
   receiveInputSchema,
   sendInputSchema,
@@ -95,8 +95,23 @@ export function createDoc(kind: DocKind, body: ReceiveBody | SendBody): Promise<
   return call(`/api/admin/saraban/docs?kind=${kind}`, jsonInit('POST', body));
 }
 
-export function patchDoc(id: string, body: DocPatch): Promise<SarabanDoc> {
+// input ของ schema: ฝั่งเรียกไม่ต้องส่งช่องที่ schema เติมค่าเริ่มต้นให้ (circulateTo)
+export function patchDoc(id: string, body: z.input<typeof docPatchSchema>): Promise<SarabanDoc> {
   return call(docKey(id), jsonInit('PATCH', body));
+}
+
+// ชนิดของ body มาจาก schema ตรง ๆ — circulateTo เป็น optional (schema ใส่ [] ให้)
+type AnnotateBody = Omit<Extract<z.input<typeof docPatchSchema>, { action: 'annotate' }>, 'action' | 'updatedAt'>;
+
+export function annotateDoc(
+  doc: Pick<SarabanDoc, 'id' | 'updatedAt'>,
+  body: AnnotateBody
+): Promise<SarabanDoc> {
+  return patchDoc(doc.id, { action: 'annotate', updatedAt: doc.updatedAt, ...body });
+}
+
+export function ackCirculation(doc: Pick<SarabanDoc, 'id' | 'updatedAt'>, unitId: string): Promise<SarabanDoc> {
+  return patchDoc(doc.id, { action: 'ack', updatedAt: doc.updatedAt, unitId });
 }
 
 export function addDocFile(id: string, file: FileRef): Promise<SarabanDoc> {

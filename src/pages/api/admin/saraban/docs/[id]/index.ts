@@ -9,13 +9,14 @@ import {
   sentTransition,
   voidTransition,
 } from '@/lib/saraban-doc';
+import { ackTransition, annotateTransition, FLOW_ERROR_STATUS } from '@/lib/saraban-flow';
 import { docPatchSchema } from '@/lib/saraban-schema';
 import { applyPatch, getDoc, type DocSet } from '@/lib/saraban-store';
 import { listUnits } from '@/lib/saraban-units-store';
-import type { SarabanEventKind, SarabanFieldChange } from '@/types/saraban';
+import type { SarabanEventDetail, SarabanEventKind, SarabanFieldChange } from '@/types/saraban';
 
 // GET   /api/admin/saraban/docs/[id]
-// PATCH /api/admin/saraban/docs/[id]  body { action: 'edit' | 'void' | 'sent', updatedAt, … }
+// PATCH /api/admin/saraban/docs/[id]  body { action: 'edit' | 'void' | 'sent' | 'annotate' | 'ack', updatedAt, … }
 //   updatedAt = เวอร์ชันที่หน้าจอเห็น — ไม่ตรงกับใน DB = มีคนแก้ไปก่อน → 409 stale ให้โหลดใหม่
 //   ไม่มี DELETE โดยตั้งใจ: เลขทะเบียนเป็นหลักฐานทางราชการ ใช้ยกเลิกแทน (สเปกข้อ 6)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -51,10 +52,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!current) return res.status(404).json({ error: 'not_found' });
     if (current.updatedAt !== patch.updatedAt) return res.status(409).json({ error: 'stale' });
 
+    // เวลากับ eventId สร้างครั้งเดียว — flow ใช้เป็น sentAt/sentEventId ของรายการเวียน และ
+    // applyPatch ใช้ event.at เป็น updatedAt ใหม่ ทั้งสามต้องตรงกัน · actor ต้องอ่านสมุดตำแหน่ง
+    // จึงหาเมื่อจำเป็น (ack ใช้ในตัว transition · ที่เหลือก่อนสร้าง event) ทางที่ไม่เขียนไม่ต้องจ่าย
+    const now = new Date().toISOString();
+    const eventId = crypto.randomUUID();
+    let actor: Awaited<ReturnType<typeof resolveActor>> | undefined;
+
     let set: DocSet;
     let kind: SarabanEventKind;
     let note = '';
     let changes: SarabanFieldChange[] | undefined;
+    let detail: SarabanEventDetail | undefined;
 
     if (patch.action === 'edit') {
       const result = buildEdit(current, patch.edit);
@@ -70,6 +79,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       set = result.set;
       kind = 'edited';
       changes = nameUnitChanges(result.changes, nameOf);
+    } else if (patch.action === 'annotate' || patch.action === 'ack') {
+      let result;
+      if (patch.action === 'annotate') {
+        result = annotateTransition(current, patch, await listUnits(), { now, eventId });
+      } else {
+        actor = await resolveActor(admin);
+        result = ackTransition(current, patch.unitId, { now, actor });
+      }
+      if (!result.ok) {
+        const body =
+          result.error === 'invalid_transition'
+            ? { error: result.error, action: patch.action, status: current.status }
+            : { error: result.error, ...('unitId' in result ? { unitId: result.unitId } : {}) };
+        return res.status(FLOW_ERROR_STATUS[result.error]).json(body);
+      }
+      set = result.set;
+      kind = patch.action === 'annotate' ? 'annotated' : 'acknowledged';
+      note = result.note;
+      detail = result.detail;
     } else {
       const transition =
         patch.action === 'void'
@@ -81,14 +109,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ({ set, kind, note } = transition);
     }
 
-    const event = makeEvent({
-      id: crypto.randomUUID(),
-      at: new Date().toISOString(),
-      actor: await resolveActor(admin),
-      kind,
-      note,
-      changes,
-    });
+    actor ??= await resolveActor(admin);
+    const event = makeEvent({ id: eventId, at: now, actor, kind, note, changes, detail });
     const updated = await applyPatch(id, patch.updatedAt, set, event);
     if (updated) return res.status(200).json(updated);
     // null: ถูกแก้แทรกระหว่าง getDoc กับตรงนี้ หรือหายไป

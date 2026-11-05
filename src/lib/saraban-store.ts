@@ -22,6 +22,7 @@ import {
   type EditableField,
   type NewDocFields,
   type RegisterView,
+  withDefaults,
 } from '@/lib/saraban-doc';
 import { readJsonArray, writeJsonArray } from '@/lib/saraban-file';
 import { bangkokDateOf, fiscalYearOf, nextNo } from '@/lib/saraban-number';
@@ -144,10 +145,10 @@ function ensureIndexes(): Promise<void> {
 // ---- อ่าน ------------------------------------------------------------------
 
 export async function getDoc(id: string): Promise<SarabanDoc | null> {
-  if (isMongoConfigured()) {
-    return (await docsCollection()).findOne({ id }, { projection: { _id: 0 } });
-  }
-  return (await readDocs()).find((doc) => doc.id === id) ?? null;
+  const doc = isMongoConfigured()
+    ? await (await docsCollection()).findOne({ id }, { projection: { _id: 0 } })
+    : ((await readDocs()).find((d) => d.id === id) ?? null);
+  return doc && withDefaults(doc);
 }
 
 export async function listDocs(
@@ -168,10 +169,10 @@ export async function listDocs(
         .toArray(),
       col.countDocuments(query),
     ]);
-    return { docs, total };
+    return { docs: docs.map(withDefaults), total };
   }
   const all = (await readDocs()).filter((doc) => matches(doc, filter, today)).sort(byNewest);
-  return { docs: all.slice(skip, skip + PAGE_SIZE), total: all.length };
+  return { docs: all.slice(skip, skip + PAGE_SIZE).map(withDefaults), total: all.length };
 }
 
 /** นับอย่างเดียว ไม่ดึงตัวหนังสือออกมา — badge เรียกจากทุกหน้า (แนว countJobs) */
@@ -388,8 +389,10 @@ export async function createDoc(args: CreateDocArgs): Promise<CreateDocResult> {
 
 // ---- แก้ไข / เปลี่ยนสถานะ / ไฟล์แนบ ----------------------------------------
 
-/** ช่องที่ applyPatch เขียนได้ — ผลของ buildEdit() หรือ Transition.set เท่านั้น */
-export type DocSet = Partial<Pick<SarabanDoc, EditableField | 'status' | 'voidReason' | 'sendMethod'>>;
+/** ช่องที่ applyPatch เขียนได้ — ผลของ buildEdit() · Transition.set · FlowSet (saraban-flow.ts) เท่านั้น */
+export type DocSet = Partial<
+  Pick<SarabanDoc, EditableField | 'status' | 'voidReason' | 'sendMethod' | 'circulation'>
+>;
 
 /**
  * เขียน set + ต่อ event หนึ่งตัว เฉพาะเมื่อ updatedAt ใน DB ยังตรงกับที่หน้าจอเห็น
@@ -403,21 +406,19 @@ export async function applyPatch(
   event: SarabanEvent
 ): Promise<SarabanDoc | null> {
   if (isMongoConfigured()) {
-    return (await docsCollection()).findOneAndUpdate(
+    const updated = await (await docsCollection()).findOneAndUpdate(
       { id, updatedAt: expectedUpdatedAt },
       { $set: { ...set, updatedAt: event.at }, $push: { events: event } },
       { returnDocument: 'after', projection: { _id: 0 } }
     );
+    return updated && withDefaults(updated);
   }
   const docs = await readDocs();
   const index = docs.findIndex((doc) => doc.id === id && doc.updatedAt === expectedUpdatedAt);
   if (index === -1) return null;
-  docs[index] = {
-    ...docs[index],
-    ...set,
-    updatedAt: event.at,
-    events: [...docs[index].events, event],
-  };
+  // ประกอบจาก withDefaults ก่อน spread set — ไฟล์ที่เขียนกลับจะมี circulation เสมอ
+  const current = withDefaults(docs[index]);
+  docs[index] = { ...current, ...set, updatedAt: event.at, events: [...current.events, event] };
   await writeJsonArray(DOCS_FILE, docs);
   return docs[index];
 }
@@ -433,11 +434,12 @@ export async function addFile(
   event: SarabanEvent
 ): Promise<SarabanDoc | null> {
   if (isMongoConfigured()) {
-    return (await docsCollection()).findOneAndUpdate(
+    const updated = await (await docsCollection()).findOneAndUpdate(
       { id, status: { $ne: 'void' }, $expr: { $lt: [{ $size: '$files' }, MAX_FILES_PER_DOC] } },
       { $push: { files: file, events: event }, $set: { updatedAt: event.at } },
       { returnDocument: 'after', projection: { _id: 0 } }
     );
+    return updated && withDefaults(updated);
   }
   const docs = await readDocs();
   const index = docs.findIndex(
@@ -451,7 +453,7 @@ export async function addFile(
     updatedAt: event.at,
   };
   await writeJsonArray(DOCS_FILE, docs);
-  return docs[index];
+  return withDefaults(docs[index]);
 }
 
 /**
@@ -466,11 +468,12 @@ export async function removeFile(
   event: SarabanEvent
 ): Promise<SarabanDoc | null> {
   if (isMongoConfigured()) {
-    return (await docsCollection()).findOneAndUpdate(
+    const updated = await (await docsCollection()).findOneAndUpdate(
       { id, status: { $in: [...OPEN_STATUSES] }, 'files.id': fileId },
       { $pull: { files: { id: fileId } }, $push: { events: event }, $set: { updatedAt: event.at } },
       { returnDocument: 'after', projection: { _id: 0 } }
     );
+    return updated && withDefaults(updated);
   }
   const docs = await readDocs();
   const index = docs.findIndex(
@@ -484,7 +487,7 @@ export async function removeFile(
     updatedAt: event.at,
   };
   await writeJsonArray(DOCS_FILE, docs);
-  return docs[index];
+  return withDefaults(docs[index]);
 }
 
 /**

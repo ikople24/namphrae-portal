@@ -105,8 +105,8 @@ export function isUrgentOpen(doc: Pick<SarabanDoc, 'level' | 'status'>): boolean
 // ข้อความตามรหัสข้อผิดพลาดของ API (สเปกข้อ 8 + แผน 1B)
 const ERROR_MESSAGES: Record<string, string> = {
   number_busy: 'มีคนลงรับพร้อมกัน กดอีกครั้ง',
-  stale: 'มีคนแก้หนังสือนี้ไปก่อน โหลดใหม่แล้วลองอีกครั้ง',
-  invalid_unit: 'ตำแหน่ง/หน่วยงานที่เลือกใช้ไม่ได้ (ถูกปิด หรือยังไม่มีรหัสส่วนราชการ)',
+  stale: 'มีคนบันทึกหนังสือนี้ไปก่อน โหลดใหม่แล้ว ลองอีกครั้ง',
+  invalid_unit: 'ตำแหน่ง/หน่วยงานที่เลือกใช้ไม่ได้ — อาจถูกปิดในสมุดผู้รับ (หรือยังไม่มีรหัสส่วนราชการ กรณีออกเลขส่ง)',
   invalid_file: 'ไฟล์แนบใช้ไม่ได้ ลองเลือกไฟล์ใหม่',
   file_too_large: 'ไฟล์ใหญ่เกิน 10 MB',
   bad_format: 'รับเฉพาะไฟล์ PDF, JPG, PNG',
@@ -117,6 +117,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   field_locked: 'มีช่องที่แก้ไม่ได้แล้วในสถานะปัจจุบัน',
   too_many_files: 'แนบได้ไม่เกิน 10 ไฟล์ต่อเรื่อง',
   invalid_input: 'ข้อมูลไม่ครบหรือไม่ถูกต้อง',
+  same_holder: 'หนังสืออยู่กับตำแหน่งนี้อยู่แล้ว เลือกปลายทางอื่น',
+  already_circulated: 'มีตำแหน่งที่เวียนถึงแล้ว เอาออกจากรายการแล้วบันทึกอีกครั้ง',
+  not_circulated: 'ตำแหน่งนี้ไม่ได้อยู่ในรายการแจ้งเวียน',
+  already_acknowledged: 'ตำแหน่งนี้ทราบแล้ว',
   not_found: 'ไม่พบหนังสือ',
   feature_denied: 'ไม่มีสิทธิ์ใช้ระบบสารบรรณ',
 };
@@ -133,10 +137,15 @@ export function docsKey(q: {
   year?: number;
   view?: RegisterView;
   page?: number;
+  scope?: 'open';
 }): string {
   const p = new URLSearchParams({ register: q.register });
-  if (q.year) p.set('year', String(q.year));
-  if (q.view && q.view !== 'all') p.set('view', q.view);
+  // scope=open: server ไม่ใช้ year/view — ไม่ใส่ในคีย์ จะได้ cache เดียวกันไม่ว่าหน้าอื่นเลือกปี/ตัวกรองอะไร
+  if (q.scope) p.set('scope', q.scope);
+  else {
+    if (q.year) p.set('year', String(q.year));
+    if (q.view && q.view !== 'all') p.set('view', q.view);
+  }
   if (q.page && q.page > 1) p.set('page', String(q.page));
   return `/api/admin/saraban/docs?${p}`;
 }

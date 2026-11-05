@@ -11,6 +11,7 @@ import {
   type DisplayStatus,
   type SarabanDoc,
   type SarabanEvent,
+  type SarabanEventDetail,
   type SarabanEventKind,
   type SarabanFieldChange,
   type SarabanFile,
@@ -28,17 +29,24 @@ export function makeEvent(args: {
   kind: SarabanEventKind;
   note?: string;
   changes?: SarabanFieldChange[];
+  detail?: SarabanEventDetail;
 }): SarabanEvent {
-  const event: SarabanEvent = {
+  // ใส่เฉพาะคีย์ที่มีค่า — คีย์ undefined ใน $push ของ Mongo กลายเป็น null ในเอกสาร
+  // detail ลงก่อน แล้วฟิลด์หลักทับท้าย — detail จึงทับ id/at/by/kind/note ไม่ได้ไม่ว่าชนิดจะเปลี่ยนไปอย่างไร
+  const event: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args.detail ?? {})) {
+    if (value !== undefined) event[key] = value;
+  }
+  Object.assign(event, {
     id: args.id,
     at: args.at,
     by: args.actor.id,
     byName: args.actor.name,
     kind: args.kind,
     note: args.note ?? '',
-  };
+  });
   if (args.changes) event.changes = args.changes;
-  return event;
+  return event as SarabanEvent;
 }
 
 // ช่องที่ผู้เรียกกำหนด — รับ: มาจากฟอร์มที่ผ่าน zod · ส่ง/เวียน: ref ประกอบจาก refFor() และ
@@ -96,10 +104,20 @@ export function buildNewDoc(fields: NewDocFields, meta: NewDocMeta): SarabanDoc 
         note: meta.eventNote,
       }),
     ],
+    circulation: [],
     registeredAt: meta.now,
     registeredBy: meta.actor.id,
     updatedAt: meta.now,
   };
+}
+
+/**
+ * หนังสือที่บันทึกก่อนรอบ 2 ไม่มีคีย์ circulation — เติม [] ตอนอ่าน ไม่ต้อง migrate
+ * (สเปกรอบ 2 ข้อ 3) · store เรียกตัวนี้ทุกทางที่คืนหนังสือออกไป หน้าจอและ flow จึงเชื่อได้ว่ามีเสมอ
+ * คืนตัวเดิมเมื่อมีแล้ว ไม่ copy ทิ้งทุกครั้ง
+ */
+export function withDefaults(doc: SarabanDoc): SarabanDoc {
+  return Array.isArray(doc.circulation) ? doc : { ...doc, circulation: [] };
 }
 
 // สถานะที่หนังสือยัง "เปิดอยู่" — ใช้ร่วมทุกกฎที่ถามคำถามนี้ (เกินกำหนด · ยกเลิกได้ · ลบไฟล์ได้ ·
