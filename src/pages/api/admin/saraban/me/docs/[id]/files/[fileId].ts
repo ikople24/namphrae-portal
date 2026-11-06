@@ -10,7 +10,7 @@ import { getDoc } from '@/lib/saraban-store';
 // แล้ว 302 ไปลิงก์ชั่วคราว (แนวเดียวกับ route โหมดเต็ม) · ไม่มี DELETE — ไฟล์เป็นงานของธุรการ
 // ?raw=1 ส่ง bytes ผ่านแอปให้ DocViewer (สเปกรอบ 4)
 
-// ?raw=1 ส่ง bytes ผ่านแอป (ไฟล์ถึง 10MB) — ค่าเริ่มต้นของ Next เตือนที่ 4MB
+// ไฟล์ถึง 10MB — ค่าเริ่มต้นของ Next เตือนที่ 4MB
 export const config = { api: { responseLimit: '11mb' } };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
