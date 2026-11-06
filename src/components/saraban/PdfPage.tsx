@@ -61,8 +61,9 @@ export default function PdfPage({
     if (!pdf || width <= 0) return;
     let alive = true;
     let render: RenderTask | undefined;
-    pdf.getPage(page).then(
-      (p) => {
+    pdf
+      .getPage(page)
+      .then((p) => {
         const el = canvas.current;
         if (!alive || !el) return;
         const base = p.getViewport({ scale: 1 });
@@ -76,9 +77,9 @@ export default function PdfPage({
           // ถูกยกเลิกตอนเปลี่ยนหน้า/ขนาด — ไม่ใช่ error · อย่างอื่น (ไฟล์เสียกลางเล่ม ฯลฯ) แจ้งผู้ใช้
           if (err?.name !== 'RenderingCancelledException' && alive) cb.current.onError();
         });
-      },
-      () => alive && cb.current.onError()
-    );
+      })
+      // .catch แทนตัวที่สองของ then — รับทั้ง getPage ล้มและ render() ที่โยนตรง ๆ ในตัวแรก
+      .catch(() => alive && cb.current.onError());
     return () => {
       alive = false;
       render?.cancel();

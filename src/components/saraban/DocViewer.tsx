@@ -78,6 +78,7 @@ export default function DocViewer({
   const penOn = pen && canInk;
 
   function pick(id: string) {
+    endStroke();
     setFileId(id);
     setPage(1);
     setInfo(null);
@@ -98,7 +99,9 @@ export default function DocViewer({
     return s;
   }
   function penDown(e: ReactPointerEvent<SVGSVGElement>) {
-    if (penPointer.current !== null) return; // มีนิ้วหนึ่งวาดอยู่แล้ว
+    // นิ้วที่สอง (ไม่ใช่ primary) ไม่นับ · นิ้ว primary ใหม่เริ่มเส้นใหม่เสมอ — เส้นที่ค้างเพราะ tools/ปากกาถูกปิด
+    // กลางเส้น (handler ถูกถอด ไม่มี cancel มาล้าง) จึงไม่ทำให้ปากกาตาย
+    if (!e.isPrimary) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     penPointer.current = e.pointerId;
     const p = unitOf(e);
@@ -163,11 +166,11 @@ export default function DocViewer({
           : <span className="max-w-[240px] truncate text-xs">{file.name}</span>}
         {pages > 1 ? (
           <span className="flex items-center gap-1 text-xs">
-            <button type="button" aria-label="หน้าก่อน" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded p-1 hover:bg-sb-hover disabled:opacity-40">
+            <button type="button" aria-label="หน้าก่อน" disabled={page <= 1} onClick={() => { endStroke(); setPage(page - 1); }} className="rounded p-1 hover:bg-sb-hover disabled:opacity-40">
               <Icon name="chevron_left" size={18} />
             </button>
             หน้า {page}/{pages}
-            <button type="button" aria-label="หน้าถัดไป" disabled={page >= pages} onClick={() => setPage(page + 1)} className="rounded p-1 hover:bg-sb-hover disabled:opacity-40">
+            <button type="button" aria-label="หน้าถัดไป" disabled={page >= pages} onClick={() => { endStroke(); setPage(page + 1); }} className="rounded p-1 hover:bg-sb-hover disabled:opacity-40">
               <Icon name="chevron_right" size={18} />
             </button>
           </span>
