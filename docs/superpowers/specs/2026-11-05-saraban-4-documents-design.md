@@ -47,7 +47,7 @@ type SarabanSignature = { ip: string; files: { fileId: string; name: string; sha
 - ผู้ลงนาม/เวลา = `by`/`byName`/`at` ของ event เดียวกัน (ไม่เก็บซ้ำ)
 - `sha256` เซิร์ฟเวอร์คำนวณเองจาก `getObjectBytes` ของทุกไฟล์ในหนังสือ ณ ตอนลงนาม (ไม่รับจาก client)
 - ไม่มีไฟล์แนบ → `files: []` (ลงนามข้อความเกษียน) · มีไฟล์แต่ไม่ได้ตั้ง bucket → 503 `storage_not_configured`
-- `ip` = ค่าแรกของ `x-forwarded-for` (Railway อยู่หลัง proxy) ไม่มี → `req.socket.remoteAddress` → `''`
+- `ip` = `x-real-ip` (edge ของ Railway ตั้งเอง) → ค่าขวาสุดของ `x-forwarded-for` (hop ที่ proxy ต่อให้ ค่าซ้ายสุด client ปลอมได้) → `req.socket.remoteAddress` → `''` · แต่ละค่าต้องผ่าน `net.isIP` ไม่งั้นข้าม · ต้องตรวจหลัง deploy ว่า Railway ส่ง header ไหนจริง · เป็นหลักฐานว่า proxy เห็นอะไร ไม่ใช่พิสูจน์ตัวบุคคล
 
 ## 3. API
 

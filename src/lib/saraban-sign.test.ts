@@ -15,11 +15,19 @@ const deps = (configured = true) => ({
 const stamp: SarabanMark = { type: 'stamp', fileId: 'a', page: 1, stamp: 'ack', x: 0.5, y: 0.5, rot: 0 };
 
 describe('clientIp', () => {
-  it('ค่าแรกของ x-forwarded-for ก่อน แล้ว socket แล้ว ""', () => {
-    expect(clientIp({ headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.1' }, socket: { remoteAddress: '::1' } })).toBe('1.2.3.4');
+  it('x-real-ip มาก่อน', () => {
+    expect(clientIp({ headers: { 'x-real-ip': '9.9.9.9', 'x-forwarded-for': '1.1.1.1, 2.2.2.2' }, socket: { remoteAddress: '::1' } })).toBe('9.9.9.9');
+  });
+  it('x-forwarded-for ใช้ค่าขวาสุด (hop ที่ proxy ต่อให้) ไม่ใช่ค่าซ้ายที่ client ปลอมได้', () => {
+    expect(clientIp({ headers: { 'x-forwarded-for': '1.1.1.1, 2.2.2.2' }, socket: { remoteAddress: '::1' } })).toBe('2.2.2.2');
     expect(clientIp({ headers: { 'x-forwarded-for': ['5.6.7.8'] }, socket: {} })).toBe('5.6.7.8');
-    expect(clientIp({ headers: {}, socket: { remoteAddress: '::1' } })).toBe('::1');
+  });
+  it('ค่าที่ไม่ใช่ IP ข้ามไปใช้ตัวถัดไป', () => {
+    expect(clientIp({ headers: { 'x-real-ip': 'nope', 'x-forwarded-for': 'evil<script>' }, socket: { remoteAddress: '::1' } })).toBe('::1');
+  });
+  it('ไม่มีค่าที่ใช้ได้ → ""', () => {
     expect(clientIp({ headers: { 'x-forwarded-for': ' ' }, socket: {} })).toBe('');
+    expect(clientIp({ headers: {} })).toBe('');
   });
 });
 

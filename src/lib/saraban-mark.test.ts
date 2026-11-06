@@ -65,6 +65,14 @@ describe('validateMarks', () => {
   });
 });
 
+describe('validateMarks — PDF ที่นับหน้าไม่ได้', () => {
+  const doc = { files: [file({ pages: 0 })] };
+  it('หน้า 500 ผ่าน · 501 → invalid_mark', () => {
+    expect(validateMarks(doc, [stamp({ page: 500 })])).toEqual({ ok: true });
+    expect(validateMarks(doc, [stamp({ page: 501 })])).toEqual({ ok: false, error: 'invalid_mark', index: 0 });
+  });
+});
+
 describe('isFileReferenced', () => {
   it('อ้างด้วย mark หรือ signature', () => {
     expect(isFileReferenced({ events: [ev({})] }, 'f1')).toBe(false);
