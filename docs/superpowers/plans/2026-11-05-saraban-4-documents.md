@@ -828,6 +828,38 @@ export const config = { api: { responseLimit: '11mb' } };
 
 หมายเหตุ: `return sendFileBytes(...)` คืน Promise<void> — Next เตือนเฉพาะเมื่อ handler คืนค่าที่ไม่ใช่ undefined; ถ้า lint/รันแล้วมีเตือน "API handler should not return a value" ให้เขียนเป็น `{ await sendFileBytes(res, file); return; }`
 
+- [ ] **Step 4b: กันชนกันใน `removeFile` (`src/lib/saraban-store.ts`)** — ข้อจากรีวิวโค้ด: DELETE อ่านหนังสือแล้วไม่เห็นการอ้าง →
+  เกษียนพร้อมกันบันทึกตราบนไฟล์นั้น → `$pull` ลบไฟล์ทั้งที่ถูกอ้างแล้ว · เช็คก่อนเขียนอย่างเดียวไม่พอ ต้องอยู่ในเงื่อนไขของคำสั่งเขียนด้วย
+
+ใน Mongo filter ของ `findOneAndUpdate` เพิ่มสองเงื่อนไข:
+
+```ts
+      {
+        id,
+        status: { $in: [...OPEN_STATUSES] },
+        'files.id': fileId,
+        // ไฟล์ที่ตรา/ลายมือ/การลงนามอ้างห้ามหลุด — อยู่ใน filter เดียวกับการเขียน กันเกษียนที่บันทึกแทรกหลัง route เช็ค
+        'events.marks.fileId': { $ne: fileId },
+        'events.signature.files.fileId': { $ne: fileId },
+      },
+```
+
+file backend: เงื่อนไขใน `findIndex` เพิ่ม `&& !isFileReferenced(doc, fileId)` (import จาก `@/lib/saraban-mark`) · route ยังเช็ค
+`isFileReferenced` ก่อนเพื่อตอบ 409 `file_referenced` ที่ชัด ส่วน `removeFile` คืน null = route ตอบ 409 `invalid_transition` เดิม
+
+เพิ่มเทสต์ใน `src/lib/api-guard-coverage.test.ts` (describe เดียวกัน):
+
+```ts
+  it('removeFile: เงื่อนไขไม่ถูกอ้างอยู่ในคำสั่งเขียน (กันชนกับเกษียน)', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'lib', 'saraban-store.ts'), 'utf8');
+    expect(src).toContain("'events.marks.fileId': { $ne: fileId }");
+    expect(src).toContain("'events.signature.files.fileId': { $ne: fileId }");
+    expect(src).toContain('!isFileReferenced(doc, fileId)');
+  });
+```
+
+และเพิ่ม `src/lib/saraban-store.ts` ใน `git add` ของ Step 7
+
 - [ ] **Step 5: แก้ route โหมดเจ้าหน้าที่ `src/pages/api/admin/saraban/me/docs/[id]/files/[fileId].ts`**
 
 import `sendFileBytes` และเพิ่ม `export const config = { api: { responseLimit: '11mb' } };` แบบเดียวกัน · หลัง `if (!file) return res.status(404)…`:
@@ -851,7 +883,7 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/lib/saraban-raw.ts 'src/pages/api/admin/saraban/docs/[id]/files/[fileId].ts' 'src/pages/api/admin/saraban/me/docs/[id]/files/[fileId].ts' src/lib/api-guard-coverage.test.ts
+git add src/lib/saraban-raw.ts src/lib/saraban-store.ts 'src/pages/api/admin/saraban/docs/[id]/files/[fileId].ts' 'src/pages/api/admin/saraban/me/docs/[id]/files/[fileId].ts' src/lib/api-guard-coverage.test.ts
 git commit -m "feat(saraban): ส่งไฟล์ดิบ same-origin ให้ตัวดูเอกสาร และห้ามลบไฟล์ที่มีตรา/ลงนามอ้าง"
 ```
 
