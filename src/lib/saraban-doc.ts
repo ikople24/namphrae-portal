@@ -288,7 +288,7 @@ export function canMarkSent(doc: Pick<SarabanDoc, 'register' | 'status'>): boole
 }
 
 // ไฟล์สแกนมักตามมาทีหลัง จึงเพิ่มได้แม้เรื่องเสร็จแล้ว — แต่ลบได้เฉพาะเรื่องที่ยังเปิดอยู่
-// (รอบ 4 ต้องห้ามลบไฟล์ที่มีตรา/ลายมือ/การลงนามอ้างอยู่ด้วย)
+// ไฟล์ที่มีตรา/ลายมือ/การลงนามอ้างอยู่ห้ามลบอีกชั้น — isFileReferenced (saraban-mark.ts)
 export function canAddFile(doc: Pick<SarabanDoc, 'status'>): boolean {
   return doc.status !== 'void';
 }
