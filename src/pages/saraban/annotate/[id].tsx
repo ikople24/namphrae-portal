@@ -1,10 +1,11 @@
-// หน้าเกษียน (สเปกรอบ 2 ข้อ 5 · ต้นแบบจอ 5) — ซ้าย "เอกสาร": ตัวอย่างไฟล์แนบจากลิงก์ชั่วคราว
-// (รอบ 4 วางปากกา/ตราที่ช่องนี้) · ขวา: ประวัติเกษียน + ฟอร์มสั่งการ
+// หน้าเกษียน (สเปกรอบ 2 ข้อ 5 · ต้นแบบจอ 5) — ซ้าย "เอกสาร": DocViewer วางตราได้ (สเปกรอบ 4 — ลายมือ/
+// ลงนามต้องเป็นเจ้าตัวในงานของฉัน ธุรการทำแทนได้แค่ตรา) · ขวา: ประวัติเกษียน + ฟอร์มสั่งการ
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import Icon from '@/components/Icon';
+import DocViewer from '@/components/saraban/DocViewer';
 import SarabanLayout from '@/components/saraban/SarabanLayout';
 import AnnotateForm, { type AnnotateSubmit } from '@/components/saraban/AnnotateForm';
 import EventDetail, { eventByline } from '@/components/saraban/EventDetail';
@@ -28,8 +29,8 @@ import {
 import { displayStatus } from '@/lib/saraban-doc';
 import { canAnnotate } from '@/lib/saraban-flow';
 import { formatNo } from '@/lib/saraban-number';
-import { thaiDateTime } from '@/lib/saraban-view';
-import type { SarabanDoc, SarabanUnit } from '@/types/saraban';
+import { thaiDateTime, withRaw } from '@/lib/saraban-view';
+import type { SarabanDoc, SarabanMark, SarabanUnit } from '@/types/saraban';
 
 // อักษรแรกของชื่อสำหรับวงกลมอวาตาร์ — ข้ามสระนำ เ แ โ ใ ไ ที่ไม่ควรเป็นตัวแทนชื่อ
 function initialOf(name: string): string {
@@ -47,7 +48,8 @@ function AnnotatePage() {
   const { mutate: globalMutate } = useSWRConfig();
   // สำเร็จแล้วเปลี่ยน key เพื่อล้างฟอร์ม (ไม่ผูกกับ updatedAt เพราะ refetch ตอน stale จะล้างตัวเลือกที่กรอกไว้)
   const [formKey, setFormKey] = useState(0);
-  const [fileId, setFileId] = useState<string | null>(null);
+  // ร่างตราอยู่ที่หน้า (ไม่อยู่ใน viewer) — 409 stale แล้ว refetch ตราที่วางไว้ต้องไม่หาย เหมือน note
+  const [marks, setMarks] = useState<SarabanMark[]>([]);
 
   if (error) {
     return (
@@ -69,13 +71,13 @@ function AnnotatePage() {
   const holderName = units?.find((u) => u.id === doc.holderUnitId)?.name ?? '—';
   const status = summary?.today ? displayStatus(doc, summary.today) : doc.status;
   const annotations = doc.events.filter((e) => e.kind === 'annotated');
-  const file = doc.files.find((f) => f.id === fileId) ?? doc.files[0];
 
   async function submit(body: AnnotateSubmit) {
     if (!doc) return;
     setBusy(true);
     try {
-      const updated = await annotateDoc(doc, body);
+      const updated = await annotateDoc(doc, { ...body, marks });
+      setMarks([]);
       setNote('');
       setFormKey((k) => k + 1);
       // ทะเบียน/รายการค้าง/ตัวเลขสรุปต้องตามสถานะใหม่
@@ -126,46 +128,15 @@ function AnnotatePage() {
 
       <div className="grid items-start gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr))]">
         <section className={`${card} overflow-hidden`}>
-          <div className="flex flex-wrap items-center gap-2 border-b border-sb-line bg-sb-panel px-4 py-2.5">
-            <Icon name="description" size={18} className="text-sb-muted" />
-            {doc.files.length === 0 ? (
-              <span className="text-[13px] text-sb-muted">หนังสือนี้ไม่มีไฟล์แนบ</span>
-            ) : (
-              doc.files.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFileId(f.id)}
-                  aria-pressed={f.id === file?.id}
-                  title={f.name}
-                  className={`max-w-[200px] truncate rounded-lg px-2.5 py-1 text-xs ${f.id === file?.id ? 'bg-sb-accent text-white' : 'bg-white hover:bg-sb-hover'}`}
-                >
-                  {f.name}
-                </button>
-              ))
-            )}
-            {file ? (
-              <a
-                href={fileUrl(doc.id, file.id)}
-                target="_blank"
-                rel="noopener"
-                className="ml-auto flex items-center gap-1 text-xs text-sb-accent hover:underline"
-              >
-                <Icon name="open_in_new" size={16} />
-                เปิดในแท็บใหม่
-              </a>
-            ) : null}
-          </div>
-          {file ? (
-            file.format === 'pdf' ? (
-              <iframe key={file.id} src={fileUrl(doc.id, file.id)} title={file.name} className="h-[70vh] min-h-[400px] w-full bg-white" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element -- ลิงก์ชั่วคราวจาก bucket ไม่ผ่าน next/image
-              <img src={fileUrl(doc.id, file.id)} alt={file.name} className="w-full bg-white" />
-            )
-          ) : (
-            <div className="flex min-h-[300px] items-center justify-center text-[13px] text-sb-muted">ไม่มีเอกสารให้แสดง</div>
-          )}
+          <DocViewer
+            files={doc.files}
+            events={doc.events}
+            rawUrl={(fileId) => withRaw(fileUrl(doc.id, fileId))}
+            openUrl={(fileId) => fileUrl(doc.id, fileId)}
+            tools={canAnnotate(doc) ? 'stamp' : 'none'}
+            draft={marks}
+            onDraftChange={setMarks}
+          />
         </section>
 
         <section className={`${card} flex flex-col gap-4 p-[22px]`}>
