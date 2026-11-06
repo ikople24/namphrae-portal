@@ -11,7 +11,10 @@ import {
   voidTransition,
 } from '@/lib/saraban-doc';
 import { ackTransition, annotateTransition, FLOW_ERROR_STATUS } from '@/lib/saraban-flow';
+import { hasSelfOnlyMarks } from '@/lib/saraban-mark';
 import { docPatchSchema } from '@/lib/saraban-schema';
+import { annotateExtras, clientIp } from '@/lib/saraban-sign';
+import { getObjectBytes, isStorageConfigured } from '@/lib/saraban-storage';
 import { applyPatch, getDoc, type DocSet } from '@/lib/saraban-store';
 import { listUnits } from '@/lib/saraban-units-store';
 import type { SarabanEventDetail, SarabanEventKind, SarabanFieldChange } from '@/types/saraban';
@@ -19,6 +22,7 @@ import type { SarabanEventDetail, SarabanEventKind, SarabanFieldChange } from '@
 // GET   /api/admin/saraban/docs/[id]
 // PATCH /api/admin/saraban/docs/[id]  body { action: 'edit' | 'void' | 'sent' | 'annotate' | 'ack' | 'reopen', updatedAt, … }
 //   reopen = ผู้จัดการดึงหนังสือรับที่จบแล้วกลับ (403 manager_only) · แก้หนังสือรับที่จบแล้วได้เฉพาะผู้จัดการ
+//   annotate รับ marks (ตราเท่านั้น) — ลายมือหรือ sign → 400 self_only (ต้องทำในงานของฉัน)
 //   updatedAt = เวอร์ชันที่หน้าจอเห็น — ไม่ตรงกับใน DB = มีคนแก้ไปก่อน → 409 stale ให้โหลดใหม่
 //   ไม่มี DELETE โดยตั้งใจ: เลขทะเบียนเป็นหลักฐานทางราชการ ใช้ยกเลิกแทน (สเปกข้อ 6)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -50,6 +54,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const patch = parsed.data;
   if (patch.action === 'reopen' && !admin.isManager) {
     return res.status(403).json({ error: 'manager_only' });
+  }
+  // ลายมือและการลงนามต้องเป็นเจ้าตัว (สเปกรอบ 4 ข้อ 1.3) — ธุรการทำแทนวางได้แค่ตรา
+  if (patch.action === 'annotate' && hasSelfOnlyMarks(patch)) {
+    return res.status(400).json({ error: 'self_only' });
   }
 
   try {
@@ -103,6 +111,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       kind = patch.action === 'annotate' ? 'annotated' : 'acknowledged';
       note = result.note;
       detail = result.detail;
+      if (patch.action === 'annotate') {
+        const extras = await annotateExtras(current, patch, clientIp(req), {
+          storageConfigured: isStorageConfigured(),
+          getBytes: getObjectBytes,
+        });
+        if (!extras.ok) return res.status(extras.status).json({ error: extras.error });
+        detail = { ...detail, ...extras.detail };
+      }
     } else {
       const transition =
         patch.action === 'void'

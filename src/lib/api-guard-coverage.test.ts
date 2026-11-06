@@ -107,4 +107,18 @@ describe('สารบรรณโหมดเจ้าหน้าที่: �
     expect(src).toContain('memberPatchSchema');
     expect(src).not.toContain('docPatchSchema');
   });
+
+  it('docs/[id]: โหมดเต็มปฏิเสธลายมือ/ลงนาม (self_only) ก่อนอ่านหนังสือ · ใช้ annotateExtras', () => {
+    const src = readFileSync(join(API_DIR, 'saraban', 'docs', '[id]', 'index.ts'), 'utf8');
+    expect(src).toContain("'self_only'");
+    expect(src.indexOf('hasSelfOnlyMarks(patch)')).toBeGreaterThan(-1);
+    expect(src.indexOf('hasSelfOnlyMarks(patch)')).toBeLessThan(src.indexOf('const current = await getDoc(id)'));
+    expect(src).toContain('annotateExtras(current, patch');
+  });
+
+  it('me/docs/[id]: ตรวจ marks และลงนามผ่าน annotateExtras หลัง not_holder', () => {
+    const src = readFileSync(join(ME_DIR, 'docs', '[id]', 'index.ts'), 'utf8');
+    expect(src).toContain('annotateExtras(current, patch');
+    expect(src.indexOf('not_holder')).toBeLessThan(src.indexOf('annotateExtras(current, patch'));
+  });
 });
