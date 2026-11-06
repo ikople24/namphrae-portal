@@ -267,13 +267,14 @@ export default function DocViewer({
               <Stamp
                 key={`d${index}`}
                 mark={m}
-                draft={{
+                // tools = none (เช่น refetch แล้วไม่ใช่ผู้ถือหนังสือแล้ว) — ร่างแสดงอย่างเดียว ลาก/เอาออกไม่ได้
+                draft={canStamp ? {
                   pen: penOn,
                   onPointerDown: (e) => stampDown(e, index, m),
                   onPointerMove: stampMove,
                   onPointerEnd: stampEnd,
                   onRemove: () => onDraftChange(removeMark(draft, index)),
-                }}
+                } : undefined}
               />
             ) : null
           )}

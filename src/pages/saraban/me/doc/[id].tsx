@@ -25,6 +25,7 @@ import {
 import { EVENT_KIND_LABELS } from '@/lib/saraban-labels';
 import type { SarabanMark } from '@/types/saraban';
 import { memberDocKey, memberFileUrl, thaiDate, thaiDateTime, withAs, withRaw } from '@/lib/saraban-view';
+import { keepOnFiles } from '@/lib/saraban-viewer';
 
 function MemberDocPage() {
   const router = useRouter();
@@ -72,6 +73,8 @@ function MemberDocPage() {
   }
 
   const { doc, actions, units } = data;
+  // ร่างที่อ้างไฟล์ซึ่งหายไปหลัง refetch ทิ้งไป (มองไม่เห็นแต่จะถูกตีกลับ invalid_mark)
+  const draft = keepOnFiles(marks, doc.files);
   const holderName = units.find((u) => u.id === doc.holderUnitId)?.name ?? doc.holderUnitId;
   const events = [...doc.events].reverse();
 
@@ -103,12 +106,13 @@ function MemberDocPage() {
       {doc.files.length ? (
         <section className="overflow-hidden rounded-2xl border border-sb-line bg-white" aria-label="เอกสาร">
           <DocViewer
+            key={doc.id}
             files={doc.files}
             events={doc.events}
             rawUrl={(fileId) => withRaw(memberFileUrl(doc.id, fileId, as))}
             openUrl={(fileId) => memberFileUrl(doc.id, fileId, as)}
             tools={actions.annotateAs ? 'stamp+ink' : 'none'}
-            draft={marks}
+            draft={draft}
             onDraftChange={setMarks}
           />
         </section>
@@ -138,7 +142,7 @@ function MemberDocPage() {
           busy={busy}
           onSubmit={(body: AnnotateSubmit) =>
             void run(
-              () => memberAnnotate(doc, { ...body, marks }, as),
+              () => memberAnnotate(doc, { ...body, marks: draft }, as),
               `${body.route.kind === 'close' ? 'จบเรื่องแล้ว' : body.route.kind === 'forward' ? 'ส่งต่อแล้ว' : 'แจ้งเวียนแล้ว'}${body.sign ? ' · ลงนามในระบบแล้ว' : ''}`
             )
           }

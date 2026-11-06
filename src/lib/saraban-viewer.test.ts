@@ -5,6 +5,7 @@ import {
   appendStroke,
   canAddStamp,
   clearInk,
+  keepOnFiles,
   dragTo,
   moveStamp,
   removeMark,
@@ -95,5 +96,13 @@ describe('ร่างลายมือ', () => {
     const d = appendStroke(addStamp([], at, 'ack'), at, [0.1, 0.1, 0.2, 0.2]);
     expect(clearInk(d)).toHaveLength(1);
     expect(clearInk(d)[0].type).toBe('stamp');
+  });
+});
+
+describe('keepOnFiles', () => {
+  it('ทิ้งร่างที่อ้างไฟล์ซึ่งไม่อยู่ในหนังสือแล้ว (ไฟล์ถูกลบ/เปลี่ยนเรื่อง)', () => {
+    const d = appendStroke(addStamp([], at, 'ack'), { fileId: 'gone', page: 1 }, [0.1, 0.1, 0.2, 0.2]);
+    expect(keepOnFiles(d, [{ id: 'f1' }])).toEqual([d[0]]);
+    expect(keepOnFiles(d, [])).toEqual([]);
   });
 });

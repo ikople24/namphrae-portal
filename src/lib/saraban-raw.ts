@@ -17,5 +17,7 @@ export async function sendFileBytes(res: NextApiResponse, file: SarabanFile): Pr
   res.setHeader('X-Content-Type-Options', 'nosniff');
   // private: ห้าม proxy/CDN เก็บ — ไฟล์ราชการต้องผ่านการตรวจสิทธิ์ทุกครั้ง
   res.setHeader('Cache-Control', 'private, max-age=300');
-  res.status(200).send(Buffer.from(bytes));
+  // res.end ไม่ใช่ res.send — send ของ Next มอง Buffer เป็น object แล้ว JSON.stringify ทั้งก้อนเพื่อทำ ETag
+  // (ไฟล์ 10MB ≈ 230MB RAM + บล็อก event loop ~180ms) · ห่อ buffer เดิมไม่คัดลอกซ้ำ
+  res.status(200).end(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
 }

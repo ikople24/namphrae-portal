@@ -69,3 +69,11 @@ export function appendStroke(draft: readonly SarabanMark[], at: At, stroke: read
 export function clearInk(draft: readonly SarabanMark[]): SarabanMark[] {
   return draft.filter((m) => m.type !== 'ink');
 }
+
+/**
+ * ร่างที่ยังใช้ได้กับไฟล์ปัจจุบันของหนังสือ — ร่างคงไว้ข้าม 409 stale โดยตั้งใจ แต่ถ้า refetch แล้วไฟล์ที่วางไว้ถูกลบ
+ * (หรือหน้าเดิมเปลี่ยนไปเปิดหนังสือเรื่องอื่น) ตรานั้นจะมองไม่เห็นและเอาออกไม่ได้ แล้วเซิร์ฟเวอร์ตีกลับ invalid_mark ทุกครั้ง
+ */
+export function keepOnFiles(draft: readonly SarabanMark[], files: readonly { id: string }[]): SarabanMark[] {
+  return draft.filter((m) => files.some((f) => f.id === m.fileId));
+}

@@ -30,6 +30,7 @@ import { displayStatus } from '@/lib/saraban-doc';
 import { canAnnotate } from '@/lib/saraban-flow';
 import { formatNo } from '@/lib/saraban-number';
 import { thaiDateTime, withRaw } from '@/lib/saraban-view';
+import { keepOnFiles } from '@/lib/saraban-viewer';
 import type { SarabanDoc, SarabanMark, SarabanUnit } from '@/types/saraban';
 
 // อักษรแรกของชื่อสำหรับวงกลมอวาตาร์ — ข้ามสระนำ เ แ โ ใ ไ ที่ไม่ควรเป็นตัวแทนชื่อ
@@ -71,12 +72,14 @@ function AnnotatePage() {
   const holderName = units?.find((u) => u.id === doc.holderUnitId)?.name ?? '—';
   const status = summary?.today ? displayStatus(doc, summary.today) : doc.status;
   const annotations = doc.events.filter((e) => e.kind === 'annotated');
+  // ตราที่อ้างไฟล์ซึ่งหายไปหลัง refetch (ถูกลบ) ทิ้งไป — ไม่งั้นมองไม่เห็นแต่ยังส่งไปให้ตีกลับ invalid_mark
+  const draft = keepOnFiles(marks, doc.files);
 
   async function submit(body: AnnotateSubmit) {
     if (!doc) return;
     setBusy(true);
     try {
-      const updated = await annotateDoc(doc, { ...body, marks });
+      const updated = await annotateDoc(doc, { ...body, marks: draft });
       setMarks([]);
       setNote('');
       setFormKey((k) => k + 1);
@@ -129,12 +132,13 @@ function AnnotatePage() {
       <div className="grid items-start gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr))]">
         <section className={`${card} overflow-hidden`}>
           <DocViewer
+            key={doc.id}
             files={doc.files}
             events={doc.events}
             rawUrl={(fileId) => withRaw(fileUrl(doc.id, fileId))}
             openUrl={(fileId) => fileUrl(doc.id, fileId)}
             tools={canAnnotate(doc) ? 'stamp' : 'none'}
-            draft={marks}
+            draft={draft}
             onDraftChange={setMarks}
           />
         </section>
