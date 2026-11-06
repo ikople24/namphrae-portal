@@ -8,6 +8,7 @@ import type {
   SarabanLevel,
   SarabanRegister,
   SendMethod,
+  StampKind,
 } from '@/types/saraban';
 
 export const REGISTER_LABELS: Record<SarabanRegister, string> = {
@@ -105,3 +106,18 @@ export const QUICK_NOTES = [
   'ทราบ แจ้งเวียนให้ทราบ',
   'ทราบ เก็บเข้าแฟ้ม',
 ] as const;
+
+// ตรา (สเปกรอบ 4) — สีจากต้นแบบจอ 5
+export const STAMP_LABELS: Record<StampKind, string> = {
+  ack: 'ทราบ',
+  act: 'ดำเนินการ',
+  circ: 'แจ้งเวียน',
+  approve: 'เห็นชอบ',
+};
+
+export const STAMP_COLORS: Record<StampKind, string> = {
+  ack: '#1E4D8C',
+  act: '#1C7C54',
+  circ: '#8A5A00',
+  approve: '#5B3A8C',
+};
