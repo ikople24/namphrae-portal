@@ -146,6 +146,8 @@ describe('docPatchSchema — แยกตาม action', () => {
       note: 'ทราบ',
       route: { kind: 'stay' },
       circulateTo: [],
+      marks: [],
+      sign: false,
     });
     expect(docPatchSchema.safeParse({ ...base, route: { kind: 'close' } }).success).toBe(true);
     expect(docPatchSchema.safeParse({ ...base, route: { kind: 'forward', toUnitId: 'dir-works' } }).success).toBe(true);
@@ -273,5 +275,39 @@ describe('unitMembersSchema', () => {
     expect(unitMembersSchema.safeParse({ clerkIds: ['a', 'b'] }).success).toBe(true);
     expect(unitMembersSchema.safeParse({ clerkIds: ['a', 'a'] }).success).toBe(false);
     expect(unitMembersSchema.safeParse({ clerkIds: Array.from({ length: 11 }, (_, i) => `u${i}`) }).success).toBe(false);
+  });
+});
+
+describe('annotate: marks / sign (รอบ 4)', () => {
+  const base = { action: 'annotate', updatedAt: 'v1', note: 'ทราบ', route: { kind: 'stay' } } as const;
+  const stamp = { type: 'stamp', fileId: 'f1', page: 1, stamp: 'ack', x: 0.5, y: 0.25, rot: -4 } as const;
+  const ink = { type: 'ink', fileId: 'f1', page: 1, strokes: [[0.1, 0.1, 0.2, 0.2]] } as const;
+  const parse = (extra: object) => docPatchSchema.safeParse({ ...base, ...extra });
+
+  it('ค่าเริ่มต้น marks = [] · sign = false', () => {
+    const r = docPatchSchema.parse(base);
+    expect(r).toMatchObject({ marks: [], sign: false });
+  });
+  it('รับตราและลายมือที่ถูกต้อง (ทั้งสองโหมด)', () => {
+    expect(parse({ marks: [stamp, ink], sign: true }).success).toBe(true);
+    expect(memberPatchSchema.safeParse({ ...base, marks: [stamp, ink], sign: true }).success).toBe(true);
+  });
+  it('พิกัดนอก 0–1 / rot เกิน ±15 / ชนิดตราแปลก ไม่ผ่าน', () => {
+    expect(parse({ marks: [{ ...stamp, x: 1.2 }] }).success).toBe(false);
+    expect(parse({ marks: [{ ...stamp, rot: 20 }] }).success).toBe(false);
+    expect(parse({ marks: [{ ...stamp, stamp: 'reject' }] }).success).toBe(false);
+    expect(parse({ marks: [{ ...stamp, page: 0 }] }).success).toBe(false);
+  });
+  it('เส้นต้อง ≥ 2 จุดและเป็นคู่', () => {
+    expect(parse({ marks: [{ ...ink, strokes: [[0.1, 0.1]] }] }).success).toBe(false);
+    expect(parse({ marks: [{ ...ink, strokes: [[0.1, 0.1, 0.2, 0.2, 0.3]] }] }).success).toBe(false);
+  });
+  it('ตราเกิน 20 / จุดลายมือเกิน 5000 / เส้นเกิน 200 ไม่ผ่าน', () => {
+    expect(parse({ marks: Array.from({ length: 21 }, () => stamp) }).success).toBe(false);
+    expect(parse({ marks: Array.from({ length: 20 }, () => stamp) }).success).toBe(true);
+    const long = Array.from({ length: 5001 * 2 }, () => 0.5);
+    expect(parse({ marks: [{ ...ink, strokes: [long] }] }).success).toBe(false);
+    const many = Array.from({ length: 201 }, () => [0.1, 0.1, 0.2, 0.2]);
+    expect(parse({ marks: [{ ...ink, strokes: many }] }).success).toBe(false);
   });
 });
