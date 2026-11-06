@@ -35,6 +35,7 @@ import {
   type SummaryResponse,
 } from '@/lib/saraban-api';
 import { canAnnotate, flowStep } from '@/lib/saraban-flow';
+import { isFileReferenced } from '@/lib/saraban-mark';
 import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { canAddFile, canMarkSent, canRemoveFile, canReopen, canVoid, displayStatus, editableFieldsOf, type DocEdit, type EditableField } from '@/lib/saraban-doc';
 import { EVENT_KIND_LABELS, fieldLabel, LEVEL_LABELS, SEND_METHOD_LABELS } from '@/lib/saraban-labels';
@@ -317,7 +318,7 @@ function TrackPage() {
                         {f.format.toUpperCase()} · {fileSizeLabel(f.bytes)}
                         {f.format === 'pdf' && f.pages > 0 ? ` · ${f.pages} หน้า` : ''}
                       </span>
-                      {canRemoveFile(doc) ? (
+                      {canRemoveFile(doc) && !isFileReferenced(doc, f.id) ? (
                         <button
                           type="button"
                           aria-label={`ลบ ${f.name}`}
