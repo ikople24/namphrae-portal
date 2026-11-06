@@ -31,6 +31,7 @@ export default function MemberActionForm({
   const [rawTo, setTo] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [note, setNote] = useState('');
+  const [sign, setSign] = useState(false);
   const uid = useId();
   const h1 = `${uid}-1`;
   const h2 = `${uid}-2`;
@@ -67,6 +68,8 @@ export default function MemberActionForm({
       note: note.trim(),
       route: choice === 'close' ? { kind: 'close' } : choice === 'forward' ? { kind: 'forward', toUnitId: to } : { kind: 'stay' },
       circulateTo,
+      // ลงนามได้เฉพาะ ทราบ·จบเรื่อง / ส่งต่อ (สเปกรอบ 4 ข้อ 4) — แจ้งเวียนไม่ใช่การสั่งการ
+      sign: choice !== 'circulate' && sign,
     });
   }
 
@@ -155,6 +158,16 @@ export default function MemberActionForm({
           className="w-full rounded-xl border border-sb-line-input px-3 py-2 text-[15px]"
         />
       </div>
+
+      {choice !== 'circulate' ? (
+        <label className="flex items-start gap-2.5 rounded-xl border border-sb-line px-3 py-2.5">
+          <input type="checkbox" checked={sign} onChange={(e) => setSign(e.target.checked)} className="mt-0.5 h-5 w-5 flex-none" />
+          <span>
+            <span className="block text-sm font-semibold">ลงนามในระบบ</span>
+            <span className="block text-xs text-sb-muted">บันทึกชื่อ เวลา IP และรหัสตรวจสอบไฟล์ (sha256) ของหนังสือนี้</span>
+          </span>
+        </label>
+      ) : null}
 
       <p aria-live="polite" className="rounded-xl bg-sb-panel px-3 py-2 text-[13px]">{summary}</p>
 

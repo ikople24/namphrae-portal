@@ -4,6 +4,7 @@ import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import Icon from '@/components/Icon';
 import type { AnnotateSubmit } from '@/components/saraban/AnnotateForm';
+import DocViewer from '@/components/saraban/DocViewer';
 import EventDetail, { eventByline } from '@/components/saraban/EventDetail';
 import MemberActionForm from '@/components/saraban/MemberActionForm';
 import MemberShell from '@/components/saraban/MemberShell';
@@ -22,7 +23,8 @@ import {
   type MemberDocResponse,
 } from '@/lib/saraban-api';
 import { EVENT_KIND_LABELS } from '@/lib/saraban-labels';
-import { memberDocKey, memberFileUrl, thaiDate, thaiDateTime, withAs } from '@/lib/saraban-view';
+import type { SarabanMark } from '@/types/saraban';
+import { memberDocKey, memberFileUrl, thaiDate, thaiDateTime, withAs, withRaw } from '@/lib/saraban-view';
 
 function MemberDocPage() {
   const router = useRouter();
@@ -34,6 +36,8 @@ function MemberDocPage() {
   });
   const { mutate: globalMutate } = useSWRConfig();
   const [busy, setBusy] = useState(false);
+  // ร่างตรา/ลายมืออยู่ที่หน้า — stale/not_holder แล้ว refetch ของที่วาดไว้ไม่หาย
+  const [marks, setMarks] = useState<SarabanMark[]>([]);
 
   async function run(action: () => Promise<unknown>, done: string) {
     setBusy(true);
@@ -94,23 +98,21 @@ function MemberDocPage() {
             </>
           ) : null}
         </dl>
-        {doc.files.length ? (
-          <div className="mt-3 flex flex-col gap-1.5">
-            {doc.files.map((f) => (
-              <a
-                key={f.id}
-                href={memberFileUrl(doc.id, f.id, as)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex min-h-11 items-center gap-2 rounded-xl border border-sb-line px-3 text-sm hover:bg-sb-hover"
-              >
-                <Icon name="attach_file" size={18} />
-                <span className="truncate">{f.name}</span>
-              </a>
-            ))}
-          </div>
-        ) : null}
       </section>
+
+      {doc.files.length ? (
+        <section className="overflow-hidden rounded-2xl border border-sb-line bg-white" aria-label="เอกสาร">
+          <DocViewer
+            files={doc.files}
+            events={doc.events}
+            rawUrl={(fileId) => withRaw(memberFileUrl(doc.id, fileId, as))}
+            openUrl={(fileId) => memberFileUrl(doc.id, fileId, as)}
+            tools={actions.annotateAs ? 'stamp+ink' : 'none'}
+            draft={marks}
+            onDraftChange={setMarks}
+          />
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-sb-line bg-white p-4" aria-label="ที่ผ่านมา">
         <h3 className="mb-2 text-sm font-semibold">ที่ผ่านมา</h3>
@@ -136,8 +138,8 @@ function MemberDocPage() {
           busy={busy}
           onSubmit={(body: AnnotateSubmit) =>
             void run(
-              () => memberAnnotate(doc, body, as),
-              body.route.kind === 'close' ? 'จบเรื่องแล้ว' : body.route.kind === 'forward' ? 'ส่งต่อแล้ว' : 'แจ้งเวียนแล้ว'
+              () => memberAnnotate(doc, { ...body, marks }, as),
+              `${body.route.kind === 'close' ? 'จบเรื่องแล้ว' : body.route.kind === 'forward' ? 'ส่งต่อแล้ว' : 'แจ้งเวียนแล้ว'}${body.sign ? ' · ลงนามในระบบแล้ว' : ''}`
             )
           }
         />
