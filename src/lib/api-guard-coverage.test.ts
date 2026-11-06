@@ -121,4 +121,30 @@ describe('สารบรรณโหมดเจ้าหน้าที่: �
     expect(src).toContain('annotateExtras(current, patch');
     expect(src.indexOf('not_holder')).toBeLessThan(src.indexOf('annotateExtras(current, patch'));
   });
+
+  it('route ไฟล์ทั้งสองส่ง bytes เมื่อ ?raw=1 และขยาย responseLimit (ไฟล์ถึง 10MB)', () => {
+    for (const p of [
+      join(API_DIR, 'saraban', 'docs', '[id]', 'files', '[fileId].ts'),
+      join(ME_DIR, 'docs', '[id]', 'files', '[fileId].ts'),
+    ]) {
+      const src = readFileSync(p, 'utf8');
+      expect(src).toContain("req.query.raw === '1'");
+      expect(src).toContain('sendFileBytes(res, file)');
+      expect(src).toContain("responseLimit: '11mb'");
+    }
+  });
+
+  it('DELETE ไฟล์: ห้ามลบไฟล์ที่ถูกอ้าง ก่อน removeFile', () => {
+    const src = readFileSync(join(API_DIR, 'saraban', 'docs', '[id]', 'files', '[fileId].ts'), 'utf8');
+    expect(src).toContain("'file_referenced'");
+    expect(src.indexOf('isFileReferenced(doc, fileId)')).toBeGreaterThan(-1);
+    expect(src.indexOf('isFileReferenced(doc, fileId)')).toBeLessThan(src.indexOf('removeFile(id, fileId'));
+  });
+
+  it('removeFile: เงื่อนไขไม่ถูกอ้างอยู่ในคำสั่งเขียน (กันชนกับเกษียน)', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'lib', 'saraban-store.ts'), 'utf8');
+    expect(src).toContain("'events.marks.fileId': { $ne: fileId }");
+    expect(src).toContain("'events.signature.files.fileId': { $ne: fileId }");
+    expect(src).toContain('!isFileReferenced(doc, fileId)');
+  });
 });
