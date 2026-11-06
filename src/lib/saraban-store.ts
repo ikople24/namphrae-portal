@@ -25,6 +25,7 @@ import {
   withDefaults,
 } from '@/lib/saraban-doc';
 import { readJsonArray, writeJsonArray } from '@/lib/saraban-file';
+import { isFileReferenced } from '@/lib/saraban-mark';
 import { canSeeDoc, memberCandidateQuery } from '@/lib/saraban-member';
 import { bangkokDateOf, fiscalYearOf, nextNo } from '@/lib/saraban-number';
 import type {
@@ -489,7 +490,14 @@ export async function removeFile(
 ): Promise<SarabanDoc | null> {
   if (isMongoConfigured()) {
     const updated = await (await docsCollection()).findOneAndUpdate(
-      { id, status: { $in: [...OPEN_STATUSES] }, 'files.id': fileId },
+      {
+        id,
+        status: { $in: [...OPEN_STATUSES] },
+        'files.id': fileId,
+        // ไฟล์ที่ตรา/ลายมือ/การลงนามอ้างห้ามหลุด — อยู่ใน filter เดียวกับการเขียน กันเกษียนที่บันทึกแทรกหลัง route เช็ค
+        'events.marks.fileId': { $ne: fileId },
+        'events.signature.files.fileId': { $ne: fileId },
+      },
       { $pull: { files: { id: fileId } }, $push: { events: event }, $set: { updatedAt: event.at } },
       { returnDocument: 'after', projection: { _id: 0 } }
     );
@@ -497,7 +505,7 @@ export async function removeFile(
   }
   const docs = await readDocs();
   const index = docs.findIndex(
-    (doc) => doc.id === id && canRemoveFile(doc) && doc.files.some((f) => f.id === fileId)
+    (doc) => doc.id === id && canRemoveFile(doc) && doc.files.some((f) => f.id === fileId) && !isFileReferenced(doc, fileId)
   );
   if (index === -1) return null;
   docs[index] = {

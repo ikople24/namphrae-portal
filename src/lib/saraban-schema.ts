@@ -6,7 +6,8 @@ import { MAX_FILES_PER_DOC } from '@/lib/saraban-attachment';
 import { REGISTER_VIEWS } from '@/lib/saraban-doc';
 import { MAX_CIRCULATE } from '@/lib/saraban-flow';
 import { MEMBER_TABS } from '@/lib/saraban-member';
-import { SARABAN_LEVELS, SARABAN_REGISTERS, SEND_METHODS } from '@/types/saraban';
+import { inkPointCount, MAX_INK_POINTS, MAX_MARK_PAGE, MAX_STAMPS, MAX_STROKES } from '@/lib/saraban-mark';
+import { SARABAN_LEVELS, SARABAN_REGISTERS, SEND_METHODS, STAMP_KINDS } from '@/types/saraban';
 
 /**
  * วันที่ในฟอร์ม — round-trip จับวันที่ไม่มีจริง (2026-02-30) แบบ jobInputSchema บวกช่วงปี
@@ -92,6 +93,39 @@ const annotateRouteSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('stay') }),
 ]);
 
+// ตรา/ลายมือ (สเปกรอบ 4 ข้อ 2) — ช่วงพิกัด/จำนวนตรวจที่นี่ · ไฟล์/หน้าตรวจกับหนังสือที่ validateMarks
+const unitCoord = z.number().min(0).max(1);
+const markBase = {
+  fileId: z.string().min(1).max(100),
+  page: z.number().int().min(1).max(MAX_MARK_PAGE),
+};
+const strokeSchema = z
+  .array(unitCoord)
+  .min(4, 'เส้นลายมือต้องมีอย่างน้อย 2 จุด')
+  .max(MAX_INK_POINTS * 2)
+  .refine((s) => s.length % 2 === 0, 'จุดลายมือต้องเป็นคู่ x,y');
+const markSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('stamp'),
+    ...markBase,
+    stamp: z.enum(STAMP_KINDS),
+    x: unitCoord,
+    y: unitCoord,
+    rot: z.number().min(-15).max(15),
+  }),
+  z.object({ type: z.literal('ink'), ...markBase, strokes: z.array(strokeSchema).min(1).max(MAX_STROKES) }),
+]);
+const marksSchema = z
+  .array(markSchema)
+  .max(MAX_STAMPS + MAX_STROKES)
+  .refine((ms) => ms.filter((m) => m.type === 'stamp').length <= MAX_STAMPS, `วางตราได้ไม่เกิน ${MAX_STAMPS} อันต่อครั้ง`)
+  .refine(
+    (ms) => ms.reduce((n, m) => (m.type === 'ink' ? n + m.strokes.length : n), 0) <= MAX_STROKES,
+    `ลายมือได้ไม่เกิน ${MAX_STROKES} เส้นต่อครั้ง`
+  )
+  .refine((ms) => inkPointCount(ms) <= MAX_INK_POINTS, 'ลายมือยาวเกินไป ล้างแล้วเขียนใหม่ให้สั้นลง')
+  .default([]);
+
 const annotatePatchSchema = z.object({
   action: z.literal('annotate'),
   updatedAt: z.string().min(1),
@@ -102,6 +136,9 @@ const annotatePatchSchema = z.object({
     .max(MAX_CIRCULATE, `เวียนได้ไม่เกิน ${MAX_CIRCULATE} ตำแหน่งต่อครั้ง`)
     .refine((ids) => new Set(ids).size === ids.length, 'เลือกตำแหน่งซ้ำ')
     .default([]),
+  // รอบ 4 — ใช้ร่วมสองโหมด · route โหมดเต็มปฏิเสธลายมือ/sign เอง (400 self_only)
+  marks: marksSchema,
+  sign: z.boolean().default(false),
 });
 const ackPatchSchema = z.object({ action: z.literal('ack'), updatedAt: z.string().min(1), unitId: z.string().min(1).max(100) });
 

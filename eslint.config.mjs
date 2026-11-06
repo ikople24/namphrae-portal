@@ -29,6 +29,8 @@ const eslintConfig = defineConfig([
     // Design-reference prototypes (not app code).
     "public/design_handoff_namphrae_ui/**",
     "docs/design_handoff_esaraban/**",
+    // pdf.js assets copied by scripts/copy-pdfjs-assets.mjs (generated, gitignored).
+    "public/pdfjs/**",
   ]),
 ]);
 

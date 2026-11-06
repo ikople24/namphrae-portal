@@ -58,3 +58,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# pdf.js assets (สร้างโดย scripts/copy-pdfjs-assets.mjs ตอน postinstall)
+/public/pdfjs/

@@ -4,12 +4,19 @@ import { requireFeature } from '@/lib/auth-server';
 import { resolveActor } from '@/lib/saraban-actor';
 import { CONTENT_TYPES } from '@/lib/saraban-attachment';
 import { canRemoveFile, makeEvent } from '@/lib/saraban-doc';
+import { isFileReferenced } from '@/lib/saraban-mark';
+import { sendFileBytes } from '@/lib/saraban-raw';
 import { deleteObject, isStorageConfigured, viewUrl } from '@/lib/saraban-storage';
 import { getDoc, removeFile } from '@/lib/saraban-store';
 
 // GET    /api/admin/saraban/docs/[id]/files/[fileId] — ตรวจสิทธิ์แล้ว 302 ไปลิงก์ชั่วคราว 5 นาที
-//        (ไม่ stream ผ่านแอป) · ลิงก์นี้คือทางเดียวที่เปิดไฟล์ได้ เพราะ bucket เป็น private
+//        ?raw=1 ส่ง bytes ผ่านแอปแทน (pdf.js ของ DocViewer — สเปกรอบ 4) · bucket เป็น private เสมอ
 // DELETE /api/admin/saraban/docs/[id]/files/[fileId] — เอาออกจากหนังสือก่อน แล้วค่อยลบ object
+//        ไฟล์ที่มีตรา/ลายมือ/การลงนามอ้าง → 409 file_referenced
+
+// ?raw=1 ส่ง bytes ผ่านแอป (ไฟล์ถึง 10MB) — ค่าเริ่มต้นของ Next เตือนที่ 4MB
+export const config = { api: { responseLimit: '11mb' } };
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const admin = await requireFeature(req, res, 'saraban');
   if (!admin) return;
@@ -29,6 +36,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!doc || !file) return res.status(404).json({ error: 'not_found' });
 
     if (req.method === 'GET') {
+      if (req.query.raw === '1') {
+        await sendFileBytes(res, file);
+        return;
+      }
       // ลิงก์มีอายุ — ห้าม cache การ redirect ไม่งั้นเบราว์เซอร์พาไปลิงก์ที่หมดอายุแล้ว
       res.setHeader('Cache-Control', 'no-store');
       // ไม่ return ค่าของ res.redirect — Next เตือน "API handler should not return a value"
@@ -39,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!canRemoveFile(doc)) {
       return res.status(409).json({ error: 'invalid_transition', status: doc.status });
     }
+    if (isFileReferenced(doc, fileId)) return res.status(409).json({ error: 'file_referenced' });
     const event = makeEvent({
       id: crypto.randomUUID(),
       at: new Date().toISOString(),

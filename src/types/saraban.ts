@@ -47,6 +47,19 @@ export type SarabanEventKind = (typeof SARABAN_EVENT_KINDS)[number];
 export const ANNOTATE_ROUTES = ['forward', 'close', 'stay'] as const;
 export type AnnotateRouteKind = (typeof ANNOTATE_ROUTES)[number];
 
+// ตรา (สเปกรอบ 4 ข้อ 2) — ป้าย/สีอยู่ใน saraban-labels.ts
+export const STAMP_KINDS = ['ack', 'act', 'circ', 'approve'] as const; // ทราบ | ดำเนินการ | แจ้งเวียน | เห็นชอบ
+export type StampKind = (typeof STAMP_KINDS)[number];
+
+// พิกัดทุกตัวเป็นสัดส่วน 0–1 ของกรอบหน้า (x ซ้าย→ขวา, y บน→ล่าง) · page เริ่ม 1
+type MarkBase = { fileId: string; page: number };
+export type StampMark = MarkBase & { type: 'stamp'; stamp: StampKind; x: number; y: number; rot: number }; // x,y = กึ่งกลาง · rot องศา
+export type InkMark = MarkBase & { type: 'ink'; strokes: number[][] }; // แต่ละเส้น [x1,y1,x2,y2,…] · หนึ่งหน้า = InkMark เดียว
+export type SarabanMark = StampMark | InkMark;
+
+// ผู้ลงนาม/เวลา = by/byName/at ของ event เดียวกัน · sha256 เซิร์ฟเวอร์คำนวณเองตอนลงนาม
+export type SarabanSignature = { ip: string; files: { fileId: string; name: string; sha256: string }[] };
+
 export type SarabanUnitRef = { unitId: string; unitName: string };
 
 // รายละเอียดเฉพาะ event รอบ 2 — optional ทั้งหมดด้วยเหตุผลเดียวกับ changes: makeEvent ใส่เฉพาะ
@@ -60,6 +73,8 @@ export type SarabanEventDetail = {
   circulateTo?: SarabanUnitRef[]; // annotated ที่มีการเวียน
   unitId?: string; // acknowledged
   unitName?: string;
+  marks?: SarabanMark[]; // annotated (รอบ 4) — ใส่เฉพาะเมื่อไม่ว่าง · แก้/ลบทีหลังไม่ได้
+  signature?: SarabanSignature; // annotated ที่ติ๊กลงนามในระบบ (โหมดเจ้าหน้าที่เท่านั้น)
 };
 
 export type SarabanFile = {

@@ -6,7 +6,10 @@ import { ackTransition, annotateTransition, FLOW_ERROR_STATUS } from '@/lib/sara
 import { canSeeDoc, memberActions } from '@/lib/saraban-member';
 import { requireSarabanMember } from '@/lib/saraban-member-guard';
 import { memberPatchSchema } from '@/lib/saraban-schema';
+import { annotateExtras, clientIp } from '@/lib/saraban-sign';
+import { getObjectBytes, isStorageConfigured } from '@/lib/saraban-storage';
 import { applyPatch, getDoc } from '@/lib/saraban-store';
+import type { SarabanEventDetail } from '@/types/saraban';
 
 // GET   /api/admin/saraban/me/docs/[id] — { doc, actions, units } · ตำแหน่งไม่เคยเกี่ยว → 404 ไม่ใช่ 403
 //       (ไม่บอกว่ามีหนังสือเรื่องนี้อยู่ — สเปกรอบ 3 ข้อ 3)
@@ -64,13 +67,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(FLOW_ERROR_STATUS[result.error]).json(body);
     }
 
+    let detail: SarabanEventDetail = result.detail;
+    if (patch.action === 'annotate') {
+      // ตรา + ลายมือ + ลงนามในระบบ (สเปกรอบ 4) — เจ้าตัวทำได้ครบ
+      const extras = await annotateExtras(current, patch, clientIp(req), {
+        storageConfigured: isStorageConfigured(),
+        getBytes: getObjectBytes,
+      });
+      if (!extras.ok) return res.status(extras.status).json({ error: extras.error });
+      detail = { ...detail, ...extras.detail };
+    }
+
     const event = makeEvent({
       id: eventId,
       at: now,
       actor,
       kind: patch.action === 'annotate' ? 'annotated' : 'acknowledged',
       note: result.note,
-      detail: result.detail,
+      detail,
     });
     const updated = await applyPatch(id, patch.updatedAt, result.set, event);
     if (updated) return res.status(200).json(updated);

@@ -128,6 +128,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   not_found: 'ไม่พบหนังสือ',
   feature_denied: 'ไม่มีสิทธิ์ใช้ระบบสารบรรณ',
   manager_only: 'เฉพาะผู้จัดการระบบเท่านั้น',
+  self_only: 'ลายมือและการลงนามต้องทำเองในงานของฉัน',
+  invalid_mark: 'ตรา/ลายมืออ้างไฟล์หรือหน้าที่ไม่มีในหนังสือนี้ — โหลดใหม่แล้ววางอีกครั้ง',
+  file_referenced: 'ไฟล์นี้มีตรา ลายมือ หรือการลงนามอ้างอยู่ ลบไม่ได้',
 };
 
 export function errorMessage(code: string | undefined): string {
@@ -193,3 +196,8 @@ export const memberDocKey = (id: string, as: string | undefined) =>
 
 export const memberFileUrl = (id: string, fileId: string, as: string | undefined) =>
   withAs(`${ME_BASE}/docs/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`, as);
+
+/** ลิงก์ไฟล์ดิบ (same-origin) ให้ pdf.js/<img> — route ตรวจสิทธิ์เดิมแล้วส่ง bytes แทน 302 */
+export function withRaw(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}raw=1`;
+}

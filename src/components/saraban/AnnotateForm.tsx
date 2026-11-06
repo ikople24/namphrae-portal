@@ -8,7 +8,8 @@ import { MAX_CIRCULATE, type AnnotateRoute } from '@/lib/saraban-flow';
 import { QUICK_NOTES, ROUTE_LABELS } from '@/lib/saraban-labels';
 import type { SarabanDoc, SarabanUnit } from '@/types/saraban';
 
-export type AnnotateSubmit = { note: string; route: AnnotateRoute; circulateTo: string[] };
+// sign: เฉพาะโหมดงานของฉัน (MemberActionForm) — ฟอร์มโหมดเต็มไม่ส่ง
+export type AnnotateSubmit = { note: string; route: AnnotateRoute; circulateTo: string[]; sign?: boolean };
 
 const STAY = '__stay';
 const CLOSE = '__close';
