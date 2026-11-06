@@ -7,7 +7,7 @@ import Icon from '@/components/Icon';
 import type { PdfInfo } from '@/components/saraban/PdfPage';
 import { STAMP_COLORS, STAMP_LABELS } from '@/lib/saraban-labels';
 import { marksOn, maxPageOf } from '@/lib/saraban-mark';
-import { addStamp, appendStroke, canAddStamp, clearInk, moveStamp, removeMark, strokePoints, toUnit } from '@/lib/saraban-viewer';
+import { addStamp, appendStroke, canAddStamp, clearInk, dragTo, moveStamp, removeMark, strokePoints, toUnit } from '@/lib/saraban-viewer';
 import { errorMessage } from '@/lib/saraban-view';
 import { STAMP_KINDS, type SarabanEvent, type SarabanFile, type SarabanMark, type StampMark } from '@/types/saraban';
 
@@ -43,10 +43,14 @@ export default function DocViewer({
   const [imgAspect, setImgAspect] = useState<number | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [pen, setPen] = useState(false);
+  // เส้นที่กำลังวาด: ref เป็นตัวจริง (pointermove ถี่กว่ารอบ render — อ่านจาก state จะทำจุดหาย) · state ไว้แสดงผล
   const [stroke, setStroke] = useState<number[] | null>(null);
+  const strokeRef = useRef<number[] | null>(null);
+  const penPointer = useRef<number | null>(null); // นิ้ว/ปากกาที่กำลังวาด — นิ้วอื่นไม่นับ
   const [width, setWidth] = useState(0);
   const box = useRef<HTMLDivElement>(null);
-  const drag = useRef<number | null>(null);
+  // ตราที่กำลังลาก + ระยะจากจุดที่จับถึงกึ่งกลางตรา (หน่วยสัดส่วน) — ตราไม่กระโดดมาที่นิ้ว
+  const drag = useRef<{ index: number; grab: { x: number; y: number } } | null>(null);
 
   const file = files.find((f) => f.id === rawFileId) ?? files[0];
 
@@ -70,6 +74,8 @@ export default function DocViewer({
   const mine = draft.map((m, index) => ({ m, index })).filter(({ m }) => m.fileId === file.id && m.page === page);
   const canStamp = tools !== 'none';
   const canInk = tools === 'stamp+ink';
+  // ปากกาทำงานจริงเมื่อเปิดอยู่และหน้านี้อนุญาตลายมือ — กันปากกาค้างเมื่อ tools เปลี่ยน
+  const penOn = pen && canInk;
 
   function pick(id: string) {
     setFileId(id);
@@ -84,34 +90,54 @@ export default function DocViewer({
   }
 
   // ---- ปากกา ----
+  function endStroke(): number[] | null {
+    const s = strokeRef.current;
+    strokeRef.current = null;
+    penPointer.current = null;
+    setStroke(null);
+    return s;
+  }
   function penDown(e: ReactPointerEvent<SVGSVGElement>) {
+    if (penPointer.current !== null) return; // มีนิ้วหนึ่งวาดอยู่แล้ว
     e.currentTarget.setPointerCapture(e.pointerId);
+    penPointer.current = e.pointerId;
     const p = unitOf(e);
-    setStroke([p.x, p.y]);
+    strokeRef.current = [p.x, p.y];
+    setStroke(strokeRef.current);
   }
   function penMove(e: ReactPointerEvent<SVGSVGElement>) {
-    if (!stroke) return;
+    const cur = strokeRef.current;
+    if (e.pointerId !== penPointer.current || !cur) return;
     const p = unitOf(e);
-    const lx = stroke[stroke.length - 2];
-    const ly = stroke[stroke.length - 1];
     // ข้ามจุดที่ชิดกันเกินไป — ประหยัดงบ 5,000 จุด
-    if (Math.hypot(p.x - lx, p.y - ly) < 0.002) return;
-    setStroke([...stroke, p.x, p.y]);
+    if (Math.hypot(p.x - cur[cur.length - 2], p.y - cur[cur.length - 1]) < 0.002) return;
+    strokeRef.current = [...cur, p.x, p.y];
+    setStroke(strokeRef.current);
   }
-  function penUp() {
-    if (stroke) onDraftChange(appendStroke(draft, at, stroke));
-    setStroke(null);
+  function penUp(e: ReactPointerEvent<SVGSVGElement>) {
+    if (e.pointerId !== penPointer.current) return;
+    const s = endStroke();
+    if (s) onDraftChange(appendStroke(draft, at, s));
+  }
+  function penCancel(e: ReactPointerEvent<SVGSVGElement>) {
+    if (e.pointerId !== penPointer.current) return;
+    endStroke(); // ระบบยกเลิก/เสีย capture ก่อนยก (เช่นเลื่อนจอ สายเรียกเข้า) — ทิ้งเส้น ไม่บันทึกครึ่ง ๆ
   }
 
   // ---- ลากตราในร่าง ----
-  function stampDown(e: ReactPointerEvent<HTMLDivElement>, index: number) {
-    if (pen) return;
+  function stampDown(e: ReactPointerEvent<HTMLDivElement>, index: number, mark: StampMark) {
+    if (penOn) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = index;
+    const p = unitOf(e);
+    drag.current = { index, grab: { x: p.x - mark.x, y: p.y - mark.y } };
   }
   function stampMove(e: ReactPointerEvent<HTMLDivElement>) {
-    if (drag.current === null) return;
-    onDraftChange(moveStamp(draft, drag.current, unitOf(e)));
+    const d = drag.current;
+    if (!d) return;
+    onDraftChange(moveStamp(draft, d.index, dragTo(unitOf(e), d.grab)));
+  }
+  function stampEnd() {
+    drag.current = null;
   }
 
   const chipOn = 'bg-sb-accent text-white';
@@ -160,6 +186,7 @@ export default function DocViewer({
               type="button"
               disabled={!canAddStamp(draft) || page > maxPageOf(file)}
               onClick={() => onDraftChange(addStamp(draft, at, k))}
+              aria-label={`วางตรา ${STAMP_LABELS[k]}`}
               className="h-9 rounded-lg border-2 bg-white px-3 text-xs font-bold disabled:opacity-40"
               style={{ color: STAMP_COLORS[k], borderColor: STAMP_COLORS[k] }}
             >
@@ -169,7 +196,7 @@ export default function DocViewer({
           {canInk ? (
             <>
               <span className="mx-1 h-6 w-px bg-sb-line" aria-hidden />
-              <button type="button" aria-pressed={pen} onClick={() => setPen(!pen)} className={`flex h-9 items-center gap-1 rounded-lg px-3 text-xs ${pen ? chipOn : `border border-sb-line ${chipOff}`}`}>
+              <button type="button" aria-pressed={penOn} onClick={() => { endStroke(); setPen(!penOn); }} className={`flex h-9 items-center gap-1 rounded-lg px-3 text-xs ${penOn ? chipOn : `border border-sb-line ${chipOff}`}`}>
                 <Icon name="edit" size={16} />
                 ปากกา
               </button>
@@ -192,7 +219,9 @@ export default function DocViewer({
             <p className="absolute inset-0 flex items-center justify-center p-6 text-center text-[13px] text-sb-muted">{failed}</p>
           ) : isPdf ? (
             <PdfPage
+              key={file.id}
               url={rawUrl(file.id)}
+              name={file.name}
               page={page}
               width={width}
               onInfo={setInfo}
@@ -201,11 +230,12 @@ export default function DocViewer({
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- ไฟล์ราชการผ่าน route ตรวจสิทธิ์ ไม่ผ่าน next/image
             <img
+              key={file.id}
               src={rawUrl(file.id)}
               alt={file.name}
               onLoad={(e) => setImgAspect(e.currentTarget.naturalHeight / e.currentTarget.naturalWidth)}
               onError={() => setFailed('เปิดไฟล์ไม่ได้ ลองเปิดในแท็บใหม่')}
-              className="absolute inset-0 h-full w-full"
+              className="absolute inset-0 h-full w-full object-contain"
             />
           )}
 
@@ -213,11 +243,12 @@ export default function DocViewer({
             viewBox="0 0 1 1"
             preserveAspectRatio="none"
             className="absolute inset-0 h-full w-full"
-            style={{ pointerEvents: pen ? 'auto' : 'none', touchAction: pen ? 'none' : 'auto', cursor: pen ? 'crosshair' : undefined }}
-            onPointerDown={pen ? penDown : undefined}
-            onPointerMove={pen ? penMove : undefined}
-            onPointerUp={pen ? penUp : undefined}
-            onPointerCancel={pen ? penUp : undefined}
+            style={{ pointerEvents: penOn ? 'auto' : 'none', touchAction: penOn ? 'none' : 'auto', cursor: penOn ? 'crosshair' : undefined }}
+            onPointerDown={penOn ? penDown : undefined}
+            onPointerMove={penOn ? penMove : undefined}
+            onPointerUp={penOn ? penUp : undefined}
+            onPointerCancel={penOn ? penCancel : undefined}
+            onLostPointerCapture={penOn ? penCancel : undefined}
           >
             {[...past, ...mine.map(({ m }) => m)].flatMap((m, i) =>
               m.type === 'ink'
@@ -234,10 +265,10 @@ export default function DocViewer({
                 key={`d${index}`}
                 mark={m}
                 draft={{
-                  pen,
-                  onPointerDown: (e) => stampDown(e, index),
+                  pen: penOn,
+                  onPointerDown: (e) => stampDown(e, index, m),
                   onPointerMove: stampMove,
-                  onPointerUp: () => (drag.current = null),
+                  onPointerEnd: stampEnd,
                   onRemove: () => onDraftChange(removeMark(draft, index)),
                 }}
               />
@@ -272,7 +303,7 @@ function Stamp({
     pen: boolean;
     onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
     onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void;
-    onPointerUp: () => void;
+    onPointerEnd: () => void; // up / cancel / เสีย capture — เลิกลาก
     onRemove: () => void;
   };
 }) {
@@ -290,7 +321,9 @@ function Stamp({
       }}
       onPointerDown={draft?.onPointerDown}
       onPointerMove={draft?.onPointerMove}
-      onPointerUp={draft?.onPointerUp}
+      onPointerUp={draft?.onPointerEnd}
+      onPointerCancel={draft?.onPointerEnd}
+      onLostPointerCapture={draft?.onPointerEnd}
     >
       {STAMP_LABELS[mark.stamp]}
       {draft && !draft.pen ? (

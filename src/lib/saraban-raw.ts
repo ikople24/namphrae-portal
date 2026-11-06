@@ -13,6 +13,8 @@ export async function sendFileBytes(res: NextApiResponse, file: SarabanFile): Pr
   res.setHeader('Content-Type', CONTENT_TYPES[file.format]);
   res.setHeader('Content-Length', String(bytes.length));
   res.setHeader('Content-Disposition', inlineDisposition(file.name));
+  // ห้ามเบราว์เซอร์เดาชนิดเอง — ให้เชื่อ Content-Type ที่เราตรวจจาก magic bytes เท่านั้น
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   // private: ห้าม proxy/CDN เก็บ — ไฟล์ราชการต้องผ่านการตรวจสิทธิ์ทุกครั้ง
   res.setHeader('Cache-Control', 'private, max-age=300');
   res.status(200).send(Buffer.from(bytes));
