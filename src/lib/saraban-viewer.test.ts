@@ -5,6 +5,7 @@ import {
   appendStroke,
   canAddStamp,
   clearInk,
+  dragTo,
   moveStamp,
   removeMark,
   round4,
@@ -44,6 +45,15 @@ describe('ร่างตรา', () => {
     expect(a[0]).toMatchObject({ x: 0.5 });
     expect(removeMark(m, 0)).toEqual([]);
   });
+  it('moveStamp ที่ index เป็นลายมือ ไม่เปลี่ยนอะไร', () => {
+    const d = appendStroke([], at, [0.1, 0.1, 0.2, 0.2]);
+    expect(moveStamp(d, 0, { x: 0.9, y: 0.9 })).toEqual(d);
+  });
+  it('dragTo หักระยะที่จับ แล้วหนีบ 0–1 ปัด 4 ตำแหน่ง', () => {
+    expect(dragTo({ x: 0.6, y: 0.5 }, { x: 0.1, y: -0.05 })).toEqual({ x: 0.5, y: 0.55 });
+    expect(dragTo({ x: 0.02, y: 0.99 }, { x: 0.1, y: -0.1 })).toEqual({ x: 0, y: 1 });
+    expect(dragTo({ x: 0.33333, y: 0.5 }, { x: 0, y: 0 })).toEqual({ x: 0.3333, y: 0.5 });
+  });
   it('canAddStamp หยุดที่ 20', () => {
     let d: SarabanMark[] = [];
     for (let i = 0; i < 20; i++) d = addStamp(d, at, 'ack');
@@ -65,6 +75,21 @@ describe('ร่างลายมือ', () => {
     const d = appendStroke(appendStroke([], at, big), at, [0.1, 0.1, 0.2, 0.2, 0.3, 0.3]);
     // เหลืองบ 1 จุด = เส้นใหม่สั้นกว่า 2 จุด → ทิ้ง
     expect((d[0] as { strokes: number[][] }).strokes).toHaveLength(1);
+  });
+  it('ตัดเส้นใหม่บางส่วนเมื่อเหลืองบ 3 จุด', () => {
+    const big = Array.from({ length: 4997 * 2 }, () => 0.5);
+    const d = appendStroke(appendStroke([], at, big), at, [0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4, 0.5, 0.5]);
+    const strokes = (d[0] as { strokes: number[][] }).strokes;
+    expect(strokes).toHaveLength(2);
+    expect(strokes[1]).toEqual([0.1, 0.1, 0.2, 0.2, 0.3, 0.3]);
+  });
+  it('ครบ 200 เส้นแล้ว เส้นใหม่ทิ้ง (ทุกหน้ารวมกัน)', () => {
+    let d: SarabanMark[] = [];
+    for (let i = 0; i < 200; i++) d = appendStroke(d, { fileId: 'f1', page: (i % 3) + 1 }, [0.1, 0.1, 0.2, 0.2]);
+    const before = d;
+    d = appendStroke(d, at, [0.3, 0.3, 0.4, 0.4]);
+    expect(d).toEqual(before);
+    expect(d).not.toBe(before);
   });
   it('clearInk เอาลายมือออก ตราคงไว้', () => {
     const d = appendStroke(addStamp([], at, 'ack'), at, [0.1, 0.1, 0.2, 0.2]);
